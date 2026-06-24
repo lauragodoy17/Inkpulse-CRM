@@ -60,7 +60,9 @@ if (isset($_POST["descripcion"])) {
 }
 
 
+$_POST["participantes"] = array_filter($_POST["participantes"] ?? [], fn($v) => $v !== 'otro');
 $_POST["participantes"] [] =$_SESSION['id'];
+$otro_participante = str_replace(["'", '"'], ' ', trim($_POST['otro_participante'] ?? ''));
 
 if(isset($_POST["oficina"])) {
 	
@@ -137,7 +139,7 @@ else {
 
 		if ($participante == $_SESSION["id"]) {
 
-			$sql = "INSERT INTO plan_trabajo(codigo,id_periodo,id_promotor,id_colegio,cod_profesor,id_objetivo,otro_objetivo,resultado,color,start,end,agendamiento,descripcion) values ('$cod_plan','".$gp_periodo["id"]."', '".$participante."', '$colegio', '$cod_profesor', '$objetivo','$otro_objetivo','0','#4c00ff', '$start', '$end', '5', '".$_POST["descripcion"]."')";
+			$sql = "INSERT INTO plan_trabajo(codigo,id_periodo,id_promotor,id_colegio,cod_profesor,id_objetivo,otro_objetivo,otro_participante,resultado,color,start,end,agendamiento,descripcion) values ('$cod_plan','".$gp_periodo["id"]."', '".$participante."', '$colegio', '$cod_profesor', '$objetivo','$otro_objetivo','$otro_participante','0','#4c00ff', '$start', '$end', '5', '".$_POST["descripcion"]."')";
 
 			$query = $bdd->prepare( $sql );
 			if ($query == false) {
@@ -152,7 +154,7 @@ else {
 
 		}else{
 
-			$sql = "INSERT INTO plan_trabajo(codigo,id_periodo,id_promotor,id_colegio,cod_profesor,id_objetivo,otro_objetivo,resultado,color,start,end,agendamiento,descripcion) values ('$cod_plan','".$gp_periodo["id"]."', '".$participante."', '$colegio', '$cod_profesor', '$objetivo','$otro_objetivo','0','#4c00ff', '$start', '$end', '4', '".$_POST["descripcion"]."')";
+			$sql = "INSERT INTO plan_trabajo(codigo,id_periodo,id_promotor,id_colegio,cod_profesor,id_objetivo,otro_objetivo,otro_participante,resultado,color,start,end,agendamiento,descripcion) values ('$cod_plan','".$gp_periodo["id"]."', '".$participante."', '$colegio', '$cod_profesor', '$objetivo','$otro_objetivo','$otro_participante','0','#4c00ff', '$start', '$end', '4', '".$_POST["descripcion"]."')";
 
 			$query = $bdd->prepare( $sql );
 			if ($query == false) {

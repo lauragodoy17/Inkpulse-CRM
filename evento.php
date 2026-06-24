@@ -134,6 +134,10 @@
                 $partics.=$participante["parti"]." (".ucfirst($tipo_noti[1])."), ";
 
               }
+
+              if (!empty($visita['otro_participante'])) {
+                $partics .= $visita['otro_participante'] . " (Externo), ";
+              }
    
                 
             ?>

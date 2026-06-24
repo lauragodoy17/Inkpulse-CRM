@@ -135,7 +135,7 @@
 								  		    <input type="text" name="otro_lugar_txt" id="otro_lugar_txt" class="form-control" placeholder="Especifique el lugar">
 								  		  </div>
 								  		</div><br>
-								  		
+
 								  		<div class="form-group ocultar_oficina">
 											<label for="cole" class="col-sm-4 control-label">Colegio<small style="color:red;"> *</small></label>
 											<div class="col-sm-8">
@@ -184,8 +184,8 @@
 								  		<label for="parti" class="col-sm-4 control-label">Otros participantes</label>
 								  		<div class="col-sm-8">
 										  	<select name="participantes[]" id="parti" class="form-control custom-select2"  multiple="multiple" style="width: 300px;">
-										  		
-										  		<?php 
+
+										  		<?php
 											 		$sql = "SELECT id, CONCAT(nombres, ' ', apellidos) as parti FROM usuarios WHERE id !=1 AND act=1 AND (tipo=3 ||tipo=6 || tipo=4 || tipo=1)";
 
 													$req = $bdd->prepare($sql);
@@ -193,12 +193,15 @@
 													$participantes = $req->fetchAll();
 
 													foreach($participantes as $participante) {
-													   
+
 													    echo '<option value="'.$participante["id"].'">'.$participante["parti"].'</option>';
 													}
 											 	?>
+											 	<option value="otro">Otro</option>
 
 										  	</select>
+										  	<input type="text" name="otro_participante" id="otro_participante_txt"
+										  	       class="form-control mt-1 d-none" placeholder="Nombre del participante externo">
 									  	</div>
 									</div><br>
 									
@@ -217,33 +220,24 @@
 									</div>
 									<?php } ?>
 								  </div><br>
-									
-									
 
 								  <div class="form-group ocultar_oficina">
 									<label for="objetivo" class="col-sm-4 control-label">Objetivo<small style="color:red;"> *</small></label>
 									<div class="col-sm-8">
-									 <select name="objetivo" id="objetivo" class="form-control" required
-									         onchange="toggleOtroObjetivo(this)">
+									 <select name="objetivo" id="objetivo" class="form-control custom-select2" style="width:300px;" required>
 									 	<option value="">Seleccionar</option>
 									 	<?php
-
 									 		if ($_SESSION["tipo"] < 4) {
-									 			$sql = "SELECT id, objetivo FROM objetivos WHERE tipo < 3 ORDER BY objetivo";
+									 			$sql = "SELECT id, objetivo FROM objetivos WHERE tipo < 3 AND objetivo != 'Otro' ORDER BY objetivo";
 									 		}else{
-									 			$sql = "SELECT id, objetivo FROM objetivos WHERE tipo > 1 ORDER BY objetivo";
+									 			$sql = "SELECT id, objetivo FROM objetivos WHERE tipo > 1 AND objetivo != 'Otro' ORDER BY objetivo";
 									 		}
-
-
-											$req = $bdd->prepare($sql);
-											$req->execute();
-											$objetivos = $req->fetchAll();
-
-											foreach($objetivos as $objetivo) {
-											    $id = $objetivo['id'];
-											    $nom = $objetivo['objetivo'];
-											    echo '<option value="'.$id.'">'.$nom.'</option>';
-											}
+									 		$req = $bdd->prepare($sql);
+									 		$req->execute();
+									 		$objetivos = $req->fetchAll();
+									 		foreach($objetivos as $objetivo) {
+									 		    echo '<option value="'.$objetivo['id'].'">'.$objetivo['objetivo'].'</option>';
+									 		}
 									 	?>
 									 	<option value="otro">Otro</option>
 									 </select>
@@ -252,7 +246,6 @@
 									</div>
 								  </div><br>
 
-							
 								  <div class="form-group">
 									<label for="start" class="col-sm-4 control-label">Inicio</label>
 									<div class="col-sm-8">
@@ -468,26 +461,6 @@
 		
 			});
 
-			$('#objetivo').on('change',function(){
-        		var valor = $(this).val();
-		        if (valor == 2) {
-
-		          	$("#muestreo").removeClass("d-none");
-		          	$("#materia").attr("required","required");
-		          	$("#grado").attr("required","required");
-		          	$("#libro").attr("required","required");
-
-        		}else{
-
-		          	$("#muestreo").addClass("d-none");
-
-		          	$("#materia").removeAttr("required");
-		          	$("#grado").removeAttr("required");
-		          	$("#libro").removeAttr("required");
-        		}
-            
-                
-    		});
 
     		$("#oficina").click(function(){
 
@@ -541,15 +514,6 @@
 
 			})
 
-			function toggleOtroObjetivo(sel) {
-				var $inp = $('#otro_objetivo_txt');
-				if ($(sel).val() === 'otro') {
-					$inp.removeClass('d-none').attr('required', 'required');
-				} else {
-					$inp.addClass('d-none').removeAttr('required').val('');
-				}
-			}
-
 			$("#otro_chk").click(function(){
 
 				if ($('#otro_chk').prop('checked')) {
@@ -578,6 +542,37 @@
 			$(document).ready(function() {
 				$(".custom-select2").select2({
 					 dropdownParent: $('#ModalAdd')
+				});
+
+				$('#parti').on('change', function() {
+					var vals = $(this).val() || [];
+					if (vals.indexOf('otro') !== -1) {
+						$('#otro_participante_txt').removeClass('d-none').attr('required', 'required');
+					} else {
+						$('#otro_participante_txt').addClass('d-none').removeAttr('required').val('');
+					}
+				});
+
+				function manejarObjetivo(valor) {
+					if (valor == 2) {
+						$("#muestreo").removeClass("d-none");
+						$("#materia").attr("required","required");
+						$("#grado").attr("required","required");
+						$("#libro").attr("required","required");
+					} else {
+						$("#muestreo").addClass("d-none");
+						$("#materia").removeAttr("required");
+						$("#grado").removeAttr("required");
+						$("#libro").removeAttr("required");
+					}
+					if (valor === 'otro') {
+						$('#otro_objetivo_txt').removeClass('d-none').attr('required', 'required');
+					} else {
+						$('#otro_objetivo_txt').addClass('d-none').removeAttr('required').val('');
+					}
+				}
+				$('#objetivo').on('change select2:select', function() {
+					manejarObjetivo($(this).val());
 				});
 			});
 
