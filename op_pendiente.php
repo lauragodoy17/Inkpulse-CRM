@@ -84,9 +84,11 @@
       .op-card { background: #fff; border-radius: 14px; overflow: hidden; margin-bottom: 18px;
                  box-shadow: 0 1px 4px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.04); }
       .op-card-head {
-        padding: 14px 20px; border-bottom: 1px solid #e2e8f0;
-        font-size: .88rem; font-weight: 700; color: #0f172a;
+        padding: 14px 20px; border-bottom: 2px solid #c7d2fe;
+        font-size: .88rem; font-weight: 700; color: #1e3a8a;
         display: flex; align-items: center; gap: 8px;
+        background: #eef2ff; border-left: 4px solid #4361ee;
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
       }
       .op-card-head i { font-size: 1rem; color: #4361ee; }
       .op-card-body { padding: 20px 24px; }
@@ -98,7 +100,7 @@
       @media (max-width: 540px) { .op-info-2, .op-info-4 { grid-template-columns: 1fr; } }
 
       .op-field-label {
-        font-size: .68rem; color: #64748b; font-weight: 600;
+        font-size: .68rem; color: #1e40af; font-weight: 700;
         text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px;
       }
       .op-val { font-size: .875rem; font-weight: 500; color: #0f172a; line-height: 1.4; word-break: break-word; }

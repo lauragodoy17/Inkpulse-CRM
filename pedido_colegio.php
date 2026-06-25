@@ -160,11 +160,11 @@ $rechazar_label = (intval($pedido['eid'] ?? 0) == 1) ? 'Rechazar' : 'Anular';
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 
     /* Print */
-    @page { margin: 15px; size: landscape; }
+    @page { size: portrait; margin: 10mm; }
     @media print {
       .mc-actions, .breadcrumb, .d-print-none, .left-side-bar, .header { display:none !important; }
       a[href]:after { content:none !important; }
-      body { font-size:9px; }
+      body { zoom: 0.68; }
       .mc-obs-wrap textarea { height:auto !important; min-height:0 !important; overflow:visible !important; white-space:pre-wrap !important; page-break-inside:avoid; }
       #pc-table td input[type="number"] { border:none !important; background:transparent !important; width:auto !important; }
       #pc-table thead, #pc-table tfoot { display: table-row-group !important; }
