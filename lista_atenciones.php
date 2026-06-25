@@ -142,6 +142,8 @@ sort($estados_uniq);
     .la-badge-purple { background:#f5f3ff; color:#4c1d95; }
     .la-badge-red    { background:#fee2e2; color:#991b1b; }
     .la-badge-gray   { background:#f1f5f9; color:#475569; }
+    .la-badge-legal-proceso { background:#fef3c7; color:#92400e; margin-top:4px; display:inline-block; }
+    .la-badge-legal-ok      { background:#dcfce7; color:#166534; margin-top:4px; display:inline-block; }
     .la-link { color: <?= $ac['accent'] ?>; font-weight: 600; text-decoration: none; }
     .la-link:hover { text-decoration: underline; }
     #la-count-badge { background: <?= $ac['accent'] ?>; color:#fff; font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:20px; }
@@ -292,6 +294,24 @@ sort($estados_uniq);
                 $req_val->execute([$s['id']]);
                 $valor = $req_val->fetchColumn() ?? 0;
 
+                // Estado de legalización desde trazabilidad
+                $tot_legal_la = 0;
+                try {
+                  $req_ll = $bdd->prepare("SELECT COALESCE(SUM(valor),0) FROM trazabilidad_entregas WHERE id_solicitud=? AND tipo='legalizacion'");
+                  $req_ll->execute([$s['id']]);
+                  $tot_legal_la = (float)$req_ll->fetchColumn();
+                } catch (Exception $e) {}
+                $legal_cerrado_la = 0;
+                try {
+                  $req_lc = $bdd->prepare("SELECT legal_cerrado FROM solicitudes_recursos WHERE id=?");
+                  $req_lc->execute([$s['id']]);
+                  $legal_cerrado_la = (int)$req_lc->fetchColumn();
+                } catch (Exception $e) {}
+                if ($legal_cerrado_la)           $legal_badge = 'completo';
+                elseif ($tot_legal_la <= 0)      $legal_badge = null;
+                elseif ($tot_legal_la < $valor)  $legal_badge = 'proceso';
+                else                             $legal_badge = 'completo';
+
                 $e_low = strtolower($s['estado']);
                 $badge_class = match(true) {
                   str_contains($e_low, 'solicit') || str_contains($e_low, 'pendient') => 'la-badge-yellow',
@@ -311,7 +331,14 @@ sort($estados_uniq);
                 <td><?= htmlspecialchars($s['solicitante'] . ($s['cargo'] ? ' ('.$s['cargo'].')' : '')) ?></td>
                 <td><?= htmlspecialchars($s['fecha_entrega']) ?></td>
                 <td>$ <?= number_format($valor, 0, ',', '.') ?></td>
-                <td><span class="la-badge <?= $badge_class ?>"><?= htmlspecialchars($s['estado']) ?></span></td>
+                <td>
+                  <span class="la-badge <?= $badge_class ?>"><?= htmlspecialchars($s['estado']) ?></span>
+                  <?php if ($legal_badge === 'proceso'): ?>
+                    <br><span class="la-badge la-badge-legal-proceso"><i class="bi bi-hourglass-split"></i> En proceso de legalización</span>
+                  <?php elseif ($legal_badge === 'completo'): ?>
+                    <br><span class="la-badge la-badge-legal-ok"><i class="bi bi-patch-check-fill"></i> Legalización completa</span>
+                  <?php endif; ?>
+                </td>
                 <?php if ($tp == 4): ?>
                   <td><?= $s['contab'] ? 'Sí' : 'No' ?></td>
                 <?php endif; ?>

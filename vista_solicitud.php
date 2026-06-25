@@ -52,9 +52,11 @@
     .vs-badge.aprobado   { background:#dcfce7; color:#166534; }
     .vs-badge.entregado  { background:#dbeafe; color:#1e40af; }
     .vs-badge.cobrado    { background:#dbeafe; color:#1e40af; }
-    .vs-badge.anulado    { background:#fee2e2; color:#991b1b; }
-    .vs-badge.rechazado  { background:#fee2e2; color:#991b1b; }
-    .vs-badge.default    { background:#f1f5f9; color:#64748b; }
+    .vs-badge.anulado          { background:#fee2e2; color:#991b1b; }
+    .vs-badge.rechazado        { background:#fee2e2; color:#991b1b; }
+    .vs-badge.default          { background:#f1f5f9; color:#64748b; }
+    .vs-badge.en-proceso       { background:#fef3c7; color:#92400e; }
+    .vs-badge.legal-completo   { background:#dcfce7; color:#15803d; }
 
     /* ── Info cards ──────────────────────────────────────────── */
     .vs-info-grid {
@@ -186,6 +188,34 @@
   $meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   $dt = date_create($solicitud["fecha"]);
   $fecha_legible = $dt ? (int)$dt->format('j') . ' de ' . $meses[(int)$dt->format('n') - 1] . ' de ' . $dt->format('Y') . ' · ' . $dt->format('g:i a') : $solicitud["fecha"];
+
+  // Pre-calcular totales para el estado de legalización en el header
+  $req_sum = $bdd->prepare("SELECT SUM(presupuesto) as tot_p, SUM(valor_e) as tot_ve FROM recursos_solicitados WHERE id_solicitud=?");
+  $req_sum->execute([$solicitud["id"]]);
+  $sums_h        = $req_sum->fetch();
+  $tot_presup_h  = (float)($sums_h['tot_p']  ?? 0);
+  $tot_valor_e_h = (float)($sums_h['tot_ve'] ?? 0);
+
+  $tot_legaliza_h = 0;
+  try {
+    $req_leg = $bdd->prepare("SELECT COALESCE(SUM(valor),0) FROM trazabilidad_entregas WHERE id_solicitud=? AND tipo='legalizacion'");
+    $req_leg->execute([$solicitud["id"]]);
+    $tot_legaliza_h = (float)$req_leg->fetchColumn();
+  } catch (Exception $e) {}
+
+  $saldo_h = $tot_presup_h - $tot_legaliza_h;
+
+  $legal_cerrado = 0;
+  try {
+    $req_lc = $bdd->prepare("SELECT legal_cerrado FROM solicitudes_recursos WHERE id=?");
+    $req_lc->execute([$solicitud["id"]]);
+    $legal_cerrado = (int)$req_lc->fetchColumn();
+  } catch (Exception $e) {}
+
+  if ($legal_cerrado)           $legal_estado = 'completo';
+  elseif ($tot_legaliza_h <= 0) $legal_estado = null;
+  elseif ($saldo_h > 0)         $legal_estado = 'proceso';
+  else                          $legal_estado = 'completo';
 ?>
 
 <div class="vs-wrap">
@@ -194,6 +224,11 @@
   <div class="vs-header">
     <p class="vs-num"><i class="bi bi-file-earmark-text" style="color:#6366f1;margin-right:6px"></i>Solicitud #<?= htmlspecialchars($num) ?></p>
     <span class="vs-badge <?= $badge ?>"><?= htmlspecialchars($solicitud["estado"]) ?></span>
+    <?php if ($legal_estado === 'proceso'): ?>
+      <span class="vs-badge en-proceso"><i class="bi bi-hourglass-split" style="margin-right:4px"></i>En proceso de legalización</span>
+    <?php elseif ($legal_estado === 'completo'): ?>
+      <span class="vs-badge legal-completo"><i class="bi bi-patch-check-fill" style="margin-right:4px"></i>Legalización completa</span>
+    <?php endif; ?>
   </div>
 
   <!-- Tarjetas de información -->
@@ -249,6 +284,13 @@
 
   <!-- Recursos solicitados -->
   <p class="vs-section-title"><i class="bi bi-box-seam"></i> Recursos solicitados</p>
+  <?php
+  if ($solicitud["idestado"] == 1) {
+    echo '<form action="php/modificar_solicitud.php?tipo=1" method="POST" id="form_a">';
+  } else {
+    echo '<form action="php/modificar_solicitud.php?tipo=2" method="POST" id="form_a">';
+  }
+  ?>
   <div class="vs-table-wrap">
   <div style="overflow-x:auto;">
     <table class="vs-table">
@@ -266,12 +308,6 @@
       </thead>
       <tbody>
         <?php
-          if ($solicitud["idestado"] == 1) {
-            echo "<form action='php/modificar_solicitud.php?tipo=1' method='POST' id='form_a'>";
-          } else {
-            echo "<form action='php/modificar_solicitud.php?tipo=2' method='POST' id='form_a'>";
-          }
-
           $sql = "SELECT t.tipo, r.id, r.recurso, r.presupuesto, r.tipo_e, r.valor_e, r.fecha_e, r.legaliza, c.categoria
                   FROM recursos_solicitados r
                   JOIN tipos_recursos t     ON t.id = r.tipo
@@ -317,19 +353,46 @@
               <?php endforeach; ?>
             </select>
           </td>
-          <td><input type="text" id="valor_e<?= $recurso["id"] ?>" value="<?= $recurso["valor_e"] ?>"></td>
+          <td>
+            <div style="font-size:0.73rem;color:#64748b;margin-bottom:3px">Entregado: $ <?= number_format($recurso["valor_e"], 0, ',', '.') ?></div>
+            <input type="number" id="valor_e<?= $recurso["id"] ?>" placeholder="Nueva entrega" style="width:100%">
+          </td>
           <td><input type="date" id="fecha_e<?= $recurso["id"] ?>" value="<?= $recurso["fecha_e"] ?>"></td>
           <td></td>
           <?php elseif ($solicitud["idestado"] == 4): ?>
           <?php
-                $sql2 = "SELECT tipo FROM tipos_recursos WHERE id='".$recurso["tipo_e"]."'";
+                $sql2 = "SELECT id, tipo FROM tipos_recursos WHERE categoria=2 OR categoria=3";
                 $req2 = $bdd->prepare($sql2); $req2->execute();
-                $tipo_e_row = $req2->fetch() ?: [];
+                $tipos_e = $req2->fetchAll();
           ?>
-          <td><?= htmlspecialchars($tipo_e_row["tipo"] ?? '') ?></td>
-          <td>$ <?= number_format($recurso["valor_e"], 0, ',', '.') ?></td>
-          <td><?= htmlspecialchars($recurso["fecha_e"]) ?></td>
-          <td><input type="text" id="legaliza<?= $recurso["id"] ?>" value="<?= $recurso["legaliza"] ?>"></td>
+          <td>
+            <select id="tipo_e<?= $recurso["id"] ?>">
+              <option value="">Seleccionar</option>
+              <?php foreach ($tipos_e as $te): ?>
+              <option value="<?= $te["id"] ?>" <?= $recurso["tipo_e"]==$te["id"] ? 'selected' : '' ?>><?= htmlspecialchars($te["tipo"]) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </td>
+          <td>
+            <div style="font-size:0.73rem;color:#64748b;margin-bottom:3px">Entregado: $ <?= number_format($recurso["valor_e"], 0, ',', '.') ?></div>
+            <input type="number" id="valor_e<?= $recurso["id"] ?>" placeholder="Nueva entrega" style="width:100%">
+          </td>
+          <td><input type="date" id="fecha_e<?= $recurso["id"] ?>" value="<?= $recurso["fecha_e"] ?>"></td>
+          <?php
+            $legal_acum = 0;
+            try {
+              $req_la = $bdd->prepare("SELECT COALESCE(SUM(valor),0) FROM trazabilidad_entregas WHERE id_recurso=? AND tipo='legalizacion'");
+              $req_la->execute([$recurso["id"]]);
+              $legal_acum = (float)$req_la->fetchColumn();
+            } catch (Exception $e) {}
+          ?>
+          <td>
+            <div style="font-size:0.73rem;color:#64748b;margin-bottom:3px">Legalizado: $ <?= number_format($legal_acum, 0, ',', '.') ?></div>
+            <div style="display:flex;gap:3px;">
+              <input type="number" id="legaliza<?= $recurso["id"] ?>" placeholder="Nuevo monto" style="width:50%">
+              <input type="date" id="fecha_legal<?= $recurso["id"] ?>" style="width:48%">
+            </div>
+          </td>
           <?php else: ?>
           <?php
                 $sql2 = "SELECT tipo FROM tipos_recursos WHERE id='".$recurso["tipo_e"]."'";
@@ -356,6 +419,7 @@
         <?php
           $t_presup[]   = $recurso["presupuesto"];
           $t_legaliza[] = $recurso["legaliza"];
+          $t_valor_e[]  = $recurso["valor_e"];
           echo "<input type='hidden' id='i_legaliza".$recurso["id"]."' name='i_legaliza[]'>";
           echo "<input type='hidden' id='i_entrega".$recurso["id"]."'  name='i_entrega[]'>";
           if ($can_edit && $solicitud["idestado"] == 2):
@@ -376,22 +440,65 @@
             $('#legaliza".$recurso["id"]."').keyup(function(){
               $('#i_legaliza".$recurso["id"]."').val(".$recurso["id"]."+'|'+parseInt($(this).val()));
             });
+            $('#tipo_e".$recurso["id"]."').change(function(){
+              $('#i_entrega".$recurso["id"]."').val(".$recurso["id"]."+'|'+$('#tipo_e".$recurso["id"]."').val()+'|'+parseInt($('#valor_e".$recurso["id"]."').val())+'|'+$('#fecha_e".$recurso["id"]."').val());
+            });
+            $('#valor_e".$recurso["id"]."').keyup(function(){
+              $('#i_entrega".$recurso["id"]."').val(".$recurso["id"]."+'|'+$('#tipo_e".$recurso["id"]."').val()+'|'+parseInt($('#valor_e".$recurso["id"]."').val())+'|'+$('#fecha_e".$recurso["id"]."').val());
+            });
+            $('#fecha_e".$recurso["id"]."').blur(function(){
+              $('#i_entrega".$recurso["id"]."').val(".$recurso["id"]."+'|'+$('#tipo_e".$recurso["id"]."').val()+'|'+parseInt($('#valor_e".$recurso["id"]."').val())+'|'+$('#fecha_e".$recurso["id"]."').val());
+            });
           </script>";
           endif;
         endforeach;
+
+        // Total legalizado desde trazabilidad (mismo origen que las tarjetas)
+        $tot_presup   = array_sum($t_presup);
+        $tot_valor_e  = array_sum($t_valor_e ?? []);
+        $tot_legaliza = 0;
+        try {
+          $req_tr = $bdd->prepare(
+            "SELECT COALESCE(SUM(valor),0) FROM trazabilidad_entregas WHERE id_solicitud=? AND tipo='legalizacion'"
+          );
+          $req_tr->execute([$solicitud["id"]]);
+          $tot_legaliza = (float)$req_tr->fetchColumn();
+        } catch (Exception $e) {}
+        $saldo_pendiente = max($tot_presup - $tot_legaliza, 0);
         ?>
       </tbody>
       <tfoot>
         <tr>
           <td>Total</td>
           <td></td><td></td>
-          <td>$ <?= number_format(array_sum($t_presup), 0, ',', '.') ?></td>
+          <td>$ <?= number_format($tot_presup, 0, ',', '.') ?></td>
           <td></td><td></td><td></td>
-          <td>$ <?= number_format(array_sum($t_legaliza), 0, ',', '.') ?></td>
+          <td>$ <?= number_format($tot_legaliza, 0, ',', '.') ?></td>
         </tr>
       </tfoot>
     </table>
   </div>
+  </div>
+
+  <!-- Resumen de saldos -->
+  <?php /* $tot_presup, $tot_valor_e, $tot_legaliza y $saldo_pendiente ya calculados arriba */ ?>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px;">
+    <div class="vs-info-card" style="border-left-color:#6366f1">
+      <p class="vs-info-label">Presupuesto total</p>
+      <p class="vs-info-val">$ <?= number_format($tot_presup, 0, ',', '.') ?></p>
+    </div>
+    <div class="vs-info-card" style="border-left-color:#1d4ed8">
+      <p class="vs-info-label">Total entregado</p>
+      <p class="vs-info-val">$ <?= number_format($tot_valor_e, 0, ',', '.') ?></p>
+    </div>
+    <div class="vs-info-card" style="border-left-color:<?= $saldo_pendiente > 0 ? '#f59e0b' : '#16a34a' ?>">
+      <p class="vs-info-label">Saldo por entregar</p>
+      <p class="vs-info-val" style="color:<?= $saldo_pendiente > 0 ? '#b45309' : '#16a34a' ?>">$ <?= number_format($saldo_pendiente, 0, ',', '.') ?></p>
+    </div>
+    <div class="vs-info-card" style="border-left-color:#16a34a">
+      <p class="vs-info-label">Total legalizado</p>
+      <p class="vs-info-val">$ <?= number_format($tot_legaliza, 0, ',', '.') ?></p>
+    </div>
   </div>
 
   <!-- Botones de acción -->
@@ -416,6 +523,14 @@
       </a>
     <?php endif; ?>
 
+    <?php if (($_SESSION['tipo'] == 1) && $solicitud["idestado"] == 4 && $legal_estado !== 'completo'): ?>
+      <a class="btn btn-success btn-sm"
+         href="php/cerrar_legalizacion.php?solicitud=<?= $solicitud["id"] ?>"
+         onclick="return confirm('¿Marcar esta solicitud como legalización completa?')">
+        <i class="bi bi-patch-check-fill"></i> Legalización completa
+      </a>
+    <?php endif; ?>
+
     <?php if (in_array($_SESSION['tipo'], [1]) || $_SESSION['id']==19): ?>
       <?php if ($solicitud["idestado"] == 1): ?>
         <a class="btn btn-success btn-sm vs-confirm-link" data-tipo="aprobar"
@@ -431,6 +546,60 @@
   </div>
 
   <?php echo "</form>"; ?>
+
+  <!-- Historial de trazabilidad -->
+  <?php
+    $trazabilidad = [];
+    try {
+      $sql_t = "SELECT te.tipo, te.valor, te.fecha, te.fecha_registro, rs.recurso
+                FROM trazabilidad_entregas te
+                JOIN recursos_solicitados rs ON rs.id = te.id_recurso
+                WHERE te.id_solicitud = ?
+                ORDER BY te.fecha_registro ASC";
+      $req_t = $bdd->prepare($sql_t);
+      $req_t->execute([$solicitud["id"]]);
+      $trazabilidad = $req_t->fetchAll();
+    } catch (Exception $e) { /* tabla aún no creada */ }
+  ?>
+  <?php if (!empty($trazabilidad)): ?>
+  <p class="vs-section-title" style="margin-top:24px"><i class="bi bi-clock-history"></i> Historial de movimientos</p>
+  <div class="vs-table-wrap">
+    <table class="vs-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Recurso</th>
+          <th>Tipo</th>
+          <th>Valor</th>
+          <th>Fecha</th>
+          <th>Registrado</th>
+        </tr>
+      </thead>
+      <tbody>
+      <?php
+        $n = 0;
+        foreach ($trazabilidad as $t):
+          $n++;
+      ?>
+      <tr>
+        <td><?= $n ?></td>
+        <td><?= htmlspecialchars($t['recurso']) ?></td>
+        <td>
+          <?php if ($t['tipo'] === 'entrega'): ?>
+            <span style="background:#dbeafe;color:#1e40af;padding:2px 9px;border-radius:20px;font-size:.72rem;font-weight:700">Entrega</span>
+          <?php else: ?>
+            <span style="background:#dcfce7;color:#15803d;padding:2px 9px;border-radius:20px;font-size:.72rem;font-weight:700">Legalización</span>
+          <?php endif; ?>
+        </td>
+        <td>$ <?= number_format($t['valor'], 0, ',', '.') ?></td>
+        <td><?= htmlspecialchars($t['fecha']) ?></td>
+        <td style="font-size:.75rem;color:#64748b"><?= htmlspecialchars($t['fecha_registro']) ?></td>
+      </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+  <?php endif; ?>
 
   <!-- Archivo de legalización -->
   <?php if ($solicitud["idestado"] == 4 && $solicitud["archivo"] == ""): ?>
@@ -525,6 +694,25 @@
   $('#mc-confirm').on('click', function () {
     $('#vs-modal-confirm').modal('hide');
     if (_pendingAction) { _pendingAction(); _pendingAction = null; }
+  });
+
+  // Capturar valores actuales de los inputs visibles justo antes de enviar
+  $('#form_a').on('submit', function () {
+    <?php foreach ($recursos as $recurso): ?>
+    (function (id) {
+      var $legaliza = $('#legaliza' + id);
+      if ($legaliza.length) {
+        var fecha_legal = $('#fecha_legal' + id).val() || '';
+        $('#i_legaliza' + id).val(id + '|' + (parseInt($legaliza.val()) || 0) + '|' + fecha_legal);
+      }
+      var $valor_e = $('#valor_e' + id);
+      if ($valor_e.length) {
+        var tipo_e  = $('#tipo_e'  + id).val() || '';
+        var fecha_e = $('#fecha_e' + id).val() || '';
+        $('#i_entrega' + id).val(id + '|' + tipo_e + '|' + (parseInt($valor_e.val()) || 0) + '|' + fecha_e);
+      }
+    })(<?= (int)$recurso['id'] ?>);
+    <?php endforeach; ?>
   });
 
   <?php if (!empty($_GET['updated'])): ?>

@@ -193,6 +193,7 @@
   }
   .at-legal-badge.ok      { background: #dcfce7; color: #15803d; }
   .at-legal-badge.pending { background: #fef3c7; color: #92400e; }
+  .at-legal-badge.proceso { background: #fef3c7; color: #92400e; }
 
   /* ── Botón filtro sin legalizar ─────────────────────────── */
   .at-filter-legal {
@@ -622,7 +623,27 @@
             elseif (strpos($estado_lower, 'rechazad') !== false)  $badge = 'rechazado';
             else                                                   $badge = 'default';
         ?>
-        <?php $es_legal = $sol['total_legaliza'] > 0; ?>
+        <?php
+          // Estado de legalización desde trazabilidad (nuevo sistema)
+          $tot_legal_sol  = 0;
+          $tot_presup_sol = (float)($tot2['total'] ?? 0);
+          try {
+            $req_ls = $bdd->prepare("SELECT COALESCE(SUM(valor),0) FROM trazabilidad_entregas WHERE id_solicitud=? AND tipo='legalizacion'");
+            $req_ls->execute([$sol['id']]);
+            $tot_legal_sol = (float)$req_ls->fetchColumn();
+          } catch (Exception $e) {}
+          $legal_cerrado_sol = 0;
+          try {
+            $req_lc = $bdd->prepare("SELECT legal_cerrado FROM solicitudes_recursos WHERE id=?");
+            $req_lc->execute([$sol['id']]);
+            $legal_cerrado_sol = (int)$req_lc->fetchColumn();
+          } catch (Exception $e) {}
+          if ($legal_cerrado_sol)                    $legal_state = 'completo';
+          elseif ($tot_legal_sol <= 0)               $legal_state = 'none';
+          elseif ($tot_legal_sol < $tot_presup_sol)  $legal_state = 'proceso';
+          else                                       $legal_state = 'completo';
+          $es_legal = ($legal_state !== 'none');
+        ?>
         <tr data-legal="<?= $es_legal ? '1' : '0' ?>">
           <td><a href="vista_solicitud.php?id=<?= $sol['id'] ?>" class="at-link vista_soli"><?= htmlspecialchars($num) ?></a></td>
           <td><?= htmlspecialchars($sol['fecha']) ?></td>
@@ -631,8 +652,10 @@
           <td>$ <?= number_format($tot2['total'], 0, ',', '.') ?></td>
           <td><span class="at-badge <?= $badge ?>"><?= htmlspecialchars($sol['estado']) ?></span></td>
           <td>
-            <?php if ($es_legal): ?>
-              <span class="at-legal-badge ok"><i class="bi bi-check-circle-fill"></i> Legalizada</span>
+            <?php if ($legal_state === 'proceso'): ?>
+              <span class="at-legal-badge proceso"><i class="bi bi-hourglass-split"></i> En proceso de legalización</span>
+            <?php elseif ($legal_state === 'completo'): ?>
+              <span class="at-legal-badge ok"><i class="bi bi-patch-check-fill"></i> Legalización completa</span>
             <?php else: ?>
               <span class="at-legal-badge pending"><i class="bi bi-exclamation-circle-fill"></i> Sin legalizar</span>
             <?php endif; ?>
