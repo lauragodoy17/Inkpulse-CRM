@@ -143,6 +143,52 @@ $req = $bdd->prepare($sql);
 $req->execute();
 $solicitudes = $req->fetchAll();
 
+// --- Pre-fetch para evitar N+1 queries en el loop principal ---
+$resource_ids  = array_unique(array_column($solicitudes, 'id_recurso'));
+$unique_zonas  = array_values(array_filter(array_unique(array_column($solicitudes, 'cod_zona'))));
+$unique_tipos  = array_values(array_filter(array_unique(array_column($solicitudes, 'tipo_e'))));
+
+// Trazabilidad de todos los recursos en una sola consulta
+$trazabilidad_map = [];
+if (!empty($resource_ids)) {
+    $ph = implode(',', array_fill(0, count($resource_ids), '?'));
+    $req_t = $bdd->prepare("SELECT id_recurso, tipo, valor, fecha, fecha_registro FROM trazabilidad_entregas WHERE id_recurso IN ($ph) ORDER BY fecha_registro ASC");
+    $req_t->execute($resource_ids);
+    foreach ($req_t->fetchAll() as $row) {
+        $trazabilidad_map[$row['id_recurso']][$row['tipo']][] = $row;
+    }
+}
+
+// Promotores por zona
+$promo_map = [];
+if (!empty($unique_zonas)) {
+    $ph_z = implode(',', array_fill(0, count($unique_zonas), '?'));
+    $req_p = $bdd->prepare("SELECT cod_zona, CONCAT(nombres,' ',apellidos) AS promotor FROM usuarios WHERE cod_zona IN ($ph_z)");
+    $req_p->execute($unique_zonas);
+    foreach ($req_p->fetchAll() as $row) {
+        $promo_map[$row['cod_zona']] = $row['promotor'];
+    }
+}
+
+// Tipos de entrega
+$tipo_e_map = [];
+if (!empty($unique_tipos)) {
+    $ph_t = implode(',', array_fill(0, count($unique_tipos), '?'));
+    $req_te = $bdd->prepare("SELECT id, tipo FROM tipos_recursos WHERE id IN ($ph_t)");
+    $req_te->execute($unique_tipos);
+    foreach ($req_te->fetchAll() as $row) {
+        $tipo_e_map[$row['id']] = $row['tipo'];
+    }
+}
+
+// Totales entregados por colegio (estado=4)
+$totals_map = [];
+$req_totals = $bdd->prepare("SELECT s.id_colegio, SUM(r.valor_e) as total_e FROM solicitudes_recursos s JOIN recursos_solicitados r ON r.id_solicitud=s.id WHERE s.id_periodo=? AND s.estado=4 GROUP BY s.id_colegio");
+$req_totals->execute([$_POST["periodo"]]);
+foreach ($req_totals->fetchAll() as $row) {
+    $totals_map[$row['id_colegio']] = $row['total_e'];
+}
+// --------------------------------------------------------------
 
 // Pre-computar presupuesto, adopción total y venta real por colegio
 $colegios_datos = [];
@@ -221,23 +267,9 @@ foreach ($solicitudes as $solicitud) {
           '_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)'
         );
 
-    $sql="SELECT CONCAT(nombres,' ', apellidos) AS promotor FROM usuarios WHERE cod_zona='".$solicitud["cod_zona"]."'";
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $promo_colegio = $req->fetch();
-
-    $sql = "SELECT tipo FROM tipos_recursos WHERE id='".$solicitud["tipo_e"]."'";
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $tipo_e = $req->fetch();
-
-    $sql = "SELECT SUM(r.valor_e) as total_e FROM solicitudes_recursos s JOIN recursos_solicitados r ON s.id=r.id_solicitud WHERE s.id_colegio='".$solicitud["cid"]."' AND s.id_periodo='".$_POST["periodo"]."' AND s.estado='4';";
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $total = $req->fetch();
+    $promo_colegio = ['promotor' => $promo_map[$solicitud['cod_zona']] ?? ''];
+    $tipo_e        = ['tipo'     => $tipo_e_map[$solicitud['tipo_e']] ?? ''];
+    $total         = ['total_e'  => $totals_map[$solicitud['cid']] ?? 0];
 	
     if ($solicitud["id"] < 221) {
         $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$solicitud[id]");
@@ -274,38 +306,14 @@ foreach ($solicitudes as $solicitud) {
     $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", "$solicitud[valor_e]");
     $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", "$solicitud[fecha_e]");
 
-    // Total legalizado desde trazabilidad para este recurso
-    $tot_legal_r = 0;
-    try {
-      $req_lr = $bdd->prepare("SELECT COALESCE(SUM(valor),0) FROM trazabilidad_entregas WHERE id_recurso=? AND tipo='legalizacion'");
-      $req_lr->execute([$solicitud["id_recurso"]]);
-      $tot_legal_r = (float)$req_lr->fetchColumn();
-    } catch (Exception $e) {
-      $tot_legal_r = (float)$solicitud["legaliza"];
+    $datos_cole     = $colegios_datos[$solicitud["cid"]] ?? ['presupuesto' => 0, 'adopcion' => 0, 'venta_real' => 0];
+    $fmt_money      = '_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)';
+    $entregas_traz  = $trazabilidad_map[$solicitud['id_recurso']]['entrega']       ?? [];
+    $legalizaciones = $trazabilidad_map[$solicitud['id_recurso']]['legalizacion']  ?? [];
+    $tot_legal_r    = array_sum(array_column($legalizaciones, 'valor'));
+    if ($tot_legal_r == 0) {
+        $tot_legal_r = (float)$solicitud["legaliza"];
     }
-    $datos_cole = $colegios_datos[$solicitud["cid"]] ?? ['presupuesto' => 0, 'adopcion' => 0, 'venta_real' => 0];
-    $fmt_money = '_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)';
-
-    // Sub-filas: entregas y legalizaciones desde trazabilidad
-    $entregas_traz = [];
-    try {
-      $req_ent = $bdd->prepare(
-        "SELECT valor, fecha, fecha_registro FROM trazabilidad_entregas
-         WHERE id_recurso=? AND tipo='entrega' ORDER BY fecha_registro ASC"
-      );
-      $req_ent->execute([$solicitud["id_recurso"]]);
-      $entregas_traz = $req_ent->fetchAll();
-    } catch (Exception $e) {}
-
-    $legalizaciones = [];
-    try {
-      $req_traz = $bdd->prepare(
-        "SELECT valor, fecha, fecha_registro FROM trazabilidad_entregas
-         WHERE id_recurso=? AND tipo='legalizacion' ORDER BY fecha_registro ASC"
-      );
-      $req_traz->execute([$solicitud["id_recurso"]]);
-      $legalizaciones = $req_traz->fetchAll();
-    } catch (Exception $e) {}
 
     if (!empty($entregas_traz) || !empty($legalizaciones)) {
       // Quitar I, K, M, O, P, Q, R, S de la fila principal (van al total)
@@ -392,8 +400,9 @@ foreach ($solicitudes as $solicitud) {
       $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", $datos_cole['venta_real']);
 
     } else {
-      // Sin legalizaciones: todo en la fila principal como antes
-      $objSpreadsheet->getActiveSheet()->SetCellValue("O$conta", "");
+      // Sin sub-filas: todo en la fila principal
+      $objSpreadsheet->getActiveSheet()->getStyle("O$conta")->getNumberFormat()->setFormatCode($fmt_money);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("O$conta", $tot_legal_r);
       if ($solicitud["contab"]==0) {
         $objSpreadsheet->getActiveSheet()->SetCellValue("P$conta", "No");
       } else {
@@ -475,22 +484,8 @@ if (isset($total_a)) {
     $objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$total_a");
 }
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
-
-foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
+foreach (range('A', 'T') as $columnID) {
+    $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);
 }
 
 
