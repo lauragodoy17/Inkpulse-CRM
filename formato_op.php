@@ -331,7 +331,7 @@
       <div class="op-field">
         <div class="op-field-icon"><i class="bi bi-arrow-return-left"></i></div>
         <div class="op-field-body"><p class="op-field-label">Devolución de cliente</p>
-          <p class="op-field-val"><a href="vista_devol.php?id_pedido=<?= $op['id_devol_c'] ?>&tipo=1" target="_blank">#<?= $op['id_devol_c'] ?></a></p></div>
+          <p class="op-field-val"><a href="vista_devol.php?id_devol=<?= $op['id_devol_c'] ?>&tipo=1" target="_blank">#<?= $op['id_devol_c'] ?></a></p></div>
       </div>
       <?php endif; ?>
 
@@ -339,7 +339,7 @@
       <div class="op-field">
         <div class="op-field-icon"><i class="bi bi-arrow-return-left"></i></div>
         <div class="op-field-body"><p class="op-field-label">Devolución de proveedor</p>
-          <p class="op-field-val"><a href="vista_devol.php?id_pedido=<?= $op['id_devol_p'] ?>&tipo=2" target="_blank">#<?= $op['id_devol_p'] ?></a></p></div>
+          <p class="op-field-val"><a href="vista_devol.php?id_devol=<?= $op['id_devol_p'] ?>&tipo=2" target="_blank">#<?= $op['id_devol_p'] ?></a></p></div>
       </div>
       <?php endif; ?>
 
@@ -347,7 +347,7 @@
       <div class="op-field">
         <div class="op-field-icon"><i class="bi bi-arrow-return-left"></i></div>
         <div class="op-field-body"><p class="op-field-label">Devolución de venta</p>
-          <p class="op-field-val"><a href="vista_devol.php?id_pedido=<?= $op['id_devol_v'] ?>&tipo=2" target="_blank">#<?= $op['id_devol_v'] ?></a></p></div>
+          <p class="op-field-val"><a href="vista_devol.php?id_devol=<?= $op['id_devol_v'] ?>&tipo=2" target="_blank">#<?= $op['id_devol_v'] ?></a></p></div>
       </div>
       <?php endif; ?>
 
