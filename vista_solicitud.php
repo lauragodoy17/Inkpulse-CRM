@@ -202,6 +202,13 @@
     $req_leg->execute([$solicitud["id"]]);
     $tot_legaliza_h = (float)$req_leg->fetchColumn();
   } catch (Exception $e) {}
+  // Fallback a campo histórico para estados 2 y 4
+  if ($tot_legaliza_h <= 0 && in_array((int)$solicitud['idestado'], [2, 4])) {
+    $req_old_h = $bdd->prepare("SELECT COALESCE(SUM(legaliza),0) FROM recursos_solicitados WHERE id_solicitud=?");
+    $req_old_h->execute([$solicitud["id"]]);
+    $old_l_h = (float)$req_old_h->fetchColumn();
+    if ($old_l_h > 0) $tot_legaliza_h = $old_l_h;
+  }
 
   $saldo_h = $tot_presup_h - $tot_legaliza_h;
 
@@ -385,6 +392,8 @@
               $req_la->execute([$recurso["id"]]);
               $legal_acum = (float)$req_la->fetchColumn();
             } catch (Exception $e) {}
+            // Fallback a campo histórico si no hay trazabilidad
+            if ($legal_acum <= 0) $legal_acum = (float)($recurso["legaliza"] ?? 0);
           ?>
           <td>
             <div style="font-size:0.73rem;color:#64748b;margin-bottom:3px">Legalizado: $ <?= number_format($legal_acum, 0, ',', '.') ?></div>
@@ -453,7 +462,7 @@
           endif;
         endforeach;
 
-        // Total legalizado desde trazabilidad (mismo origen que las tarjetas)
+        // Total legalizado: trazabilidad primero, fallback a campo histórico para estados 2 y 4
         $tot_presup   = array_sum($t_presup);
         $tot_valor_e  = array_sum($t_valor_e ?? []);
         $tot_legaliza = 0;
@@ -464,6 +473,9 @@
           $req_tr->execute([$solicitud["id"]]);
           $tot_legaliza = (float)$req_tr->fetchColumn();
         } catch (Exception $e) {}
+        if ($tot_legaliza <= 0 && in_array((int)$solicitud['idestado'], [2, 4])) {
+          $tot_legaliza = (float)array_sum($t_legaliza);
+        }
         $saldo_pendiente = max($tot_presup - $tot_legaliza, 0);
         ?>
       </tbody>

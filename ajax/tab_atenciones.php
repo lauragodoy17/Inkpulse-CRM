@@ -26,7 +26,9 @@
 
   $sql_sin_legal = "SELECT COUNT(*) as cnt FROM solicitudes_recursos s
                     WHERE s.id_colegio='".$_GET['colegio']."' AND s.id_periodo='".$_GET['periodo']."'
-                    AND COALESCE((SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id), 0) = 0";
+                    AND COALESCE((SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id), 0) = 0
+                    AND COALESCE((SELECT SUM(te.valor) FROM trazabilidad_entregas te WHERE te.id_solicitud = s.id AND te.tipo='legalizacion'), 0) = 0
+                    AND COALESCE(s.legal_cerrado, 0) = 0";
   $req_sin_legal = $bdd->prepare($sql_sin_legal); $req_sin_legal->execute();
   $cnt_sin_legal = (int)$req_sin_legal->fetchColumn();
 ?>
@@ -624,7 +626,7 @@
             else                                                   $badge = 'default';
         ?>
         <?php
-          // Estado de legalización desde trazabilidad (nuevo sistema)
+          // Estado de legalización: trazabilidad primero, fallback a campo histórico para estados 2 y 4
           $tot_legal_sol  = 0;
           $tot_presup_sol = (float)($tot2['total'] ?? 0);
           try {
@@ -632,6 +634,10 @@
             $req_ls->execute([$sol['id']]);
             $tot_legal_sol = (float)$req_ls->fetchColumn();
           } catch (Exception $e) {}
+          if ($tot_legal_sol <= 0 && in_array((int)$sol['id_estado'], [2, 4])) {
+            $old_leg = (float)($sol['total_legaliza'] ?? 0);
+            if ($old_leg > 0) $tot_legal_sol = $old_leg;
+          }
           $legal_cerrado_sol = 0;
           try {
             $req_lc = $bdd->prepare("SELECT legal_cerrado FROM solicitudes_recursos WHERE id=?");

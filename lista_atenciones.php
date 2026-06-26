@@ -26,7 +26,7 @@ if ($tp == 1) {
   $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
-          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor
+          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
           FROM solicitudes_recursos s
           JOIN estados_pedidos e ON e.id=s.estado
           LEFT JOIN trabajadores_colegios t ON s.solicitante=t.id
@@ -38,7 +38,7 @@ if ($tp == 1) {
   $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
-          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor
+          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
           FROM solicitudes_recursos s
           JOIN estados_pedidos e ON e.id=s.estado
           LEFT JOIN trabajadores_colegios t ON s.solicitante=t.id
@@ -50,7 +50,7 @@ if ($tp == 1) {
   $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
-          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor
+          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
           FROM solicitudes_recursos s
           JOIN estados_pedidos e ON e.id=s.estado
           LEFT JOIN trabajadores_colegios t ON s.solicitante=t.id
@@ -62,7 +62,7 @@ if ($tp == 1) {
   $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
-          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor
+          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
           FROM solicitudes_recursos s
           JOIN estados_pedidos e ON e.id=s.estado
           LEFT JOIN trabajadores_colegios t ON s.solicitante=t.id
@@ -74,7 +74,7 @@ if ($tp == 1) {
   $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
-          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor
+          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
           FROM solicitudes_recursos s
           JOIN estados_pedidos e ON e.id=s.estado
           LEFT JOIN trabajadores_colegios t ON s.solicitante=t.id
@@ -86,7 +86,7 @@ if ($tp == 1) {
   $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
-          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor
+          c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
           FROM solicitudes_recursos s
           JOIN estados_pedidos e ON e.id=s.estado
           LEFT JOIN trabajadores_colegios t ON s.solicitante=t.id
@@ -110,7 +110,23 @@ foreach ($solicitudes as $s) {
     $promotores_uniq[] = $s['promotor'];
   if ($s['estado'] && !in_array($s['estado'], $estados_uniq))
     $estados_uniq[] = $s['estado'];
-  if ($s['total_legaliza'] > 0) $cnt_legal++; else $cnt_no_legal++;
+  // Legalizado si: campo histórico tiene valor, o trazabilidad tiene registro, o legal_cerrado=1
+  $is_legal_cnt = $s['total_legaliza'] > 0;
+  if (!$is_legal_cnt) {
+    try {
+      $r_cnt = $bdd->prepare("SELECT COALESCE(SUM(valor),0) FROM trazabilidad_entregas WHERE id_solicitud=? AND tipo='legalizacion'");
+      $r_cnt->execute([$s['id']]);
+      if ((float)$r_cnt->fetchColumn() > 0) $is_legal_cnt = true;
+    } catch (Exception $e) {}
+  }
+  if (!$is_legal_cnt) {
+    try {
+      $r_cnt = $bdd->prepare("SELECT COALESCE(legal_cerrado,0) FROM solicitudes_recursos WHERE id=?");
+      $r_cnt->execute([$s['id']]);
+      if ((int)$r_cnt->fetchColumn()) $is_legal_cnt = true;
+    } catch (Exception $e) {}
+  }
+  if ($is_legal_cnt) $cnt_legal++; else $cnt_no_legal++;
 }
 sort($promotores_uniq);
 sort($estados_uniq);
@@ -294,7 +310,7 @@ sort($estados_uniq);
                 $req_val->execute([$s['id']]);
                 $valor = $req_val->fetchColumn() ?? 0;
 
-                // Estado de legalización desde trazabilidad
+                // Estado de legalización: trazabilidad primero, fallback a campo histórico para estados 2 y 4
                 $tot_legal_la = 0;
                 try {
                   $req_ll = $bdd->prepare("SELECT COALESCE(SUM(valor),0) FROM trazabilidad_entregas WHERE id_solicitud=? AND tipo='legalizacion'");
@@ -307,6 +323,10 @@ sort($estados_uniq);
                   $req_lc->execute([$s['id']]);
                   $legal_cerrado_la = (int)$req_lc->fetchColumn();
                 } catch (Exception $e) {}
+                if ($tot_legal_la <= 0 && !$legal_cerrado_la && in_array((int)($s['id_estado'] ?? 0), [2, 4])) {
+                  $old_leg = (float)($s['total_legaliza'] ?? 0);
+                  if ($old_leg > 0) $tot_legal_la = $old_leg;
+                }
                 if ($legal_cerrado_la)           $legal_badge = 'completo';
                 elseif ($tot_legal_la <= 0)      $legal_badge = null;
                 elseif ($tot_legal_la < $valor)  $legal_badge = 'proceso';
@@ -322,7 +342,7 @@ sort($estados_uniq);
                 };
                 $fecha_raw = substr($s['fecha'], 0, 10);
               ?>
-              <?php $fila_legal = ($s['total_legaliza'] > 0) ? '1' : '0'; ?>
+              <?php $fila_legal = ($legal_badge !== null) ? '1' : '0'; ?>
               <tr data-fecha="<?= $fecha_raw ?>" data-promotor="<?= htmlspecialchars($s['promotor']) ?>" data-estado="<?= htmlspecialchars($s['estado']) ?>" data-legal="<?= $fila_legal ?>">
                 <td><a href="vista_solicitud.php?id=<?= $s['id'] ?>" class="la-link vista_soli"><?= htmlspecialchars($s['conse']) ?></a></td>
                 <td><?= htmlspecialchars($s['fecha']) ?></td>
