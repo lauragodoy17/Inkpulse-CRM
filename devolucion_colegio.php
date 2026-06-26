@@ -22,7 +22,7 @@ $sql_ped = "SELECT pe.fecha, pe.tipo as petipo, pe.observaciones, pe.cliente,
 $req_ped = $bdd->prepare($sql_ped);
 $req_ped->execute();
 $pedido  = $req_ped->fetch();
-$n_cole  = $req_ped->rowCount();
+$n_cole  = ($pedido !== false) ? 1 : 0;
 
 if ($n_cole > 0) {
     $sql_libros = "SELECT pe.id, l.id as libroid, l.id_grado, l.libro, l.precio, l.isbn,
