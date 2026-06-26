@@ -133,6 +133,10 @@ if ($n_cole > 0) {
       .mc-actions, .breadcrumb, .d-print-none, .left-side-bar, .header { display: none !important; }
       a[href]:after { content: none !important; }
       body { font-size: 9px; }
+      #dc-table { width: 100% !important; table-layout: auto !important; }
+      #dc-table th, #dc-table td { display: table-cell !important; }
+      #dc-table thead th { padding: 6px 5px !important; font-size: .72rem !important; }
+      #dc-table tbody td, #dc-table tfoot td { padding: 5px !important; font-size: .72rem !important; }
     }
 
     /* Info cards (legacy — usado por JS print) */
