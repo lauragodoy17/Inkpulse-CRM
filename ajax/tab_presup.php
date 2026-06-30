@@ -624,7 +624,7 @@
                 break;
             }
         }
-        $venta_ajustada = isset($venta_p) ? $venta_p * ($prob_valor_actual / 100) : 0;
+        $venta_ajustada = isset($venta_p) ? round($venta_p * ($prob_valor_actual / 100)) : 0;
         $venta_ajustada_fmt = $venta_ajustada > 0 ? number_format($venta_ajustada, 0, ",", ".") : 0;
         echo "<td id='venta_aj_p".$libro_p["id"]."' class='venta-aj'>".$venta_ajustada_fmt."</td>
               <input type='hidden' id='venta_ajs_p".$libro_p["id"]."' class='venta1_aj_p' value='".$venta_ajustada."'>";
@@ -712,14 +712,14 @@
                 $('#venta_p_p".$libro_p["id"]."').text(formatNumber.new(vp));
                 $('#venta_ps_p".$libro_p["id"]."').val(vp);
                 var prob_valor=parseFloat($('#proba_p".$libro_p["id"]."').find('option:selected').data('valor')) || 0;
-                var venta_aj=vp*(prob_valor/100);
+                var venta_aj=Math.round(vp*(prob_valor/100));
                 if(isNaN(venta_aj)){venta_aj=0;}
                 $('#venta_aj_p".$libro_p["id"]."').text(formatNumber.new(venta_aj));
                 $('#venta_ajs_p".$libro_p["id"]."').val(venta_aj);
                 var total_vp_aj_p=0;
                 $('.venta1_aj_p').each(function(){
                     total_vp_aj_p+=parseFloat($(this).val()) || 0;
-                    total_vp_aj_p=Math.round(total_vp_aj_p * 100) / 100;
+                    total_vp_aj_p=Math.round(total_vp_aj_p);
                 });
                 $('#total_vp_aj_p').text(formatNumber.new(total_vp_aj_p));
                 var probab=$('#proba_p".$libro_p["id"]."').val();
@@ -747,14 +747,14 @@
                 $('#venta_p_p".$libro_p["id"]."').text(formatNumber.new(vp));
                 $('#venta_ps_p".$libro_p["id"]."').val(vp);
                 var prob_valor=parseFloat($('#proba_p".$libro_p["id"]."').find('option:selected').data('valor')) || 0;
-                var venta_aj=vp*(prob_valor/100);
+                var venta_aj=Math.round(vp*(prob_valor/100));
                 if(isNaN(venta_aj)){venta_aj=0;}
                 $('#venta_aj_p".$libro_p["id"]."').text(formatNumber.new(venta_aj));
                 $('#venta_ajs_p".$libro_p["id"]."').val(venta_aj);
                 var total_vp_aj_p=0;
                 $('.venta1_aj_p').each(function(){
                     total_vp_aj_p+=parseFloat($(this).val()) || 0;
-                    total_vp_aj_p=Math.round(total_vp_aj_p * 100) / 100;
+                    total_vp_aj_p=Math.round(total_vp_aj_p);
                 });
                 $('#total_vp_aj_p').text(formatNumber.new(total_vp_aj_p));
                 var probab=$('#proba_p".$libro_p["id"]."').val();
@@ -782,14 +782,14 @@
                 $('#venta_p_p".$libro_p["id"]."').text(formatNumber.new(vp));
                 $('#venta_ps_p".$libro_p["id"]."').val(vp);
                 var prob_valor=parseFloat($('#proba_p".$libro_p["id"]."').find('option:selected').data('valor')) || 0;
-                var venta_aj=vp*(prob_valor/100);
+                var venta_aj=Math.round(vp*(prob_valor/100));
                 if(isNaN(venta_aj)){venta_aj=0;}
                 $('#venta_aj_p".$libro_p["id"]."').text(formatNumber.new(venta_aj));
                 $('#venta_ajs_p".$libro_p["id"]."').val(venta_aj);
                 var total_vp_aj_p=0;
                 $('.venta1_aj_p').each(function(){
                     total_vp_aj_p+=parseFloat($(this).val()) || 0;
-                    total_vp_aj_p=Math.round(total_vp_aj_p * 100) / 100;
+                    total_vp_aj_p=Math.round(total_vp_aj_p);
                 });
                 $('#total_vp_aj_p').text(formatNumber.new(total_vp_aj_p));
                 var probab=$('#proba_p".$libro_p["id"]."').val();
