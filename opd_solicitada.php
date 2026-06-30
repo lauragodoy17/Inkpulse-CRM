@@ -9,12 +9,17 @@ $req_pedido = $bdd->prepare(
             c.cliente, o.cliente as cid, o.adjunto, u.nombres, u.apellidos,
             o.fecha_ent_s, o.estado, o.solicitante, o.fecha_cumplida, o.fecha_entrega
      FROM ordenes_produccion o
-     JOIN clientes c ON o.cliente = c.id
+     LEFT JOIN clientes c ON o.cliente = c.id
      JOIN usuarios u ON u.id = o.usuario
      WHERE o.id = ?"
 );
 $req_pedido->execute([$opd]);
 $pedido = $req_pedido->fetch();
+
+if (!$pedido) {
+    header('Location: ver_opds.php');
+    exit;
+}
 
 $req_libros = $bdd->prepare("SELECT * FROM libros_opd WHERE opid = ?");
 $req_libros->execute([$opd]);

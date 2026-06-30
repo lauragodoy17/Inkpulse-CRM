@@ -82,7 +82,7 @@
             <div class="col-md-4 col-sm-6">
               <div class="form-group">
                 <label for="cliente">Cliente</label>
-                <select class="form-control" name="cliente" id="cliente" style="width:100%">
+                <select class="form-control" name="cliente" id="cliente" style="width:100%" required>
                   <option value="">Seleccionar</option>
                   <?php
                     $req = $bdd->query("SELECT id, cliente FROM clientes ORDER BY cliente");
