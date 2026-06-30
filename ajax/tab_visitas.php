@@ -2,8 +2,23 @@
 require_once("../php/aut.php");
 require_once('../conexion/bdd.php');
 
-$id_colegio = intval($_GET["colegio"] ?? 0);
-$periodo    = intval($_GET["periodo"] ?? 0);
+$id_colegio    = intval($_GET["colegio"]       ?? 0);
+$periodo       = intval($_GET["periodo"]       ?? 0);
+$id_calendario = intval($_GET["id_calendario"] ?? 0);
+$anio_sel      = intval($_GET["anio_texto"]    ?? 0);
+
+// Años con visitas reales para este colegio (para el dropdown)
+$stmt_years = $bdd->prepare(
+    "SELECT DISTINCT YEAR(start) AS anio FROM plan_trabajo
+     WHERE id_colegio = ? AND start IS NOT NULL ORDER BY anio DESC"
+);
+$stmt_years->execute([$id_colegio]);
+$years_list = $stmt_years->fetchAll(PDO::FETCH_COLUMN);
+
+// Año por defecto: el más reciente con visitas; si no hay ninguno, el año actual
+if ($anio_sel === 0) {
+    $anio_sel = !empty($years_list) ? intval($years_list[0]) : intval(date('Y'));
+}
 
 $sql = "SELECT
             p.id,
@@ -24,10 +39,11 @@ $sql = "SELECT
         JOIN colegios col     ON col.id = p.id_colegio
         JOIN zonas z          ON z.codigo = col.cod_zona
         WHERE p.id_colegio = :id_colegio
+          AND YEAR(p.start)  = :anio_sel
         ORDER BY p.start DESC";
 
 $stmt = $bdd->prepare($sql);
-$stmt->execute([':id_colegio' => $id_colegio]);
+$stmt->execute([':id_colegio' => $id_colegio, ':anio_sel' => $anio_sel]);
 $visitas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <style>
@@ -71,7 +87,32 @@ $visitas = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <i class="bi bi-calendar-check text-primary"></i> Trazabilidad de visitas
     <span class="vis-count"><?= count($visitas) ?></span>
   </span>
+  <?php if (!empty($years_list)): ?>
+  <div style="display:flex;align-items:center;gap:8px">
+    <label style="font-size:12px;color:#6b7280;margin:0">Año:</label>
+    <select id="vis-periodo-filter" style="font-size:12px;padding:3px 8px;border:1px solid #d1d5db;border-radius:6px;color:#374151;background:#fff;cursor:pointer">
+      <?php foreach ($years_list as $anio): ?>
+        <option value="<?= $anio ?>" <?= ($anio == $anio_sel) ? 'selected' : '' ?>>
+          <?= $anio ?>
+        </option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <?php endif; ?>
 </div>
+
+<script>
+(function(){
+  var sel = document.getElementById('vis-periodo-filter');
+  if (!sel) return;
+  sel.addEventListener('change', function(){
+    var url = 'ajax/tab_visitas.php?colegio=<?= $id_colegio ?>&anio_texto=' + encodeURIComponent(this.value) + '&id_calendario=<?= $id_calendario ?>';
+    var $tab = $('#visitas');
+    $tab.html('<br><br><center style="font-size:30px;color:#E25906">Cargando...</center>');
+    $tab.load(url);
+  });
+})();
+</script>
 
 <div class="table-responsive">
   <table class="vis-table">
