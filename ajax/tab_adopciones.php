@@ -20,7 +20,11 @@
 	$num_hp = $req_hp->rowCount();
 
 	$show_guardar = ($num_hp >= 1 && $_SESSION["tipo"] != 4) &&
-		(!($_SESSION['tipo'] == 3 && $_SESSION["zona"] != '5656') || $_GET["f_cierre"] > date("Y-m-d"));
+(
+    $gp_periodo["periodo"] == 2026 ||
+    !($_SESSION['tipo'] == 3 && $_SESSION["zona"] != '5656') ||
+    $_GET["f_cierre"] > date("Y-m-d")
+);
 ?>
 
 <style>
@@ -1543,8 +1547,13 @@
 
                           // Documento de adopción (solo para tipos 1, 3, 10)
                           if (in_array($_SESSION['tipo'], [1, 3, 10])) {
-                              $arch_existente = ($count > 0 && !empty($recursos['archivo'])) ? $recursos['archivo'] : '';
-                              $periodo_activo = $_GET["f_cierre"] > date("Y-m-d");
+
+    $arch_existente = ($count > 0 && !empty($recursos['archivo'])) ? $recursos['archivo'] : '';
+
+    $periodo_activo = (
+        $gp_periodo["periodo"] == 2026 ||
+        $_GET["f_cierre"] > date("Y-m-d")
+    );
 
                               if ($periodo_activo) {
                                   // Periodo activo: upload interactivo

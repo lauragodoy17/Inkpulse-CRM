@@ -187,6 +187,7 @@
   .pr-toast.error { background: #dc2626; }
   .pr-toast i { font-size: 1.1rem; }
 
+
   /* ── Modal de confirmación ──────────────────────────────────── */
   .pr-overlay {
     position: fixed;
@@ -806,6 +807,7 @@
         echo "</tr>";
     }
 
+
     echo '</tbody>
           <tfoot>
             <tr>
@@ -836,6 +838,7 @@
 
     echo "</form>";
   ?>
+
 
 </div>
 
@@ -1160,4 +1163,6 @@
     $('.pr-prob').each(function () { actualizarColorProb($(this)); });
     // Al cambiar
     $(document).on('change', '.pr-prob', function () { actualizarColorProb($(this)); });
+
+
 </script>
