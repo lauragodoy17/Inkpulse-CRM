@@ -20,11 +20,7 @@
 	$num_hp = $req_hp->rowCount();
 
 	$show_guardar = ($num_hp >= 1 && $_SESSION["tipo"] != 4) &&
-(
-    $gp_periodo["periodo"] == 2026 ||
-    !($_SESSION['tipo'] == 3 && $_SESSION["zona"] != '5656') ||
-    $_GET["f_cierre"] > date("Y-m-d")
-);
+		(!($_SESSION['tipo'] == 3 && $_SESSION["zona"] != '5656') || $_GET["f_cierre"] > date("Y-m-d"));
 ?>
 
 <style>
@@ -1547,13 +1543,8 @@
 
                           // Documento de adopción (solo para tipos 1, 3, 10)
                           if (in_array($_SESSION['tipo'], [1, 3, 10])) {
-
-    $arch_existente = ($count > 0 && !empty($recursos['archivo'])) ? $recursos['archivo'] : '';
-
-    $periodo_activo = (
-        $gp_periodo["periodo"] == 2026 ||
-        $_GET["f_cierre"] > date("Y-m-d")
-    );
+                              $arch_existente = ($count > 0 && !empty($recursos['archivo'])) ? $recursos['archivo'] : '';
+                              $periodo_activo = $_GET["f_cierre"] > date("Y-m-d");
 
                               if ($periodo_activo) {
                                   // Periodo activo: upload interactivo
@@ -1991,9 +1982,18 @@
     });
 
     // ── Validar archivo antes de guardar adopciones ──────────────
+    var requiereAcuerdo = <?= ($gp_periodo["periodo"] >= 2027) ? 'true' : 'false'; ?>;
+
+    // ── Validar archivo antes de guardar adopciones ──────────────
     $('#form_definicion').on('submit', function(e) {
+
+        if (!requiereAcuerdo) {
+            return true;
+        }
+
         var archivo = $('#archivo_adopcion')[0];
         var tieneNuevo = archivo && archivo.files.length > 0;
+
         if (!adArchivoGuardado && !tieneNuevo) {
             e.preventDefault();
             adToast('Debes adjuntar el acuerdo de adopción antes de guardar.', 'error');

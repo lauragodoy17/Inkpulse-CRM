@@ -242,12 +242,12 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
             </div>
           </div>
 
-          <?php if (!$tiene_archivo): ?>
-          <div class="sop-no-arch">
-            <i class="bi bi-exclamation-triangle-fill"></i>
-            <span>Para solicitar el pedido debes adjuntar primero el acuerdo de adopción en la pestaña <strong>Adopciones</strong> del colegio.</span>
-          </div>
-          <?php endif; ?>
+<?php if ($periodo_info['periodo'] >= 2027 && !$tiene_archivo): ?>
+  <div class="sop-no-arch">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <span>Para solicitar el pedido debes adjuntar primero el acuerdo de adopción en la pestaña <strong>Adopciones</strong> del colegio.</span>
+</div>
+<?php endif; ?>
 
           <hr class="sop-divider" />
 
@@ -387,13 +387,12 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
             <!-- Hidden inputs -->
             <input type="hidden" name="id_colegio" value="<?= $id_colegio ?>">
             <input type="hidden" name="periodo"    value="<?= $periodo_id ?>">
-
-            <div class="sop-actions">
-              <button type="submit" class="sop-btn-save" id="solicitar"
-                <?= !$tiene_archivo ? 'disabled style="opacity:.45;cursor:not-allowed;pointer-events:none"' : '' ?>>
-                <i class="bi bi-floppy2-fill"></i> Solicitar pedido
-              </button>
-            </div>
+<button type="submit" class="sop-btn-save" id="solicitar"
+<?= ($periodo_info["periodo"] >= 2027 && !$tiene_archivo)
+    ? 'disabled style="opacity:.45;cursor:not-allowed;pointer-events:none"'
+    : '' ?>>
+    <i class="bi bi-floppy2-fill"></i> Solicitar pedido
+</button>
 
           </form>
 
