@@ -113,10 +113,6 @@
     border-bottom: 2px solid #e2e8f0;
     font-size: 0.79rem;
     letter-spacing: .02em;
-    /* encabezado pegajoso para que siempre sea visible al bajar */
-    position: sticky;
-    top: 0;
-    z-index: 2;
   }
   #dataTables-adop thead th:first-child { text-align: left; padding-left: 14px; }
   /* ocultar flechas de ordenamiento de DataTables */
@@ -674,8 +670,6 @@
                                 $req_gp = $bdd->prepare($sq_gp);
                                 $req_gp->execute();
                                 $gp = $req_gp->fetch();
-
-                                echo '<script>alert('.$presup["definido"].')</script>';
 
                                  echo "<tr data-adoptado='".($presup["definido"]==1?'1':'0')."'>
                                     <td>".$libro."</td>
@@ -1531,7 +1525,7 @@
 
                           // Canal de venta
                           echo '<div class="col-sm-3">
-                                  <span class="ad-footer-form form-label-sm">
+                                  <span class="form-label-sm">
                                     <i class="bi bi-shop"></i> Canal de venta
                                   </span>
                                   <select name="canal" id="canal" class="form-control materia">
@@ -1564,7 +1558,7 @@
                                   $arch_req_badge = $arch_existente ? '' : ' <span style="color:#dc2626">*</span>';
 
                                   echo '<div class="col-sm-4">
-                                          <span class="ad-footer-form form-label-sm">
+                                          <span class="form-label-sm">
                                             <i class="bi bi-paperclip"></i> Acuerdo de adopción'.$arch_req_badge.'
                                           </span>
                                           <label class="ad-file-label'.$arch_label_class.'" id="ad-file-label" for="archivo_adopcion">
@@ -1578,7 +1572,7 @@
                               } else {
                                   // Periodo cerrado: solo lectura
                                   echo '<div class="col-sm-4">
-                                          <span class="ad-footer-form form-label-sm">
+                                          <span class="form-label-sm">
                                             <i class="bi bi-paperclip"></i> Acuerdo de adopción
                                           </span>';
                                   if ($arch_existente) {
@@ -1596,7 +1590,7 @@
                           // Observaciones
                           $obs_val = ($count > 0) ? htmlspecialchars($recursos["observaciones"]) : '';
                           echo '<div class="col-sm-5">
-                                  <span class="ad-footer-form form-label-sm">
+                                  <span class="form-label-sm">
                                     <i class="bi bi-chat-left-text"></i> Observaciones
                                   </span>
                                   <textarea class="form-control" name="observaciones" rows="4"
