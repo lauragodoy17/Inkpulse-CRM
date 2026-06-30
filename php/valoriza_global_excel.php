@@ -27,7 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
-ini_set('memory_limit', '200000M');
+ini_set('memory_limit', '512M');
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
 $objSpreadsheet->getProperties()->setTitle("valorización global");
@@ -168,193 +168,157 @@ $req = $bdd->prepare($sql);
 $req->execute();
 $colegios = $req->fetchAll();
 
+// ── Pre-fetch para eliminar N+1 queries ──────────────────────────
+$cole_ids_g = array_values(array_unique(array_column($colegios, 'id')));
+$ph_g = !empty($cole_ids_g) ? implode(',', array_fill(0, count($cole_ids_g), '?')) : '0';
+
+$pres_map_g = [];
+if (!empty($cole_ids_g)) {
+    $req_pres = $bdd->prepare("SELECT p.id_colegio, p.id_usuario, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id as idlibro, l.id_grado FROM presupuestos p JOIN libros l ON p.id_libro=l.id WHERE p.id_colegio IN ($ph_g) AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo=?");
+    $req_pres->execute(array_merge($cole_ids_g, [$_POST['periodo']]));
+    foreach ($req_pres->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $pres_map_g[$row['id_colegio']][$row['id_usuario']][] = $row;
+}
+
+$vreal_map_g = [];
+if (!empty($cole_ids_g)) {
+    $req_vr_g = $bdd->prepare("SELECT id_colegio, venta_real FROM recursos WHERE id_colegio IN ($ph_g) AND id_periodo=?");
+    $req_vr_g->execute(array_merge($cole_ids_g, [$_POST['periodo']]));
+    foreach ($req_vr_g->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $vreal_map_g[$row['id_colegio']] = $row['venta_real'];
+}
+
+$ao_map_g = [];
+if (!empty($cole_ids_g)) {
+    $req_ao_g = $bdd->prepare("SELECT id_colegio, id_libro_eureka, codigo, id_grado_otro FROM areas_objetivas WHERE id_colegio IN ($ph_g) AND id_periodo=?");
+    $req_ao_g->execute(array_merge($cole_ids_g, [$_POST['periodo']]));
+    foreach ($req_ao_g->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $ao_map_g[$row['id_colegio']][$row['id_libro_eureka']][$row['codigo']] = $row['id_grado_otro'];
+}
+
+$gp_map_g = [];
+if (!empty($cole_ids_g)) {
+    $req_gp_g = $bdd->prepare("SELECT id_colegio, id_grado, SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio IN ($ph_g) AND id_periodo=? AND alumnos > 0 GROUP BY id_colegio, id_grado");
+    $req_gp_g->execute(array_merge($cole_ids_g, [$_POST['periodo']]));
+    foreach ($req_gp_g->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $gp_map_g[$row['id_colegio']][$row['id_grado']] = (int)$row['alumnos'];
+}
+
+$total_map_g = [];
+if (!empty($cole_ids_g)) {
+    $req_tot_g = $bdd->prepare("SELECT s.id_colegio, SUM(r.legaliza) as total FROM solicitudes_recursos s JOIN recursos_solicitados r ON s.id=r.id_solicitud WHERE s.id_colegio IN ($ph_g) AND s.id_periodo=? AND s.estado='4' GROUP BY s.id_colegio");
+    $req_tot_g->execute(array_merge($cole_ids_g, [$_POST['periodo']]));
+    foreach ($req_tot_g->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $total_map_g[$row['id_colegio']] = $row['total'];
+}
+
+$sz_map_g = [];
+$sz_ids_g = array_values(array_filter(array_unique(array_column($colegios, 'sub_zona'))));
+if (!empty($sz_ids_g)) {
+    $ph_sz_g = implode(',', array_fill(0, count($sz_ids_g), '?'));
+    $req_sz_g = $bdd->prepare("SELECT id, sub_zona FROM sub_zonas WHERE id IN ($ph_sz_g)");
+    $req_sz_g->execute($sz_ids_g);
+    foreach ($req_sz_g->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $sz_map_g[$row['id']] = $row['sub_zona'];
+}
+
+$dep_map_g = [];
+foreach ($bdd->query("SELECT id, departamento FROM departamentos")->fetchAll(PDO::FETCH_ASSOC) as $row)
+    $dep_map_g[$row['id']] = $row['departamento'];
+// ── Fin pre-fetch ─────────────────────────────────────────────────
 
 $conta=7;
-//$conse=1;
 foreach ($colegios as $colegio) {
 
-
-    /*$sql = "UPDATE presupuestos SET conse='".$conse."' WHERE id_colegio='".$colegio["id"]."' AND id_periodo='".$_POST['periodo']."'";
-
-
-    $req = $bdd->prepare($sql);
-    $req->execute();*/
-  
-
-    $sql = "SELECT p.tasa_compra,p.tasa_compra_d,p.descuento ,p.descuento_d ,p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id as idlibro, l.id_grado FROM presupuestos p JOIN libros l ON p.id_libro=l.id WHERE p.id_colegio='".$colegio["id"]."' AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$colegio["uid"]."'";
-
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $adopciones = $req->fetchAll();
-
-
-    $sql = "SELECT venta_real FROM recursos WHERE id_colegio='".$colegio["id"]."' AND id_periodo='".$_POST['periodo']."'";
-
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $v_real = $req->fetch();
-
+    $adopciones = $pres_map_g[$colegio["id"]][$colegio["uid"]] ?? [];
+    $vr_val     = $vreal_map_g[$colegio["id"]] ?? null;
+    $v_real     = (is_numeric($vr_val) && $vr_val > 0) ? ['venta_real' => $vr_val] : false;
 
     foreach ($adopciones as $adopcion) {
-       
-        if ($adopcion["id_grado"] != 17  && $adopcion["cod_area"]=="") {
 
-            $sq_gp = "SELECT  SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$colegio["id"]."' AND id_grado='".$adopcion["id_grado"]."' AND id_periodo='".$_POST['periodo']."' AND alumnos > 0";
-
-        }else{
-
-       
-            $sql_go = "SELECT id_grado_otro FROM areas_objetivas WHERE id_colegio='".$colegio['id']."' AND id_libro_eureka='".$adopcion["idlibro"]."' AND id_periodo='".$_POST['periodo']."' AND codigo='".$adopcion["cod_area"]."'";
-                
-            $req_go = $bdd->prepare($sql_go);
-            $req_go->execute();
-            $grado_o = $req_go->fetch();
-
-            $id_grado_o = $grado_o['id_grado_otro'] ?? 0;
-
-            $sq_gp = "SELECT  SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$colegio["id"]."' AND id_grado='".$id_grado_o."' AND id_periodo='".$_POST['periodo']."' AND alumnos > 0";
+        if ($adopcion["id_grado"] != 17 && $adopcion["cod_area"] == "") {
+            $grado_lookup = $adopcion["id_grado"];
+        } else {
+            $grado_lookup = $ao_map_g[$colegio['id']][$adopcion["idlibro"]][$adopcion["cod_area"]] ?? 0;
         }
 
-        $req_gp = $bdd->prepare($sq_gp);
-        $req_gp->execute();
-        $gp = $req_gp->fetch();
+        $alumnos_gp = $gp_map_g[$colegio["id"]][$grado_lookup] ?? 0;
 
-        if ($adopcion["pre_definido"] ==1) {
-
-            $alumnos_tasa= floor($gp["alumnos"] * $adopcion["tasa_compra"]);
-            $precio_neto=$adopcion["precio"] - ($adopcion["precio"] * $adopcion["descuento"]);
-
-            $valor_presup[$colegio["id"]][]=$precio_neto * $alumnos_tasa;
-
-            $cant_presup[$colegio["id"]][]=$alumnos_tasa;
-
-           
+        if ($adopcion["pre_definido"] == 1) {
+            $alumnos_tasa = floor($alumnos_gp * $adopcion["tasa_compra"]);
+            $precio_neto  = $adopcion["precio"] - ($adopcion["precio"] * $adopcion["descuento"]);
+            $valor_presup[$colegio["id"]][] = $precio_neto * $alumnos_tasa;
+            $cant_presup[$colegio["id"]][]  = $alumnos_tasa;
         }
 
-        if ($adopcion["definido"] !=0) {
-
+        if ($adopcion["definido"] != 0) {
             if ($adopcion["tasa_compra_d"] == 0.00) {
-                $alumnos_tasa_d= floor($gp["alumnos"] * $adopcion["tasa_compra"]);
-                $precio_neto_d=$adopcion["precio"] - ($adopcion["precio"] * $adopcion["descuento"]);
-           
-            }else{
-                $alumnos_tasa_d= floor($gp["alumnos"] * $adopcion["tasa_compra_d"]);
-                $precio_neto_d=$adopcion["precio"] - ($adopcion["precio"] * $adopcion["descuento_d"]);
-
+                $alumnos_tasa_d = floor($alumnos_gp * $adopcion["tasa_compra"]);
+                $precio_neto_d  = $adopcion["precio"] - ($adopcion["precio"] * $adopcion["descuento"]);
+            } else {
+                $alumnos_tasa_d = floor($alumnos_gp * $adopcion["tasa_compra_d"]);
+                $precio_neto_d  = $adopcion["precio"] - ($adopcion["precio"] * $adopcion["descuento_d"]);
             }
 
-            if (!is_array($v_real) || !isset($v_real['venta_real']) || $v_real['venta_real'] < 1) {
-
-                $venta_real[$colegio["id"]][]= $precio_neto_d * $adopcion["uni_vr"];
-            }else{
-
+            if (!$v_real) {
+                $venta_real[$colegio["id"]][] = $precio_neto_d * $adopcion["uni_vr"];
             }
 
-            $valor_adopcion[$colegio["id"]][]=$precio_neto_d * $alumnos_tasa_d;
-
-            $castigo[$colegio["id"]][]=$alumnos_tasa_d;
-
+            $valor_adopcion[$colegio["id"]][] = $precio_neto_d * $alumnos_tasa_d;
+            $castigo[$colegio["id"]][]         = $alumnos_tasa_d;
         }
 
-        
-    
-        
-        
-
-        $alms[$colegio["id"]][]=$gp["alumnos"];
-
+        $alms[$colegio["id"]][] = $alumnos_gp;
     }
 
-    $t_cant_presup[$colegio["id"]]=array_sum($cant_presup[$colegio["id"]]);
-    $t_valor_presup[$colegio["id"]]=array_sum($valor_presup[$colegio["id"]]);
-
-  
-    $t_castigo[$colegio["id"]]       = array_sum($castigo[$colegio["id"]] ?? []);
+    $t_cant_presup[$colegio["id"]]    = array_sum($cant_presup[$colegio["id"]] ?? []);
+    $t_valor_presup[$colegio["id"]]   = array_sum($valor_presup[$colegio["id"]] ?? []);
+    $t_castigo[$colegio["id"]]        = array_sum($castigo[$colegio["id"]] ?? []);
     $t_valor_adopcion[$colegio["id"]] = array_sum($valor_adopcion[$colegio["id"]] ?? []);
+    $t_alms[$colegio["id"]]           = array_sum($alms[$colegio["id"]] ?? []);
 
-    
-    $t_alms[$colegio["id"]]=array_sum($alms[$colegio["id"]]);
-    
-   
+    $total_val = $total_map_g[$colegio["id"]] ?? null;
 
-    
-
-
-    $sql = "SELECT SUM(r.legaliza) as total FROM solicitudes_recursos s JOIN recursos_solicitados r ON s.id=r.id_solicitud WHERE s.id_colegio='".$colegio["id"]."' AND s.id_periodo='".$_POST['periodo']."' AND s.estado='4'";
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $total = $req->fetch();
-
-    $conse=$colegio["year"]."-".$colegio["conse"];
+    $conse = $colegio["year"]."-".$colegio["conse"];
     $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$conse");
-    if ($colegio["tipouser"]!=6) {
-        list($empresa,$n_zona) = explode("/", $colegio["zona"]);
+    if ($colegio["tipouser"] != 6) {
+        list($empresa, $n_zona) = explode("/", $colegio["zona"]);
         $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$empresa");
         $objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$n_zona");
         $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$colegio[promotor]");
-    }else{
-
-        $sql_sz="SELECT sub_zona FROM sub_zonas WHERE id='".$colegio["sub_zona"]."'";
-        $req_sz = $bdd->prepare($sql_sz);
-        $req_sz->execute();
-        $sub_zona = $req_sz->fetch();
-
+    } else {
+        $sz_nombre_g = $sz_map_g[$colegio["sub_zona"]] ?? '';
         $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$colegio[promotor]");
-        $objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$sub_zona[sub_zona]");
+        $objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$sz_nombre_g");
         $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$colegio[responsable]");
     }
-    
+
     $objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$colegio[dane]");
     $objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$colegio[colegio]");
-
-    $sql_dep="SELECT departamento FROM departamentos WHERE id='".$colegio['departamento']."' ";
-    $req_dep = $bdd->prepare($sql_dep);
-    $req_dep->execute();
-    $dep = $req_dep->fetch();
-
-    $objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "$dep[departamento]");
+    $objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", $dep_map_g[$colegio['departamento']] ?? '');
     $objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "$colegio[ciudad]");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "".$t_alms[$colegio["id"]]."");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("J$conta", "".$t_cant_presup[$colegio["id"]]."");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", "".$t_valor_presup[$colegio["id"]]."");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("L$conta", "".$t_castigo[$colegio["id"]]."");
-    if ($t_valor_adopcion[$colegio["id"]]==0) {
-        if ($colegio["conse"] > 0) {
-            $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", "Anulada");
-        }else{
-            $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", "".$t_valor_adopcion[$colegio["id"]]."");
-        }
-    }else{
-        $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", "".$t_valor_adopcion[$colegio["id"]]."");
-    }
-    
+    $objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", $t_alms[$colegio["id"]]);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("J$conta", $t_cant_presup[$colegio["id"]]);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", $t_valor_presup[$colegio["id"]]);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("L$conta", $t_castigo[$colegio["id"]]);
 
-    if (is_array($v_real) && isset($v_real['venta_real']) && $v_real['venta_real'] > 0) {
-        $t_venta_real= $v_real["venta_real"];
-        $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", "$t_venta_real");
-    }else{
-        if (empty($venta_real[$colegio["id"]])) {
-            $t_venta_real[$colegio["id"]]=0;
-        }else{
-            $t_venta_real[$colegio["id"]]=array_sum($venta_real[$colegio["id"]]);
-        }
-        
-        $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", "".$t_venta_real[$colegio["id"]]."");
+    if ($t_valor_adopcion[$colegio["id"]] == 0) {
+        $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", $colegio["conse"] > 0 ? "Anulada" : 0);
+    } else {
+        $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", $t_valor_adopcion[$colegio["id"]]);
     }
 
-    
-   
-    $objSpreadsheet->getActiveSheet()->SetCellValue("O$conta", "$total[total]");
-   
+    if ($v_real) {
+        $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", $v_real["venta_real"]);
+    } else {
+        $t_vr = empty($venta_real[$colegio["id"]]) ? 0 : array_sum($venta_real[$colegio["id"]]);
+        $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", $t_vr);
+    }
+
+    $objSpreadsheet->getActiveSheet()->SetCellValue("O$conta", $total_val ?? '');
 
     $conta++;
-  
-
-
-}   
+}
 
 
 $objSpreadsheet->getActiveSheet()->getStyle("K7:K$conta")
@@ -376,21 +340,9 @@ $objSpreadsheet->getActiveSheet()->getStyle("M7:M$conta")
         );
 
     
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

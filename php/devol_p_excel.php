@@ -132,15 +132,20 @@ $estilo_negrita = array(
 	$req->execute();
 	$devoluciones= $req->fetchAll();
 
+	$devol_codes_p = array_column($devoluciones, 'codigo');
+	$cant_map_dvp = [];
+	if (!empty($devol_codes_p)) {
+	    $ph_dp = implode(',', array_fill(0, count($devol_codes_p), '?'));
+	    $req_cant_dvp = $bdd->prepare("SELECT cod_pedido, SUM(cantidad) as cant FROM libros_devol WHERE cod_pedido IN ($ph_dp) GROUP BY cod_pedido");
+	    $req_cant_dvp->execute($devol_codes_p);
+	    foreach ($req_cant_dvp->fetchAll(PDO::FETCH_ASSOC) as $row)
+	        $cant_map_dvp[$row['cod_pedido']] = $row['cant'];
+	}
+
 	$conta=5;
 	foreach($devoluciones as $devolucion) {
-	
 
-
-        $sql = "SELECT SUM(cantidad) as cant FROM libros_devol WHERE cod_pedido='".$devolucion["codigo"]."'";
-		$req = $bdd->prepare($sql);
-		$req->execute();
-		$cantidades = $req->fetch();
+		$cantidades = ['cant' => $cant_map_dvp[$devolucion["codigo"]] ?? 0];
 
 		//if ($_POST["usuario"]==0) {
 
@@ -202,21 +207,9 @@ $estilo_negrita = array(
 
     
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

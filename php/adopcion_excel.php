@@ -292,29 +292,36 @@ $gp_periodo = $req_periodo->fetch();
  		echo "<script>alert('Aun no hay adopciones en este colegio');window.location='../reporte_adopcion.php'</script>";
  	}else {
 
+	// ── Pre-fetch para eliminar N+1 ──────────────────────────────────
+	$ao_map_adop = [];
+	$req_ao_adop = $bdd->prepare("SELECT codigo, id_grado_otro FROM areas_objetivas WHERE id_colegio=? AND id_periodo=?");
+	$req_ao_adop->execute([$_GET["cole"], $_GET["periodo"]]);
+	foreach ($req_ao_adop->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $ao_map_adop[$row['codigo']] = (int)$row['id_grado_otro'];
+
+	$gp_map_adop = [];
+	$req_gp_adop = $bdd->prepare("SELECT id_grado, SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio=? AND id_periodo=? AND alumnos > 0 GROUP BY id_grado");
+	$req_gp_adop->execute([$_GET["cole"], $_GET["periodo"]]);
+	foreach ($req_gp_adop->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $gp_map_adop[$row['id_grado']] = (int)$row['alumnos'];
+
+	$grados_map_adop = [];
+	foreach ($bdd->query("SELECT id, grado FROM grados")->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $grados_map_adop[$row['id']] = $row['grado'];
+	// ── Fin pre-fetch ─────────────────────────────────────────────────
+
 $conta=12;
- 
+
 foreach($adopciones as $adopcion) {
 
-	
-	$sql_go = "SELECT a.id_grado_otro FROM areas_objetivas a WHERE id_periodo='".$_GET["periodo"]."' AND id_colegio='".$_GET["cole"]."' AND codigo='".$adopcion["cod_area"]."'";
-	$req_go = $bdd->prepare($sql_go);
-	$req_go->execute();
-	$go = $req_go->fetch();
+	$grado_otro_id = $ao_map_adop[$adopcion["cod_area"]] ?? 0;
+	$go = ['id_grado_otro' => $grado_otro_id];
 
-	if (($go['id_grado_otro'] ?? null) == 0) {
-
-		$sq_gp = "SELECT  SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$_GET["cole"]."' AND id_grado='".$adopcion["id_grado"]."' AND id_periodo='".$_GET["periodo"]."'";
-
-	}else {
-
-		$sq_gp = "SELECT  SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$_GET["cole"]."' AND id_grado='".$go["id_grado_otro"]."' AND id_periodo='".$_GET["periodo"]."'";
+	if ($grado_otro_id == 0) {
+	    $gp = ['alumnos' => $gp_map_adop[$adopcion["id_grado"]] ?? 0];
+	} else {
+	    $gp = ['alumnos' => $gp_map_adop[$grado_otro_id] ?? 0];
 	}
-
-                           
-    $req_gp = $bdd->prepare($sq_gp);
-    $req_gp->execute();
-    $gp = $req_gp->fetch();
 
    
 
@@ -511,12 +518,9 @@ foreach($adopciones as $adopcion) {
 
 	}else{
 
-		$sql_go1 = "SELECT grado FROM grados WHERE id='".$go["id_grado_otro"]."'";
-		$req_go1 = $bdd->prepare($sql_go1);
-		$req_go1->execute();
-		$go1 = $req_go1->fetch();
+		$go1 = ['grado' => $grados_map_adop[$go["id_grado_otro"]] ?? ''];
 
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$go1[grado]");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", $go1["grado"]);
 		if ($go["id_grado_otro"] < 4) {
 			$p_pre[]=$tasa_compra;
 		}elseif ($go["id_grado_otro"] > 3 && $go["id_grado_otro"] < 9) {
@@ -1414,22 +1418,10 @@ $objSpreadsheet->getActiveSheet()->getColumnDimensionByColumn(1)->setWidth(30);
 
 
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 $objSpreadsheet->getActiveSheet()->getColumnDimension('A')->setWidth('10');
 $objSpreadsheet->getActiveSheet()->getRowDimension(10)->setRowHeight(20);
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

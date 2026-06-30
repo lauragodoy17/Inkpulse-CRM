@@ -117,17 +117,21 @@ $objSpreadsheet->getActiveSheet()->getStyle('A6:K6')->applyFromArray([
     $req->execute();
     $ops = $req->fetchAll();
 
+    $anu_ids = array_values(array_filter(array_unique(array_column($ops, 'usuario_anu'))));
+    $anu_map = [];
+    if (!empty($anu_ids)) {
+        $ph_anu = implode(',', array_fill(0, count($anu_ids), '?'));
+        $req_anu = $bdd->prepare("SELECT id, CONCAT(nombres,' ',apellidos) AS usr_anu FROM usuarios WHERE id IN ($ph_anu)");
+        $req_anu->execute($anu_ids);
+        foreach ($req_anu->fetchAll(PDO::FETCH_ASSOC) as $row)
+            $anu_map[$row['id']] = $row['usr_anu'];
+    }
+
     $conta=7;
 
 foreach($ops as $op) {
     $opid=$op["año"]." - ".$op["opid"];
-    $sql = "SELECT CONCAT(nombres,' ',apellidos) AS usr_anu FROM usuarios WHERE id='".$op["usuario_anu"]."' ";
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-
-    $anu = $req->fetch();
-    $usr_anu = $anu ? $anu['usr_anu'] : '';
+    $usr_anu = $anu_map[$op["usuario_anu"]] ?? '';
 
     $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$opid");
     $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$op[fecha]");
@@ -146,21 +150,9 @@ foreach($ops as $op) {
     $conta++;
 }
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

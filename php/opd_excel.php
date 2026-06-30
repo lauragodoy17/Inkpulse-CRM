@@ -148,25 +148,37 @@ $req = $bdd->prepare($sql);
 $req->execute();
 $opds = $req->fetchAll();
 
+// ── Pre-fetch entregas e impresoras ───────────────────────────────
+$lid_ids = array_column($opds, 'lid');
+$entregas_map = [];
+if (!empty($lid_ids)) {
+    $ph_lid = implode(',', array_fill(0, count($lid_ids), '?'));
+    $req_ent = $bdd->prepare("SELECT id_libro_opd, fecha, cant_entregada, observacion_entrega FROM entregas_opd WHERE id_libro_opd IN ($ph_lid) ORDER BY id_libro_opd, id");
+    $req_ent->execute($lid_ids);
+    foreach ($req_ent->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (count($entregas_map[$row['id_libro_opd']] ?? []) < 3)
+            $entregas_map[$row['id_libro_opd']][] = $row;
+    }
+}
+$impresoras_map = [];
+foreach ($bdd->query("SELECT id, impresora FROM impresoras_taller")->fetchAll(PDO::FETCH_ASSOC) as $row)
+    $impresoras_map[$row['id']] = $row['impresora'];
+// ── Fin pre-fetch ─────────────────────────────────────────────────
 
 $conta=7;
 
 foreach ($opds as $opd) {
 
+    $ents = $entregas_map[$opd["lid"]] ?? [];
+    $ent1 = $ents[0] ?? null;
+    $ent2 = $ents[1] ?? null;
+    $ent3 = $ents[2] ?? null;
 
 	$opdid=$opd["año"]." - ".$opd["id"];
-  
-    $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$opdid");  
-	
+    $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$opdid");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$opd[fecha]");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$opd[usuario]");
-
-    if ($opd["estado"] == 0) {
-        $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "Pendiente");
-    }else{
-        $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "Cumplida");
-    }
-    
+    $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", $opd["estado"] == 0 ? "Pendiente" : "Cumplida");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$opd[solicitante]");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$opd[cliente]");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "$opd[fecha_ent_s]");
@@ -174,78 +186,33 @@ foreach ($opds as $opd) {
 	$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$opd[libro]");
     $objSpreadsheet->getActiveSheet()->SetCellValue("J$conta", "$opd[cantidad]");
 
-    $sql="SELECT fecha, cant_entregada, cant_entregada, observacion_entrega FROM entregas_opd WHERE id_libro_opd='".$opd["lid"]."' ORDER BY id LIMIT 1 OFFSET 0";
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $ent1 = $req->fetch();
-
-    if (!empty($ent1)) {
-        
-        $entrega1= $ent1["fecha"]." / ".$ent1["observacion_entrega"];
-
-        $objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", "$ent1[cant_entregada]");
-        $objSpreadsheet->getActiveSheet()->SetCellValue("L$conta", "$entrega1");
-
+    if ($ent1) {
+        $objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", $ent1["cant_entregada"]);
+        $objSpreadsheet->getActiveSheet()->SetCellValue("L$conta", $ent1["fecha"]." / ".$ent1["observacion_entrega"]);
     }
-    
-
-
-    $sql="SELECT fecha, cant_entregada, cant_entregada, observacion_entrega FROM entregas_opd WHERE id_libro_opd='".$opd["lid"]."' ORDER BY id LIMIT 1 OFFSET 1";
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $ent2 = $req->fetch();
-    if (!empty($ent2)) {
-         $entrega2= $ent2["fecha"]." / ".$ent2["observacion_entrega"];
-
-        $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", "$ent2[cant_entregada]");
-        $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", "$entrega2");
+    if ($ent2) {
+        $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", $ent2["cant_entregada"]);
+        $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", $ent2["fecha"]." / ".$ent2["observacion_entrega"]);
     }
-   
-
-    $sql="SELECT fecha, cant_entregada, cant_entregada, observacion_entrega FROM entregas_opd WHERE id_libro_opd='".$opd["lid"]."' ORDER BY id LIMIT 1 OFFSET 2";
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $ent3 = $req->fetch();
-    if (!empty($ent3)) {
-        $entrega3= $ent3["fecha"]." / ".$ent3["observacion_entrega"];
-
-        $objSpreadsheet->getActiveSheet()->SetCellValue("O$conta", "$ent3[cant_entregada]");
-        $objSpreadsheet->getActiveSheet()->SetCellValue("P$conta", "$entrega3");
+    if ($ent3) {
+        $objSpreadsheet->getActiveSheet()->SetCellValue("O$conta", $ent3["cant_entregada"]);
+        $objSpreadsheet->getActiveSheet()->SetCellValue("P$conta", $ent3["fecha"]." / ".$ent3["observacion_entrega"]);
     }
-    $total_entregas = 
-        ($ent1["cant_entregada"] ?? 0) + 
-        ($ent2["cant_entregada"] ?? 0) + 
-        ($ent3["cant_entregada"] ?? 0);
 
-    $objSpreadsheet->getActiveSheet()->SetCellValue("Q$conta", "$total_entregas");
+    $total_entregas = ($ent1["cant_entregada"] ?? 0) + ($ent2["cant_entregada"] ?? 0) + ($ent3["cant_entregada"] ?? 0);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("Q$conta", $total_entregas);
 
-    $sql="SELECT impresora FROM impresoras_taller WHERE id='".$opd["impresora"]."'";
+    $imp_nombre = $impresoras_map[$opd["impresora"]] ?? '';
+    if ($imp_nombre !== '')
+        $objSpreadsheet->getActiveSheet()->SetCellValue("R$conta", $imp_nombre);
 
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $impresora = $req->fetch();
-    if (!empty($impresora["impresora"])) {
-        $objSpreadsheet->getActiveSheet()->SetCellValue("R$conta", "$impresora[impresora]");
-    }
-    
     $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", "$opd[click]");
+    $total_clicks = $total_entregas * $opd["click"];
+    $objSpreadsheet->getActiveSheet()->SetCellValue("T$conta", $total_clicks);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("U$conta", $total_clicks * $opd["valor_click"]);
 
-    $total_clicks=$total_entregas * $opd["click"];
-
-    $objSpreadsheet->getActiveSheet()->SetCellValue("T$conta", "$total_clicks");
-
-    $valor=$total_clicks* $opd["valor_click"];
-
-    $objSpreadsheet->getActiveSheet()->SetCellValue("U$conta", "$valor");
-   
 	$conta++;
-
-  
-
-}	
+}
 
 $objSpreadsheet->getActiveSheet()->getStyle("U7:U$conta")
     ->getNumberFormat()
@@ -254,21 +221,9 @@ $objSpreadsheet->getActiveSheet()->getStyle("U7:U$conta")
 );
 
 	
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

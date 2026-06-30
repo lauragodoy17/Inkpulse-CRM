@@ -131,6 +131,10 @@ $estilo_negrita = array(
 	$req->execute();
 	$libros= $req->fetchAll();
 
+	$estados_map = [];
+	foreach ($bdd->query("SELECT id, estado FROM estados_pedidos")->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $estados_map[$row['id']] = $row['estado'];
+
 	$conta=5;
 	foreach($libros as $libro) {
 
@@ -155,10 +159,7 @@ $estilo_negrita = array(
         $total_cantidad[]=$libro["cantidad"];
         $total_cantidad_aprob[]=$libro["cantidad_aprob"];
 
-        $sql = "SELECT estado FROM estados_pedidos WHERE id='".$libro["estado"]."'";
-		$req = $bdd->prepare($sql);
-		$req->execute();
-		$estado = $req->fetch();
+		$estado = ['estado' => $estados_map[$libro["estado"]] ?? ''];
 
 		if ($_POST["usuario"]==0) {
 			$objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$libro[id]");
@@ -218,21 +219,9 @@ $estilo_negrita = array(
 
     
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

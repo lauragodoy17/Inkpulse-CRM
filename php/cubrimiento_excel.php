@@ -158,33 +158,64 @@ if ($_POST['promo']!=0) {
   $req->execute();
   $coles = $req->fetchAll();
 
+// ── Pre-fetch para eliminar N+1 queries ──────────────────────────
+$cole_ids = array_column($coles, 'id');
+$gp_map = []; $adj_map = []; $uc_map = []; $est_map = []; $sz_map = [];
+
+if (!empty($cole_ids)) {
+    $ph = implode(',', array_fill(0, count($cole_ids), '?'));
+
+    $req_gp_all = $bdd->prepare("
+        SELECT id_colegio,
+            COUNT(CASE WHEN id_grado BETWEEN 1 AND 3 THEN 1 END)  as par_pre,
+            SUM(CASE WHEN id_grado BETWEEN 1 AND 3 THEN alumnos ELSE 0 END) as alm_pre,
+            COUNT(CASE WHEN id_grado BETWEEN 4 AND 8 THEN 1 END)  as par_pri,
+            SUM(CASE WHEN id_grado BETWEEN 4 AND 8 THEN alumnos ELSE 0 END) as alm_pri,
+            COUNT(CASE WHEN id_grado BETWEEN 9 AND 14 THEN 1 END) as par_bach,
+            SUM(CASE WHEN id_grado BETWEEN 9 AND 14 THEN alumnos ELSE 0 END) as alm_bach
+        FROM grados_paralelos
+        WHERE id_colegio IN ($ph) AND id_periodo = ? AND id_grado BETWEEN 1 AND 14 AND alumnos != 0
+        GROUP BY id_colegio
+    ");
+    $req_gp_all->execute(array_merge($cole_ids, [$gp_periodo["id"]]));
+    foreach ($req_gp_all->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $gp_map[$row['id_colegio']] = $row;
+
+    $req_adj_all = $bdd->prepare("SELECT id_colegio FROM adjuntos WHERE id_colegio IN ($ph) AND id_periodo = ? AND tipo = 1 GROUP BY id_colegio");
+    $req_adj_all->execute(array_merge($cole_ids, [$_POST["periodo"]]));
+    foreach ($req_adj_all->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $adj_map[$row['id_colegio']] = true;
+
+    $req_uc_all = $bdd->prepare("SELECT p.id_colegio, MAX(v.fecha) as ultimo_contacto FROM plan_trabajo p JOIN visitas v ON p.id = v.id_plan_trabajo WHERE p.id_colegio IN ($ph) AND p.resultado = 1 GROUP BY p.id_colegio");
+    $req_uc_all->execute($cole_ids);
+    foreach ($req_uc_all->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $uc_map[$row['id_colegio']] = $row['ultimo_contacto'];
+
+    if ($_POST["periodo"] >= 7) {
+        $req_est_all = $bdd->prepare("SELECT ce.id_colegio, e.estado FROM estados_cliente e JOIN colegios_estados_clientes ce ON e.id = ce.id_estado_cliente WHERE ce.id_colegio IN ($ph) AND ce.id_periodo = ?");
+        $req_est_all->execute(array_merge($cole_ids, [$_POST["periodo"]]));
+        foreach ($req_est_all->fetchAll(PDO::FETCH_ASSOC) as $row)
+            $est_map[$row['id_colegio']] = $row['estado'];
+    }
+}
+$all_sz_ids = array_values(array_filter(array_unique(array_column($coles, 'sub_zona'))));
+if (!empty($all_sz_ids)) {
+    $ph_sz = implode(',', array_fill(0, count($all_sz_ids), '?'));
+    $req_sz_all = $bdd->prepare("SELECT id, sub_zona FROM sub_zonas WHERE id IN ($ph_sz)");
+    $req_sz_all->execute($all_sz_ids);
+    foreach ($req_sz_all->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $sz_map[$row['id']] = $row['sub_zona'];
+}
+// ── Fin pre-fetch ─────────────────────────────────────────────────
+
 $conta=5;
 foreach($coles as $cole) {
 
-  
-  $sql_pre = "SELECT COUNT(alumnos) as paralelos,SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$cole['id']."' AND id_grado BETWEEN 1 AND 3 AND id_periodo='".$gp_periodo["id"]."' AND alumnos!='0'";
-  $req_pre = $bdd->prepare($sql_pre);
-  $req_pre->execute();
-  $gp_pre = $req_pre->fetch();
-
-  $sql_pri = "SELECT COUNT(alumnos) as paralelos,SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$cole['id']."' AND id_grado BETWEEN 4 AND 8  AND id_periodo='".$gp_periodo["id"]."' AND alumnos!='0'";
-  $req_pri = $bdd->prepare($sql_pri);
-  $req_pri->execute();
-  $gp_pri = $req_pri->fetch();
- 
-  $sql_bach = "SELECT COUNT(alumnos) as paralelos,SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$cole['id']."' AND id_grado BETWEEN 9 AND 14  AND id_periodo='".$gp_periodo["id"]."' AND alumnos!='0'";
-  $req_bach = $bdd->prepare($sql_bach);
-  $req_bach->execute();
-  $gp_bach = $req_bach->fetch();
-  
-
-  $paralelos_global= $gp_pre["paralelos"] + $gp_pri["paralelos"] + $gp_bach["paralelos"];
-  $alumnos_global= $gp_pre["alumnos"] + $gp_pri["alumnos"] + $gp_bach["alumnos"];
-
-  $sql_uc = "SELECT MAX(v.fecha) as ultimo_contacto FROM plan_trabajo p JOIN visitas v ON p.id=v.id_plan_trabajo WHERE p.id_colegio='".$cole["id"]."' AND p.resultado=1";
-  $req_uc = $bdd->prepare($sql_uc);
-  $req_uc->execute();
-  $uc = $req_uc->fetch();
+  $gp_row = $gp_map[$cole['id']] ?? ['par_pre'=>0,'alm_pre'=>0,'par_pri'=>0,'alm_pri'=>0,'par_bach'=>0,'alm_bach'=>0];
+  $paralelos_global = $gp_row["par_pre"] + $gp_row["par_pri"] + $gp_row["par_bach"];
+  $alumnos_global   = $gp_row["alm_pre"] + $gp_row["alm_pri"] + $gp_row["alm_bach"];
+  $count_p          = isset($adj_map[$cole['id']]) ? 1 : 0;
+  $ultimo_contacto  = $uc_map[$cole['id']] ?? '';
 
   $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$cole[codigo]");
   $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$cole[colegio]");
@@ -192,94 +223,44 @@ foreach($coles as $cole) {
 
   if ($_POST['promo']!=0) {
     if ($usuario["tipo"]==3 || $usuario["tipo"]==1 || $usuario["tipo"]==10) {
-    
       $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$empresa");
-    }else{
-
-      $sql_sz="SELECT sub_zona FROM sub_zonas WHERE id='".$cole["sub_zona"]."'";
-
-      $req_sz = $bdd->prepare($sql_sz);
-
-      $req_sz->execute();
-
-      $sub_zona = $req_sz->fetch();
-
-      $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$sub_zona[sub_zona] / $cole[responsable]");
+    } else {
+      $sub_zona_nombre = $sz_map[$cole["sub_zona"]] ?? '';
+      $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$sub_zona_nombre / $cole[responsable]");
     }
-  }else{
+  } else {
     $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$cole[promotor]");
   }
-
-  $sql = "SELECT id FROM adjuntos WHERE id_colegio='".$cole["id"]."' AND id_periodo='".$_POST["periodo"]."' AND tipo=1";
-
-  $req = $bdd->prepare($sql);
-  $req->execute();
-  $count_p = $req->rowCount();
 
   $objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$cole[departamento]");
   $objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$cole[ciudad]");
   $objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "$cole[barrio]");
-  $objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "$gp_pre[paralelos]");
-  $objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$gp_pri[paralelos]");
-  $objSpreadsheet->getActiveSheet()->SetCellValue("J$conta", "$gp_bach[paralelos]");
-  $objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", "$paralelos_global");
-  $objSpreadsheet->getActiveSheet()->SetCellValue("L$conta", "$gp_pre[alumnos]");
-  $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", "$gp_pri[alumnos]");
-  $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", "$gp_bach[alumnos]");
-  $objSpreadsheet->getActiveSheet()->SetCellValue("O$conta", "$alumnos_global");
+  $objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", $gp_row["par_pre"]);
+  $objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", $gp_row["par_pri"]);
+  $objSpreadsheet->getActiveSheet()->SetCellValue("J$conta", $gp_row["par_bach"]);
+  $objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", $paralelos_global);
+  $objSpreadsheet->getActiveSheet()->SetCellValue("L$conta", $gp_row["alm_pre"]);
+  $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", $gp_row["alm_pri"]);
+  $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", $gp_row["alm_bach"]);
+  $objSpreadsheet->getActiveSheet()->SetCellValue("O$conta", $alumnos_global);
   $objSpreadsheet->getActiveSheet()->SetCellValue("P$conta", "$cole[status]");
-
-  if ($count_p < 1) {
-    $objSpreadsheet->getActiveSheet()->SetCellValue("Q$conta", "No");
-  }else{
-    $objSpreadsheet->getActiveSheet()->SetCellValue("Q$conta", "Si");
-  }
-
+  $objSpreadsheet->getActiveSheet()->SetCellValue("Q$conta", $count_p < 1 ? "No" : "Si");
   $objSpreadsheet->getActiveSheet()->SetCellValue("R$conta", "$cole[segmento]");
 
   if ($_POST["periodo"] < 7) {
     $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", "");
-  }else{
-    $sql_est = "SELECT e.estado FROM estados_cliente e JOIN colegios_estados_clientes ce ON e.id=ce.id_estado_cliente WHERE ce.id_colegio='".$cole["id"]."' AND ce.id_periodo='".$_POST["periodo"]."'";
-    $req_est = $bdd->prepare($sql_est);
-    $req_est->execute();
-    $est = $req_est->fetch();
-
-    if (empty($est["estado"])) {
-      $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", "");
-    }else{
-      $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", "$est[estado]");
-    }
-    
-  }
-  
-
-  if (empty($uc["ultimo_contacto"])) {
-    $objSpreadsheet->getActiveSheet()->SetCellValue("T$conta", "");
-  }else{
-    $objSpreadsheet->getActiveSheet()->SetCellValue("T$conta", "$uc[ultimo_contacto]");
+  } else {
+    $est_val = $est_map[$cole['id']] ?? '';
+    $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", $est_val);
   }
 
+  $objSpreadsheet->getActiveSheet()->SetCellValue("T$conta", $ultimo_contacto ?: "");
 
-$conta++;
+  $conta++;
 }
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
-
-foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
+foreach (range('A', 'T') as $columnID) {
+  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);
 }
 
 

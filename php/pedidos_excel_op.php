@@ -124,25 +124,35 @@ $estilo_negrita = array(
 	$req->execute();
 	$libros= $req->fetchAll();
 
+	$estados_map = [];
+	foreach ($bdd->query("SELECT id, estado FROM estados_pedidos")->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $estados_map[$row['id']] = $row['estado'];
+
+	$pedido_ids = array_column($libros, 'id');
+	$op_map_eo = []; $agrup_map = []; $agrup_count = [];
+	if (!empty($pedido_ids)) {
+	    $ph_pid = implode(',', array_fill(0, count($pedido_ids), '?'));
+	    $req_op_eo = $bdd->prepare("SELECT o.id_pedido, o.id, o.estado, o.n_doc, t.tipo FROM ordenes_pedidos o JOIN tipo_doc t ON t.id=o.tipo_doc WHERE o.id_pedido IN ($ph_pid)");
+	    $req_op_eo->execute($pedido_ids);
+	    foreach ($req_op_eo->fetchAll(PDO::FETCH_ASSOC) as $row)
+	        $op_map_eo[$row['id_pedido']] = $row;
+
+	    $req_agrup = $bdd->prepare("SELECT a.id_pedido, a.op, o.estado, o.n_doc, t.tipo FROM op_pedidos_agrupados a JOIN ordenes_pedidos o ON o.id=a.op JOIN tipo_doc t ON t.id=o.tipo_doc WHERE a.id_pedido IN ($ph_pid)");
+	    $req_agrup->execute($pedido_ids);
+	    foreach ($req_agrup->fetchAll(PDO::FETCH_ASSOC) as $row) {
+	        $agrup_count[$row['id_pedido']] = ($agrup_count[$row['id_pedido']] ?? 0) + 1;
+	        if (!isset($agrup_map[$row['id_pedido']]))
+	            $agrup_map[$row['id_pedido']] = $row;
+	    }
+	}
+
 	$conta=5;
 	foreach($libros as $libro) {
 
-		
-
-        $sql = "SELECT estado FROM estados_pedidos WHERE id='".$libro["estado"]."'";
-		$req = $bdd->prepare($sql);
-		$req->execute();
-		$estado = $req->fetch();
-
-		$sql = "SELECT o.id,o.estado, o.n_doc, t.tipo FROM ordenes_pedidos o JOIN tipo_doc t ON t.id=o.tipo_doc WHERE o.id_pedido='".$libro["id"]."'";
-		$req = $bdd->prepare($sql);
-		$req->execute();
-		$op = $req->fetch();
-
-		$sql2 = "SELECT a.op,o.estado, o.n_doc, t.tipo FROM ordenes_pedidos o JOIN op_pedidos_agrupados a ON o.id=a.op JOIN tipo_doc t ON t.id=o.tipo_doc WHERE a.id_pedido='".$libro["id"]."'";
-		$req2 = $bdd->prepare($sql2);
-		$req2->execute();
-		$num = $req2->rowCount();
+		$estado = ['estado' => $estados_map[$libro["estado"]] ?? ''];
+		$op     = $op_map_eo[$libro["id"]] ?? [];
+		$op2    = $agrup_map[$libro["id"]] ?? null;
+		$num    = $agrup_count[$libro["id"]] ?? 0;
 
 		if ($_POST["usuario"]==0) {
 
@@ -257,21 +267,9 @@ $estilo_negrita = array(
     $objSpreadsheet->getActiveSheet()->getStyle('I'.$conta.':G'.$conta)->applyFromArray($estilo_negrita);
 
    
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

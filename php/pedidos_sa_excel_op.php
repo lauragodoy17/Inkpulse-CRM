@@ -128,19 +128,25 @@ $estilo_negrita = array(
 	$req->execute();
 	$libros= $req->fetchAll();
 
+	$estados_map = [];
+	foreach ($bdd->query("SELECT id, estado FROM estados_pedidos")->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $estados_map[$row['id']] = $row['estado'];
+
+	$dist_ids = array_column($libros, 'id');
+	$op_map_sa = [];
+	if (!empty($dist_ids)) {
+	    $ph_did = implode(',', array_fill(0, count($dist_ids), '?'));
+	    $req_op_sa = $bdd->prepare("SELECT o.id_pedido_dist, o.id, o.estado, o.n_doc, t.tipo FROM ordenes_pedidos o JOIN tipo_doc t ON t.id=o.tipo_doc WHERE o.id_pedido_dist IN ($ph_did)");
+	    $req_op_sa->execute($dist_ids);
+	    foreach ($req_op_sa->fetchAll(PDO::FETCH_ASSOC) as $row)
+	        $op_map_sa[$row['id_pedido_dist']] = $row;
+	}
+
 	$conta=5;
 	foreach($libros as $libro) {
 
-
-        $sql = "SELECT estado FROM estados_pedidos WHERE id='".$libro["estado"]."'";
-		$req = $bdd->prepare($sql);
-		$req->execute();
-		$estado = $req->fetch();
-
-		$sql = "SELECT o.id,o.estado, o.n_doc, t.tipo FROM ordenes_pedidos o JOIN tipo_doc t ON t.id=o.tipo_doc WHERE o.id_pedido_dist='".$libro["id"]."'";
-		$req = $bdd->prepare($sql);
-		$req->execute();
-		$op = $req->fetch();
+		$estado = ['estado' => $estados_map[$libro["estado"]] ?? ''];
+		$op     = $op_map_sa[$libro["id"]] ?? [];
 
 		if ($_POST["usuario"]==0) {
 
@@ -210,21 +216,9 @@ $estilo_negrita = array(
 	
     $objSpreadsheet->getActiveSheet()->getStyle('I'.$conta.':G'.$conta)->applyFromArray($estilo_negrita);  
 
-	function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

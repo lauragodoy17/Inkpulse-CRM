@@ -226,46 +226,42 @@ $gp_periodo = $req_periodo->fetch();
  		echo "<script>alert('Aun no hay adopciones en este colegio');window.location='../reporte_adopcion.php'</script>";
  	}else {
 
+	// ── Pre-fetch para eliminar N+1 ──────────────────────────────────
+	$ao_map_pre = [];
+	$req_ao_pre = $bdd->prepare("SELECT codigo, id_grado_otro FROM areas_objetivas WHERE id_colegio=? AND id_periodo=?");
+	$req_ao_pre->execute([$_GET["cole"], $_GET["periodo"]]);
+	foreach ($req_ao_pre->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $ao_map_pre[$row['codigo']] = $row['id_grado_otro'];
+
+	$gp_map_pre = [];
+	$req_gp_pre = $bdd->prepare("SELECT id_grado, SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio=? AND id_periodo=? AND alumnos > 0 GROUP BY id_grado");
+	$req_gp_pre->execute([$_GET["cole"], $_GET["periodo"]]);
+	foreach ($req_gp_pre->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $gp_map_pre[$row['id_grado']] = (int)$row['alumnos'];
+
+	$prob_map_pre = [];
+	foreach ($bdd->query("SELECT id, probabilidad, valor FROM probabilidades")->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $prob_map_pre[$row['id']] = $row;
+
+	$grados_map_pre = [];
+	foreach ($bdd->query("SELECT id, grado FROM grados")->fetchAll(PDO::FETCH_ASSOC) as $row)
+	    $grados_map_pre[$row['id']] = $row['grado'];
+	// ── Fin pre-fetch ─────────────────────────────────────────────────
+
 $conta=12;
- 
+
 foreach($adopciones as $adopcion) {
 
-	if ($adopcion["id_grado"] == 17) {
-		# code...
-	}
-	$sql_go = "SELECT a.id_grado_otro FROM areas_objetivas a WHERE id_periodo='".$_GET["periodo"]."' AND id_colegio='".$_GET["cole"]."' AND codigo='".$adopcion["cod_area"]."'";
-	$req_go = $bdd->prepare($sql_go);
-	$req_go->execute();
-	$n_go = $req_go->rowCount();
-
-	if ($n_go < 1) {
-		$go["id_grado_otro"] =0;
-	}else{
-		$go = $req_go->fetch();
-	}
-	
+	$grado_otro_id = $ao_map_pre[$adopcion["cod_area"]] ?? 0;
+	$go = ['id_grado_otro' => $grado_otro_id];
 
 	if ($go["id_grado_otro"] == 0) {
-
-
-		$sq_gp = "SELECT  SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$_GET["cole"]."' AND id_grado='".$adopcion["id_grado"]."' AND id_periodo='".$_GET["periodo"]."'";
-
-	}else {
-
-		
-		$sq_gp = "SELECT  SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$_GET["cole"]."' AND id_grado='".$go["id_grado_otro"]."' AND id_periodo='".$_GET["periodo"]."'";
-
+	    $gp = ['alumnos' => $gp_map_pre[$adopcion["id_grado"]] ?? 0];
+	} else {
+	    $gp = ['alumnos' => $gp_map_pre[$go["id_grado_otro"]] ?? 0];
 	}
 
-                           
-    $req_gp = $bdd->prepare($sq_gp);
-    $req_gp->execute();
-    $gp = $req_gp->fetch();
-
-   	$sql_pro = "SELECT probabilidad, valor FROM probabilidades WHERE id='".$adopcion["probabilidad"]."'";
-	$req_pro = $bdd->prepare($sql_pro);
-	$req_pro->execute();
-	$probab = $req_pro->fetch();
+	$probab = $prob_map_pre[$adopcion["probabilidad"]] ?? null;
 
 
     $tasa_compra=$adopcion["tasa_compra"] * 100;
@@ -313,12 +309,9 @@ foreach($adopciones as $adopcion) {
 
 	}else{
 		$effective_grado = $go["id_grado_otro"];
-		$sql_go1 = "SELECT grado FROM grados WHERE id='".$go["id_grado_otro"]."'";
-		$req_go1 = $bdd->prepare($sql_go1);
-		$req_go1->execute();
-		$go1 = $req_go1->fetch();
-		$grade_label_map[$effective_grado] = $go1["grado"];
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$go1[grado]");
+		$grado_nombre = $grados_map_pre[$go["id_grado_otro"]] ?? '';
+		$grade_label_map[$effective_grado] = $grado_nombre;
+		$objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", $grado_nombre);
 		if ($go["id_grado_otro"] < 4) {
 			$p_pre[]=$tasa_compra;
 		}elseif ($go["id_grado_otro"] > 3 && $go["id_grado_otro"] < 9) {
@@ -546,22 +539,10 @@ $conta8=$conta7 + 4;
 
 $objSpreadsheet->getActiveSheet()->getStyle('A1:O'.$conta8)->applyFromArray($estilo_fuente);
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 $objSpreadsheet->getActiveSheet()->getColumnDimension('A')->setWidth('10');
 $objSpreadsheet->getActiveSheet()->getRowDimension(10)->setRowHeight(20);
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

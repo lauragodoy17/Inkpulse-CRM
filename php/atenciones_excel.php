@@ -192,57 +192,76 @@ foreach ($req_totals->fetchAll() as $row) {
 
 // Pre-computar presupuesto, adopción total y venta real por colegio
 $colegios_datos = [];
-$unique_cids = array_unique(array_column($solicitudes, 'cid'));
-foreach ($unique_cids as $cid) {
-    $val_presup = 0;
-    $val_adopcion = 0;
-    $val_venta_real = 0;
+$unique_cids = array_values(array_unique(array_column($solicitudes, 'cid')));
 
-    $req_vr = $bdd->prepare("SELECT venta_real FROM recursos WHERE id_colegio=? AND id_periodo=?");
-    $req_vr->execute([$cid, $_POST["periodo"]]);
-    $v_real = $req_vr->fetch();
+if (!empty($unique_cids)) {
+    $ph_cids = implode(',', array_fill(0, count($unique_cids), '?'));
 
-    $req_books = $bdd->prepare("SELECT p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id as idlibro, l.id_grado FROM presupuestos p JOIN libros l ON p.id_libro=l.id WHERE p.id_colegio=? AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo=?");
-    $req_books->execute([$cid, $_POST["periodo"]]);
-    $books = $req_books->fetchAll();
+    // venta_real por colegio
+    $vreal_at = [];
+    $req_vr_at = $bdd->prepare("SELECT id_colegio, venta_real FROM recursos WHERE id_colegio IN ($ph_cids) AND id_periodo=?");
+    $req_vr_at->execute(array_merge($unique_cids, [$_POST["periodo"]]));
+    foreach ($req_vr_at->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $vreal_at[$row['id_colegio']] = $row['venta_real'];
 
-    foreach ($books as $book) {
-        if ($book["id_grado"] != 17 && $book["cod_area"] == "") {
-            $req_gp = $bdd->prepare("SELECT SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio=? AND id_grado=? AND id_periodo=? AND alumnos > 0");
-            $req_gp->execute([$cid, $book["id_grado"], $_POST["periodo"]]);
-        } else {
-            $req_go = $bdd->prepare("SELECT id_grado_otro FROM areas_objetivas WHERE id_colegio=? AND id_libro_eureka=? AND id_periodo=? AND codigo=?");
-            $req_go->execute([$cid, $book["idlibro"], $_POST["periodo"], $book["cod_area"]]);
-            $grado_o = $req_go->fetch();
-            $id_grado_o = $grado_o['id_grado_otro'] ?? 0;
-            $req_gp = $bdd->prepare("SELECT SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio=? AND id_grado=? AND id_periodo=? AND alumnos > 0");
-            $req_gp->execute([$cid, $id_grado_o, $_POST["periodo"]]);
-        }
-        $gp = $req_gp->fetch();
-        $alumnos = $gp["alumnos"] ?? 0;
+    // presupuestos + libros por colegio
+    $books_at = [];
+    $req_bk_at = $bdd->prepare("SELECT p.id_colegio, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id as idlibro, l.id_grado FROM presupuestos p JOIN libros l ON p.id_libro=l.id WHERE p.id_colegio IN ($ph_cids) AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo=?");
+    $req_bk_at->execute(array_merge($unique_cids, [$_POST["periodo"]]));
+    foreach ($req_bk_at->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $books_at[$row['id_colegio']][] = $row;
 
-        if ($book["pre_definido"] == 1) {
-            $precio_neto = $book["precio"] - ($book["precio"] * $book["descuento"]);
-            $val_presup += $precio_neto * floor($alumnos * $book["tasa_compra"]);
-        }
-        if ($book["definido"] != 0) {
-            if ($book["tasa_compra_d"] == 0.00) {
-                $alumnos_tasa_d = floor($alumnos * $book["tasa_compra"]);
-                $precio_neto_d  = $book["precio"] - ($book["precio"] * $book["descuento"]);
+    // areas_objetivas por colegio
+    $ao_at = [];
+    $req_ao_at = $bdd->prepare("SELECT id_colegio, id_libro_eureka, codigo, id_grado_otro FROM areas_objetivas WHERE id_colegio IN ($ph_cids) AND id_periodo=?");
+    $req_ao_at->execute(array_merge($unique_cids, [$_POST["periodo"]]));
+    foreach ($req_ao_at->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $ao_at[$row['id_colegio']][$row['id_libro_eureka']][$row['codigo']] = $row['id_grado_otro'];
+
+    // grados_paralelos por colegio+grado
+    $gp_at = [];
+    $req_gp_at = $bdd->prepare("SELECT id_colegio, id_grado, SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio IN ($ph_cids) AND id_periodo=? AND alumnos > 0 GROUP BY id_colegio, id_grado");
+    $req_gp_at->execute(array_merge($unique_cids, [$_POST["periodo"]]));
+    foreach ($req_gp_at->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $gp_at[$row['id_colegio']][$row['id_grado']] = (int)$row['alumnos'];
+
+    foreach ($unique_cids as $cid) {
+        $val_presup = 0;
+        $val_adopcion = 0;
+        $val_venta_real = 0;
+        $vr_val = $vreal_at[$cid] ?? null;
+
+        foreach ($books_at[$cid] ?? [] as $book) {
+            if ($book["id_grado"] != 17 && $book["cod_area"] == "") {
+                $alumnos = $gp_at[$cid][$book["id_grado"]] ?? 0;
             } else {
-                $alumnos_tasa_d = floor($alumnos * $book["tasa_compra_d"]);
-                $precio_neto_d  = $book["precio"] - ($book["precio"] * $book["descuento_d"]);
+                $id_grado_o = $ao_at[$cid][$book["idlibro"]][$book["cod_area"]] ?? 0;
+                $alumnos = $gp_at[$cid][$id_grado_o] ?? 0;
             }
-            $val_adopcion += $precio_neto_d * $alumnos_tasa_d;
-            if (!is_array($v_real) || !isset($v_real['venta_real']) || $v_real['venta_real'] < 1) {
-                $val_venta_real += $precio_neto_d * $book["uni_vr"];
+
+            if ($book["pre_definido"] == 1) {
+                $precio_neto = $book["precio"] - ($book["precio"] * $book["descuento"]);
+                $val_presup += $precio_neto * floor($alumnos * $book["tasa_compra"]);
+            }
+            if ($book["definido"] != 0) {
+                if ($book["tasa_compra_d"] == 0.00) {
+                    $alumnos_tasa_d = floor($alumnos * $book["tasa_compra"]);
+                    $precio_neto_d  = $book["precio"] - ($book["precio"] * $book["descuento"]);
+                } else {
+                    $alumnos_tasa_d = floor($alumnos * $book["tasa_compra_d"]);
+                    $precio_neto_d  = $book["precio"] - ($book["precio"] * $book["descuento_d"]);
+                }
+                $val_adopcion += $precio_neto_d * $alumnos_tasa_d;
+                if (!is_numeric($vr_val) || $vr_val < 1) {
+                    $val_venta_real += $precio_neto_d * $book["uni_vr"];
+                }
             }
         }
+        if (is_numeric($vr_val) && $vr_val > 0) {
+            $val_venta_real = $vr_val;
+        }
+        $colegios_datos[$cid] = ['presupuesto' => $val_presup, 'adopcion' => $val_adopcion, 'venta_real' => $val_venta_real];
     }
-    if (is_array($v_real) && isset($v_real['venta_real']) && $v_real['venta_real'] > 0) {
-        $val_venta_real = $v_real['venta_real'];
-    }
-    $colegios_datos[$cid] = ['presupuesto' => $val_presup, 'adopcion' => $val_adopcion, 'venta_real' => $val_venta_real];
 }
 
 $conta=7;

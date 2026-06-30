@@ -140,22 +140,29 @@ $estilo_negrita = array(
 	$req->execute();
 	$devoluciones= $req->fetchAll();
 
+	$devol_ids   = array_column($devoluciones, 'id');
+	$devol_codes = array_column($devoluciones, 'codigo');
+	$cant_map_dvc = []; $op_map_dvc = [];
+	if (!empty($devol_ids)) {
+	    $ph_dv = implode(',', array_fill(0, count($devol_codes), '?'));
+	    $req_cant_dvc = $bdd->prepare("SELECT cod_pedido, SUM(cantidad) as cant FROM libros_devol_v WHERE cod_pedido IN ($ph_dv) GROUP BY cod_pedido");
+	    $req_cant_dvc->execute($devol_codes);
+	    foreach ($req_cant_dvc->fetchAll(PDO::FETCH_ASSOC) as $row)
+	        $cant_map_dvc[$row['cod_pedido']] = $row['cant'];
+
+	    $ph_dv2 = implode(',', array_fill(0, count($devol_ids), '?'));
+	    $req_op_dvc = $bdd->prepare("SELECT id_devol_v, id, estado, fecha_at FROM ordenes_pedidos WHERE id_devol_v IN ($ph_dv2) AND estado!=4");
+	    $req_op_dvc->execute($devol_ids);
+	    foreach ($req_op_dvc->fetchAll(PDO::FETCH_ASSOC) as $row)
+	        $op_map_dvc[$row['id_devol_v']] = $row;
+	}
+
 	$conta=5;
 	foreach($devoluciones as $devolucion) {
-	
 
-
-        $sql = "SELECT SUM(cantidad) as cant FROM libros_devol_v WHERE cod_pedido='".$devolucion["codigo"]."'";
-		$req = $bdd->prepare($sql);
-		$req->execute();
-		$cantidades = $req->fetch();
-
-		$sql = "SELECT id, estado,fecha_at FROM ordenes_pedidos WHERE id_devol_v='".$devolucion["id"]."' AND estado!=4";
-
-		$req = $bdd->prepare($sql);
-		$req->execute();
-		$op = $req->rowCount();
-		$n_op = $req->fetch();
+		$cantidades = ['cant' => $cant_map_dvc[$devolucion["codigo"]] ?? 0];
+		$n_op       = $op_map_dvc[$devolucion["id"]] ?? null;
+		$op         = $n_op ? 1 : 0;
 
 		//if ($_POST["usuario"]==0) {
 
@@ -247,21 +254,9 @@ $estilo_negrita = array(
 
     
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

@@ -125,12 +125,6 @@ $objSpreadsheet->getActiveSheet()->getStyle('A6:O6')->applyFromArray([
 
 foreach($ops as $op) {
     $opid=$op["año"]." - ".$op["opid"];
-    $sql = "SELECT CONCAT(nombres,' ',apellidos) AS usr_at FROM usuarios WHERE id='".$op["usuario_at"]."' ";
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-
-    $at= $req->fetch();
 
     $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$opid");
     $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$op[fecha]");
@@ -155,21 +149,9 @@ foreach($ops as $op) {
     $conta++;
 }
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 

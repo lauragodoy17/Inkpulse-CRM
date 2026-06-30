@@ -136,6 +136,31 @@ if ($_POST['promo']!=0) {
 	$req->execute();
 	$coles = $req->fetchAll();
 
+// ── Pre-fetch para eliminar N+1 queries ──────────────────────────
+$cole_ids = array_column($coles, 'id');
+$dep_map = []; $adj_map2 = []; $sz_map2 = [];
+
+$req_all_dep = $bdd->query("SELECT id, departamento FROM departamentos");
+foreach ($req_all_dep->fetchAll(PDO::FETCH_ASSOC) as $row)
+    $dep_map[$row['id']] = $row['departamento'];
+
+if (!empty($cole_ids)) {
+    $ph = implode(',', array_fill(0, count($cole_ids), '?'));
+    $req_adj2 = $bdd->prepare("SELECT id_colegio FROM adjuntos WHERE id_colegio IN ($ph) AND id_periodo = ? AND tipo = 1 GROUP BY id_colegio");
+    $req_adj2->execute(array_merge($cole_ids, [$_POST["periodo"]]));
+    foreach ($req_adj2->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $adj_map2[$row['id_colegio']] = true;
+}
+$all_sz_ids2 = array_values(array_filter(array_unique(array_column($coles, 'sub_zona'))));
+if (!empty($all_sz_ids2)) {
+    $ph_sz2 = implode(',', array_fill(0, count($all_sz_ids2), '?'));
+    $req_sz2 = $bdd->prepare("SELECT id, sub_zona FROM sub_zonas WHERE id IN ($ph_sz2)");
+    $req_sz2->execute($all_sz_ids2);
+    foreach ($req_sz2->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $sz_map2[$row['id']] = $row['sub_zona'];
+}
+// ── Fin pre-fetch ─────────────────────────────────────────────────
+
 $conta=5;
 foreach($coles as $cole) {
 
@@ -145,86 +170,38 @@ foreach($coles as $cole) {
 
 	if ($_POST['promo']!=0) {
 		if ($usuario["tipo"]==3 || $usuario["tipo"]==1) {
-		
 			$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$empresa");
-		}elseif ($usuario["tipo"]==10) {
+		} elseif ($usuario["tipo"]==10) {
 			if ($cole["zona_madre"]=="") {
 				$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$empresa");
-			}else{
-				$sql_sz="SELECT sub_zona FROM sub_zonas WHERE id='".$cole["sub_zona"]."'";
-
-			    $req_sz = $bdd->prepare($sql_sz);
-
-			    $req_sz->execute();
-
-			    $sub_zona = $req_sz->fetch();
-				$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$sub_zona[sub_zona] / $cole[responsable]");
+			} else {
+				$sznombre = $sz_map2[$cole["sub_zona"]] ?? '';
+				$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$sznombre / $cole[responsable]");
 			}
+		} else {
+			$sznombre = $sz_map2[$cole["sub_zona"]] ?? '';
+			$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$sznombre / $cole[responsable]");
 		}
-
-		else{
-
-			$sql_sz="SELECT sub_zona FROM sub_zonas WHERE id='".$cole["sub_zona"]."'";
-
-	    $req_sz = $bdd->prepare($sql_sz);
-
-	    $req_sz->execute();
-
-	    $sub_zona = $req_sz->fetch();
-
-			$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$sub_zona[sub_zona] / $cole[responsable]");
-		}
-	}else{
+	} else {
 		$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$cole[promotor]");
 	}
 
-	
+	$dep_nombre = $dep_map[$cole['departamento']] ?? '';
+	$count_p2   = isset($adj_map2[$cole['id']]) ? 1 : 0;
 
-	$sql_dep="SELECT departamento FROM departamentos WHERE id='".$cole['departamento']."' ";
-  $req_dep = $bdd->prepare($sql_dep);
-  $req_dep->execute();
-  $dep = $req_dep->fetch();
-
-   $sql = "SELECT id FROM adjuntos WHERE id_colegio='".$cole["id"]."' AND id_periodo='".$_POST["periodo"]."' AND tipo=1";
-
-   $req = $bdd->prepare($sql);
-   $req->execute();
-   $count_p = $req->rowCount();
-
-	$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$dep[departamento]");
+	$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", $dep_nombre);
 	$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$cole[ciudad]");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "$cole[barrio]");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "$cole[direccion]");
-	$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$cole[telefono]");		
+	$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$cole[telefono]");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("J$conta", "$cole[status]");
+	$objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", $count_p2 < 1 ? "No" : "Si");
 
-	if ($count_p < 1) {
-		$objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", "No");
-	}else{
-		$objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", "Si");
-	}
-
-
-
-$conta++;
+	$conta++;
 }
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
-
-foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
+foreach (range('A', 'K') as $columnID) {
+  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);
 }
 
 

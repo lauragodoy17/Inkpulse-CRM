@@ -178,94 +178,94 @@ $req = $bdd->prepare($sql);
 $req->execute();
 $colegios = $req->fetchAll();
 
+// ── Pre-fetch presupuestos para todos los libros en una sola query ─
+$libro_ids = array_column($colegios, 'id');
+$pres_por_libro = [];
+if (!empty($libro_ids)) {
+    $ph_lb = implode(',', array_fill(0, count($libro_ids), '?'));
+    if ($_POST['promotor'] != 0) {
+        $sql_pres = "SELECT p.id_libro, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p WHERE p.id_libro IN ($ph_lb) AND p.definido=1 AND p.id_periodo=? AND p.id_usuario=? AND p.probabilidad!=3 GROUP BY p.id_libro, p.id_colegio";
+        $params_pres = array_merge($libro_ids, [$_POST['periodo'], $_POST['promotor']]);
+    } elseif (isset($_POST['desde'])) {
+        $sql_pres = "SELECT p.id_libro, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p WHERE p.id_libro IN ($ph_lb) AND p.definido=1 AND p.id_periodo=? AND p.probabilidad!=3 AND p.conse BETWEEN ? AND ? GROUP BY p.id_libro, p.id_colegio";
+        $params_pres = array_merge($libro_ids, [$_POST['periodo'], $_POST['desde'], $_POST['hasta']]);
+    } else {
+        $sql_pres = "SELECT p.id_libro, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p WHERE p.id_libro IN ($ph_lb) AND p.definido=1 AND p.id_periodo=? AND p.probabilidad!=3 GROUP BY p.id_libro, p.id_colegio";
+        $params_pres = array_merge($libro_ids, [$_POST['periodo']]);
+    }
+    $req_pres = $bdd->prepare($sql_pres);
+    $req_pres->execute($params_pres);
+    foreach ($req_pres->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $pres_por_libro[$row['id_libro']][] = $row;
+}
+
+// Colegios únicos de los presupuestos → pre-fetch grados y areas
+$all_cole_ids = [];
+foreach ($pres_por_libro as $rows)
+    foreach ($rows as $r) $all_cole_ids[$r['id_colegio']] = true;
+$all_cole_ids = array_keys($all_cole_ids);
+
+$gp_map_ca = [];
+$ao_map_ca  = [];
+if (!empty($all_cole_ids)) {
+    $ph_ca = implode(',', array_fill(0, count($all_cole_ids), '?'));
+    $req_gp_ca = $bdd->prepare("SELECT id_colegio, id_grado, SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio IN ($ph_ca) AND id_periodo=? AND alumnos > 0 GROUP BY id_colegio, id_grado");
+    $req_gp_ca->execute(array_merge($all_cole_ids, [$_POST['periodo']]));
+    foreach ($req_gp_ca->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $gp_map_ca[$row['id_colegio']][$row['id_grado']] = (int)$row['alumnos'];
+
+    $req_ao_ca = $bdd->prepare("SELECT id_colegio, id_libro_eureka, codigo, id_grado_otro FROM areas_objetivas WHERE id_colegio IN ($ph_ca) AND id_periodo=?");
+    $req_ao_ca->execute(array_merge($all_cole_ids, [$_POST['periodo']]));
+    foreach ($req_ao_ca->fetchAll(PDO::FETCH_ASSOC) as $row)
+        $ao_map_ca[$row['id_colegio']][$row['id_libro_eureka']][$row['codigo']] = $row['id_grado_otro'];
+}
+// ── Fin pre-fetch ─────────────────────────────────────────────────
 
 $conta=7;
+$last_uni_vr = 0;
 
 foreach ($colegios as $colegio) {
 
-
-    if ($_POST['promotor']!=0) {
-        $sql ="SELECT p.tasa_compra,p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id WHERE p.id_libro='".$colegio["id"]."' AND p.definido=1 AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_POST['promotor']."' AND p.probabilidad !=3 GROUP BY p.id_colegio;";
-    }else{
-
-        if (!isset($_POST['desde']) ) {
-
-            $sql ="SELECT p.tasa_compra,p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id WHERE p.id_libro='".$colegio["id"]."' AND p.definido=1 AND p.id_periodo='".$_POST['periodo']."' AND p.probabilidad !=3 GROUP BY p.id_colegio;";
-
-
-        }else{
-
-            $sql ="SELECT p.tasa_compra,p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id WHERE p.id_libro='".$colegio["id"]."' AND p.definido=1 AND p.id_periodo='".$_POST['periodo']."' AND p.probabilidad !=3 AND p.conse BETWEEN '".$_POST["desde"]."' AND '".$_POST["hasta"]."' GROUP BY p.id_colegio;";
-
-
-        }
-
-        
-    }
-
-    
-
-    $req = $bdd->prepare($sql);
-    $req->execute();
-    $libros = $req->fetchAll();
+    $libros = $pres_por_libro[$colegio["id"]] ?? [];
+    $last_uni_vr = 0;
 
     foreach ($libros as $libro) {
-        
+
         if ($colegio["id_grado"] != 17) {
-            $sq_gp = "SELECT  SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$libro["id_colegio"]."' AND id_grado='".$colegio["id_grado"]."' AND id_periodo='".$_POST['periodo']."' AND alumnos > 0";
-        }else{
-
-       
-            $sql_go = "SELECT id_grado_otro FROM areas_objetivas WHERE id_colegio='".$libro["id_colegio"]."' AND id_libro_eureka='".$colegio["id"]."' AND id_periodo='".$_POST['periodo']."' AND codigo='".$libro["cod_area"]."'";
-                
-            $req_go = $bdd->prepare($sql_go);
-            $req_go->execute();
-            $grado_o = $req_go->fetch();
-
-            $sq_gp = "SELECT  SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$libro["id_colegio"]."' AND id_grado='".$grado_o["id_grado_otro"]."' AND id_periodo='".$_POST['periodo']."' AND alumnos > 0";
+            $alumnos = $gp_map_ca[$libro["id_colegio"]][$colegio["id_grado"]] ?? 0;
+        } else {
+            $grado_o_id = $ao_map_ca[$libro["id_colegio"]][$colegio["id"]][$libro["cod_area"]] ?? 0;
+            $alumnos    = $gp_map_ca[$libro["id_colegio"]][$grado_o_id] ?? 0;
         }
 
-        $req_gp = $bdd->prepare($sq_gp);
-        $req_gp->execute();
-        $gp = $req_gp->fetch();
-  
-        
         if ($libro["tasa_compra_d"] == 0.00) {
-            $alumnos_tasa_d= floor($gp["alumnos"] * $libro["tasa_compra"]);
-            $precio_neto_d=$colegio["precio"] - ($colegio["precio"] * $libro["descuento"]);
-               
-        }else{
-            $alumnos_tasa_d= floor($gp["alumnos"] * $libro["tasa_compra_d"]);
-            $precio_neto_d=$colegio["precio"] - ($colegio["precio"] * $libro["descuento_d"]);
+            $alumnos_tasa_d = floor($alumnos * $libro["tasa_compra"]);
+            $precio_neto_d  = $colegio["precio"] - ($colegio["precio"] * $libro["descuento"]);
+        } else {
+            $alumnos_tasa_d = floor($alumnos * $libro["tasa_compra_d"]);
+            $precio_neto_d  = $colegio["precio"] - ($colegio["precio"] * $libro["descuento_d"]);
         }
 
-        
-        $poblacion[$colegio["id"]][]=$gp["alumnos"];
-        $castigo[$colegio["id"]][]=$alumnos_tasa_d;
-
-        $valor_adopcion[$colegio["id"]][]=$precio_neto_d * $alumnos_tasa_d;
-
+        $poblacion[$colegio["id"]][]      = $alumnos;
+        $castigo[$colegio["id"]][]        = $alumnos_tasa_d;
+        $valor_adopcion[$colegio["id"]][] = $precio_neto_d * $alumnos_tasa_d;
+        $last_uni_vr = $libro["uni_vr"];
     }
 
-    $t_poblacion[$colegio["id"]]=array_sum($poblacion[$colegio["id"]]);
+    $t_poblacion[$colegio["id"]]     = array_sum($poblacion[$colegio["id"]] ?? []);
+    $t_castigo[$colegio["id"]]       = array_sum($castigo[$colegio["id"]] ?? []);
+    $t_valor_adopcion[$colegio["id"]]= array_sum($valor_adopcion[$colegio["id"]] ?? []);
 
-    $t_castigo[$colegio["id"]]=array_sum($castigo[$colegio["id"]]);
-    $t_valor_adopcion[$colegio["id"]]=array_sum($valor_adopcion[$colegio["id"]]);
-
-	
 	$objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$colegio[libro]");
     $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$colegio[etiqueta]");
     $objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$colegio[precio]");
-	$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "".$t_poblacion[$colegio["id"]]."");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "".$t_castigo[$colegio["id"]]."");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "".$t_valor_adopcion[$colegio["id"]]."");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "".$libro["uni_vr"]."");
+	$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", $t_poblacion[$colegio["id"]]);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", $t_castigo[$colegio["id"]]);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", $t_valor_adopcion[$colegio["id"]]);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", $last_uni_vr);
 
 	$conta++;
-
-   
-
-}	
+}
 
 $objSpreadsheet->getActiveSheet()->getStyle("C7:C$conta")
           ->getNumberFormat()
@@ -280,21 +280,9 @@ $objSpreadsheet->getActiveSheet()->getStyle("F7:F$conta")
         );
 
 
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
+
 
 foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 
