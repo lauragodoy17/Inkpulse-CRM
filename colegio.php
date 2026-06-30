@@ -290,6 +290,16 @@
                         >Adjuntos</a
                       >
                     </li>
+                    <li class="nav-item">
+                      <a
+                        class="nav-link"
+                        data-toggle="tab"
+                        href="#visitas"
+                        role="tab"
+                        aria-selected="false" data-url="ajax/tab_visitas.php"
+                        >Visitas</a
+                      >
+                    </li>
                     <?php if ($_SESSION['tipo'] == 1): ?>
                     <li class="nav-item">
                       <a
@@ -686,6 +696,8 @@
                     <div class="tab-pane" id="atenciones" role="tabpanel"></div>
 
                     <div class="tab-pane" id="adjuntos" role="tabpanel"></div>
+
+                    <div class="tab-pane" id="visitas" role="tabpanel"></div>
 
                     <?php if ($_SESSION['tipo'] == 1): ?>
                     <div class="tab-pane" id="historial" role="tabpanel"></div>
