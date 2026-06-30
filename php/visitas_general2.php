@@ -73,7 +73,7 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("C2", "$nombre_completo");
 
 
 
-$objSpreadsheet->getActiveSheet()->getStyle('A4:L4')->applyFromArray([
+$objSpreadsheet->getActiveSheet()->getStyle('A4:M4')->applyFromArray([
     'fill' => [
         'fillType' => Fill::FILL_SOLID,
         'startColor' => [
@@ -84,7 +84,7 @@ $objSpreadsheet->getActiveSheet()->getStyle('A4:L4')->applyFromArray([
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("A4", "Fecha planificada");
 $objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Hora planificada");
-$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Colegio");
+$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Colegio / Otro lugar");
 $objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Status");
 $objSpreadsheet->getActiveSheet()->SetCellValue("E4", "Profesor");
 $objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Cargo");
@@ -94,6 +94,7 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("I4", "Efectiva");
 $objSpreadsheet->getActiveSheet()->SetCellValue("J4", "Fecha llegada");
 $objSpreadsheet->getActiveSheet()->SetCellValue("K4", "Fecha ejecutada");
 $objSpreadsheet->getActiveSheet()->SetCellValue("L4", "Comentarios");
+$objSpreadsheet->getActiveSheet()->SetCellValue("M4", "Participante externo");
 
 
 $sql_periodo="SELECT id FROM periodos ORDER BY id DESC";
@@ -107,7 +108,7 @@ $hasta=$_POST["hasta"]." "."23:59:59";
 
 
 	
-$sql = "SELECT p.id as planid, p.resultado,p.cod_profesor,p.id_objetivo, c.id as cid, UPPER(c.colegio) as colegio, p.start FROM plan_trabajo p JOIN colegios c ON p.id_colegio=c.id  WHERE p.id_promotor='".$_SESSION["id"]."' AND p.start BETWEEN '".$desde."' AND '".$hasta."' ORDER BY start ASC";
+$sql = "SELECT p.id as planid, p.resultado, p.cod_profesor, p.id_objetivo, p.otro_lugar, p.otro_participante, p.otro_objetivo, c.id as cid, UPPER(c.colegio) as colegio, p.start FROM plan_trabajo p LEFT JOIN colegios c ON p.id_colegio=c.id WHERE p.id_promotor='".$_SESSION["id"]."' AND p.start BETWEEN '".$desde."' AND '".$hasta."' ORDER BY start ASC";
 $req = $bdd->prepare($sql);
 $req->execute();
 $planes = $req->fetchAll();
@@ -173,6 +174,18 @@ foreach($planes as $plan) {
 
 	list($fecha,$hora)=explode(" ", $plan["start"]);
 
+	// Colegio / Otro lugar
+	$col_lugar = !empty($plan["otro_lugar"])
+	    ? "Otro lugar - " . $plan["otro_lugar"]
+	    : ($plan["colegio"] ?? '');
+
+	// Objetivo / Otro objetivo
+	$col_objetivo = !empty($plan["otro_objetivo"])
+	    ? "Otro objetivo - " . $plan["otro_objetivo"]
+	    : ($objetivo["objetivo"] ?? '');
+
+	// Participante externo
+	$col_participante = $plan["otro_participante"] ?? '';
 
 	$sql_st = "SELECT status FROM colegios_status cs JOIN status_cubrimiento s ON cs.id_status=s.id WHERE cs.id_colegio='".$plan["cid"]."' ORDER BY cs.id DESC, FIELD (cs.id_status,'5','1','2','3','4')";
 		$req_st = $bdd->prepare($sql_st);
@@ -182,13 +195,13 @@ foreach($planes as $plan) {
 
 	$objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$fecha");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$hora");
-	$objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$plan[colegio]");
+	$objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", $col_lugar);
 	if (empty($status["status"])) {
 		$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "");
 	}else{
 		$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$status[status]");
 	}
-		
+
 	if (!empty($profe["nombre"])) {
 		$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$profe[nombre]");
 	}else{
@@ -199,24 +212,24 @@ foreach($planes as $plan) {
 	}else{
 		$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "");
 	}
-		
-	$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "$objetivo[objetivo]");
+
+	$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", $col_objetivo);
 	if ($plan["resultado"]==1) {
 		$objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "Ejecutada");
 	}
 	else {
 		$objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "No ejecutada");
 	}
-	
+
 	if ($plan["resultado"]==1) {
-		
+
 		if ($visitas["efectiva"]==1) {
-			
+
 			$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "SI");
 		}else{
-			$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "NO");	
+			$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "NO");
 		}
-		
+
 		$objSpreadsheet->getActiveSheet()->SetCellValue("J$conta", "$visitas[fecha_llegada]");
 
 		$objSpreadsheet->getActiveSheet()->SetCellValue("K$conta", "$visitas[fecha]");
@@ -224,26 +237,16 @@ foreach($planes as $plan) {
 		$objSpreadsheet->getActiveSheet()->SetCellValue("L$conta", "$visitas[observaciones]");
 	}
 
+	if (!empty($col_participante)) {
+		$objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", $col_participante);
+	}
+
 
 
 $conta++;
 }
-function excelColumnRange($start, $end) {
-    $columns = [];
-    $current = $start;
-    while ($current !== $end) {
-        $columns[] = $current;
-        $current++;
-    }
-    $columns[] = $end;
-    return $columns;
-}
-
-foreach (range('A', 'Z') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
-}
-foreach (excelColumnRange('AA', 'ZZ') as $columnID) {
-  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
+foreach (range('A', 'M') as $columnID) {
+  $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);
 }
 
 
