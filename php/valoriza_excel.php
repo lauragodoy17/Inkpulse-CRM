@@ -396,22 +396,11 @@ foreach ($colegios as $colegio) {
         $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", "0");
     }
 
-    $objSpreadsheet->getActiveSheet()->SetCellValue("T$conta", "$muestras[cant]");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("U$conta", "$total[total]");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("V$conta", "$ejecutadas[ejecu]");
+    $objSpreadsheet->getActiveSheet()->SetCellValue("T$conta", $muestras_cant ?? 0);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("U$conta", $total_val ?? 0);
+    $objSpreadsheet->getActiveSheet()->SetCellValue("V$conta", $ejecu_val);
 
-    if (!empty($status)) {
-        
-        $objSpreadsheet->getActiveSheet()->SetCellValue("W$conta", "$status[status]");
-
-    }elseif(!empty($status2)){
-
-        $objSpreadsheet->getActiveSheet()->SetCellValue("W$conta", "$status2[status]");
-
-    }else{
-
-        $objSpreadsheet->getActiveSheet()->SetCellValue("W$conta", "Por definir");
-    }
+    $objSpreadsheet->getActiveSheet()->SetCellValue("W$conta", !empty($status_str) ? $status_str : "Por definir");
 
 	$conta++;
 
