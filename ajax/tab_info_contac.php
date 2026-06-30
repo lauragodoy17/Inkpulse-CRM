@@ -40,6 +40,10 @@ function ic_initials($n, $a) {
   .ic-actions { display:flex; gap:6px; margin-left:auto; }
   .ic-btn-edit { border:1px solid #e9ecef; background:#fff; color:#4361ee; padding:5px 9px; border-radius:6px; cursor:pointer; font-size:13px; line-height:1; }
   .ic-btn-edit:hover { background:#eef0ff; border-color:#c7d2fe; }
+  .ic-btn-del  { border:1px solid #e9ecef; background:#fff; color:#dc2626; padding:5px 9px; border-radius:6px; cursor:pointer; font-size:13px; line-height:1; }
+  .ic-btn-del:hover  { background:#fee2e2; border-color:#fca5a5; }
+  .ic-del-confirm { padding:10px 16px; border-top:2px solid #dc2626; background:#fff5f5; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; }
+  .ic-del-msg { flex:1; color:#374151; }
 
   /* ── Inline edit form ── */
   .ic-edit-form { padding:16px; border-top:2px solid #4361ee; background:#fafbff; }
@@ -74,7 +78,7 @@ function ic_initials($n, $a) {
   /* ══════════════════════════════
      NIVEL 1 — ADMINISTRATIVO
   ══════════════════════════════ */
-  $adms = $bdd->prepare("SELECT * FROM trabajadores_colegios WHERE id_colegio=? AND cargo !=6");
+  $adms = $bdd->prepare("SELECT * FROM trabajadores_colegios WHERE id_colegio=? AND cargo !=6 AND activo=1");
   $adms->execute([$_GET["colegio"]]);
   $adms = $adms->fetchAll();
 
@@ -132,7 +136,18 @@ function ic_initials($n, $a) {
           <button type="button" class="ic-btn-edit" title="Editar">
             <i class="bi bi-pencil"></i>
           </button>
+          <button type="button" class="ic-btn-del" title="Eliminar"
+                  data-id="<?= $adm['id'] ?>" data-nombre="<?= htmlspecialchars($adm['nombre'].' '.$adm['apellido']) ?>">
+            <i class="bi bi-trash"></i>
+          </button>
         </div>
+      </div>
+
+      <!-- Confirmación de eliminación (oculta) -->
+      <div class="ic-del-confirm d-none">
+        <span class="ic-del-msg">¿Desactivar a <strong><?= htmlspecialchars($adm['nombre'].' '.$adm['apellido']) ?></strong>? </span>
+        <button type="button" class="btn btn-danger btn-sm ic-del-si">Sí, desactivar</button>
+        <button type="button" class="btn btn-light btn-sm ic-del-no">Cancelar</button>
       </div>
 
       <!-- Formulario de edición (oculto) -->
@@ -208,14 +223,36 @@ function ic_initials($n, $a) {
   /* ══════════════════════════════
      NIVEL 2 — ACADÉMICO
   ══════════════════════════════ */
-  $profes = $bdd->prepare("SELECT * FROM trabajadores_colegios WHERE id_colegio=? AND cargo=6");
+  $profes = $bdd->prepare("SELECT * FROM trabajadores_colegios WHERE id_colegio=? AND cargo=6 AND activo=1 ORDER BY nivel_academico, nombre");
   $profes->execute([$_GET["colegio"]]);
-  $profes = $profes->fetchAll();
+  $profes_raw = $profes->fetchAll();
 
   $materias_q = $bdd->prepare("SELECT * FROM materias WHERE id < 16");
   $materias_q->execute();
   $materias_all = $materias_q->fetchAll();
   $materias_map = array_column($materias_all, 'materia', 'id');
+
+  // Agrupar por nivel académico
+  $niveles_orden = ['Bachillerato', 'Primaria', 'Preescolar'];
+  $profes_por_nivel = [];
+  foreach ($profes_raw as $p) {
+    $niv = $p['nivel_academico'] ?? '';
+    $profes_por_nivel[$niv ?: '__sin__'][] = $p;
+  }
+
+  // Colores de badge por nivel
+  $nivel_badge = [
+    'Bachillerato' => 'background:#eef0ff;color:#4361ee',
+    'Primaria'     => 'background:#d1fae5;color:#059669',
+    'Preescolar'   => 'background:#fff7ed;color:#ea580c',
+    '__sin__'      => 'background:#f3f4f6;color:#6b7280',
+  ];
+  $nivel_icon = [
+    'Bachillerato' => 'bi-mortarboard-fill',
+    'Primaria'     => 'bi-book-fill',
+    'Preescolar'   => 'bi-stars',
+    '__sin__'      => 'bi-person',
+  ];
   ?>
 
   <div class="ic-section">
@@ -229,11 +266,28 @@ function ic_initials($n, $a) {
       </a>
     </div>
 
-    <?php if (empty($profes)): ?>
+    <?php if (empty($profes_raw)): ?>
     <div class="ic-empty"><i class="bi bi-book" style="font-size:22px;display:block;margin-bottom:6px"></i>Sin profesores registrados</div>
     <?php endif; ?>
 
-    <?php foreach ($profes as $profe):
+    <?php
+    // Mostrar primero los niveles ordenados, luego sin nivel
+    $orden_display = array_merge($niveles_orden, ['__sin__']);
+    foreach ($orden_display as $niv_key):
+      if (empty($profes_por_nivel[$niv_key])) continue;
+      $niv_label = ($niv_key === '__sin__') ? 'Sin nivel asignado' : $niv_key;
+      $badge_style = $nivel_badge[$niv_key] ?? $nivel_badge['__sin__'];
+      $badge_icon  = $nivel_icon[$niv_key]  ?? $nivel_icon['__sin__'];
+    ?>
+    <!-- Sub-encabezado de nivel -->
+    <div style="display:flex;align-items:center;gap:8px;margin:16px 0 8px;">
+      <span style="<?= $badge_style ?>;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;">
+        <i class="bi <?= $badge_icon ?>"></i> <?= htmlspecialchars($niv_label) ?>
+      </span>
+      <span style="flex:1;height:1px;background:#e9ecef;"></span>
+    </div>
+
+    <?php foreach ($profes_por_nivel[$niv_key] as $profe):
       $ini   = ic_initials($profe['nombre'], $profe['apellido']);
       $color = ic_color($profe['nombre']);
       $area_nombre = $materias_map[$profe['area']] ?? '—';
@@ -266,7 +320,18 @@ function ic_initials($n, $a) {
           <button type="button" class="ic-btn-edit" title="Editar">
             <i class="bi bi-pencil"></i>
           </button>
+          <button type="button" class="ic-btn-del" title="Eliminar"
+                  data-id="<?= $profe['id'] ?>" data-nombre="<?= htmlspecialchars($profe['nombre'].' '.$profe['apellido']) ?>">
+            <i class="bi bi-trash"></i>
+          </button>
         </div>
+      </div>
+
+      <!-- Confirmación de eliminación (oculta) -->
+      <div class="ic-del-confirm d-none">
+        <span class="ic-del-msg">¿Desactivar a <strong><?= htmlspecialchars($profe['nombre'].' '.$profe['apellido']) ?></strong>? No se eliminará de la base de datos.</span>
+        <button type="button" class="btn btn-danger btn-sm ic-del-si">Sí, desactivar</button>
+        <button type="button" class="btn btn-light btn-sm ic-del-no">Cancelar</button>
       </div>
 
       <!-- Formulario de edición (oculto) -->
@@ -303,6 +368,18 @@ function ic_initials($n, $a) {
             </div>
             <div class="col-sm-3">
               <div class="form-group">
+                <label>Nivel académico <small style="color:red">*</small></label>
+                <select class="form-control form-control-sm" name="nivel_profe" required>
+                  <option value="">Seleccione</option>
+                  <?php foreach ($niveles_orden as $nv):
+                    $sel = ($profe['nivel_academico'] === $nv) ? 'selected' : '';
+                    echo '<option value="'.$nv.'" '.$sel.'>'.$nv.'</option>';
+                  endforeach; ?>
+                </select>
+              </div>
+            </div>
+            <div class="col-sm-3">
+              <div class="form-group">
                 <label>Área <small style="color:red">*</small></label>
                 <select class="form-control form-control-sm custom-select" name="area_profe" required>
                   <option value="">Seleccione</option>
@@ -325,6 +402,7 @@ function ic_initials($n, $a) {
         </div>
       </form>
     </div>
+    <?php endforeach; ?>
     <?php endforeach; ?>
   </div>
 
@@ -479,19 +557,30 @@ function ic_initials($n, $a) {
                 </div>
               </div>
               <div class="row">
-                <div class="col-sm-4">
+                <div class="col-sm-3">
                   <div class="form-group">
                     <label>Correo <small style="color:red">*</small></label>
                     <input type="email" class="form-control" placeholder="Correo" name="correo_profe" id="correo_profe" required />
                   </div>
                 </div>
-                <div class="col-sm-4">
+                <div class="col-sm-3">
                   <div class="form-group">
                     <label>Teléfono <small style="color:red">*</small></label>
                     <input type="text" class="form-control" placeholder="Teléfono" name="telefono_profe" id="telefono_profe" required />
                   </div>
                 </div>
-                <div class="col-sm-4">
+                <div class="col-sm-3">
+                  <div class="form-group">
+                    <label>Nivel académico <small style="color:red">*</small></label>
+                    <select class="form-control" name="nivel_profe" id="nivel_profe" required>
+                      <option value="">Seleccione</option>
+                      <option value="Bachillerato">Bachillerato</option>
+                      <option value="Primaria">Primaria</option>
+                      <option value="Preescolar">Preescolar</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="col-sm-3">
                   <div class="form-group">
                     <label>Área <small style="color:red">*</small></label>
                     <select class="custom-select2" name="area_profe" id="area_profe" required>
@@ -524,19 +613,30 @@ function ic_initials($n, $a) {
                 </div>
               </div>
               <div class="row">
-                <div class="col-sm-4">
+                <div class="col-sm-3">
                   <div class="form-group">
                     <label>Correo</label>
                     <input type="email" class="form-control" placeholder="Correo" name="correo_profe" id="correo_profe<?= $i ?>" />
                   </div>
                 </div>
-                <div class="col-sm-4">
+                <div class="col-sm-3">
                   <div class="form-group">
                     <label>Teléfono</label>
                     <input type="text" class="form-control" placeholder="Teléfono" name="telefono_profe" id="telefono_profe<?= $i ?>" />
                   </div>
                 </div>
-                <div class="col-sm-4">
+                <div class="col-sm-3">
+                  <div class="form-group">
+                    <label>Nivel académico</label>
+                    <select class="form-control" name="nivel_profe" id="nivel_profe<?= $i ?>">
+                      <option value="">Seleccione</option>
+                      <option value="Bachillerato">Bachillerato</option>
+                      <option value="Primaria">Primaria</option>
+                      <option value="Preescolar">Preescolar</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="col-sm-3">
                   <div class="form-group">
                     <label>Área</label>
                     <select class="custom-select2" name="area_profe" id="area_profe<?= $i ?>">
@@ -641,15 +741,16 @@ $('#agregar_adm').on('click', function () {
 // ── Guardar datos en hidden fields (profesores) ──
 function syncProfe(i) {
   var sfx = i === 0 ? '' : i;
-  var n = $('#nombre_profe'  + sfx).val();
-  var a = $('#apellido_profe'+ sfx).val();
-  var c = $('#correo_profe'  + sfx).val();
-  var t = $('#telefono_profe'+ sfx).val();
-  var r = $('#area_profe'    + sfx).val();
-  $('#profe' + sfx).val(n+'/'+a+'/'+c+'/'+t+'/'+r);
+  var n   = $('#nombre_profe'  + sfx).val();
+  var a   = $('#apellido_profe'+ sfx).val();
+  var c   = $('#correo_profe'  + sfx).val();
+  var t   = $('#telefono_profe'+ sfx).val();
+  var r   = $('#area_profe'    + sfx).val();
+  var niv = $('#nivel_profe'   + sfx).val();
+  $('#profe' + sfx).val(n+'/'+a+'/'+c+'/'+t+'/'+r+'/'+niv);
 }
 $('#nombre_profe, #apellido_profe, #correo_profe, #telefono_profe').on('keyup', function(){ syncProfe(0); });
-$('#area_profe').on('change', function(){ syncProfe(0); });
+$('#area_profe, #nivel_profe').on('change', function(){ syncProfe(0); });
 
 // Garantiza que todos los campos ocultos estén sincronizados antes de enviar
 $('form[action="php/guardar_profe.php"]').on('submit', function() {
@@ -663,8 +764,51 @@ $('#agregar_profe').on('click', function () {
   $('#agg_profe' + mProfe).removeClass('d-none');
   (function(i){
     $('#nombre_profe'+i+', #apellido_profe'+i+', #correo_profe'+i+', #telefono_profe'+i).on('keyup', function(){ syncProfe(i); });
-    $('#area_profe'+i).on('change', function(){ syncProfe(i); });
+    $('#area_profe'+i+', #nivel_profe'+i).on('change', function(){ syncProfe(i); });
   })(mProfe);
   mProfe++;
+});
+
+// ── Botón eliminar (soft delete) ──
+$(document).on('click', '.ic-btn-del', function () {
+  var card = $(this).closest('.ic-card');
+  card.find('.ic-view').hide();
+  card.find('.ic-edit-form').addClass('d-none');
+  card.find('.ic-del-confirm').removeClass('d-none');
+});
+
+$(document).on('click', '.ic-del-no', function () {
+  var card = $(this).closest('.ic-card');
+  card.find('.ic-del-confirm').addClass('d-none');
+  card.find('.ic-view').show();
+});
+
+$(document).on('click', '.ic-del-si', function () {
+  var $btn  = $(this);
+  var card  = $btn.closest('.ic-card');
+  var id    = card.find('.ic-btn-del').data('id');
+
+  $btn.prop('disabled', true).text('Desactivando…');
+
+  $.ajax({
+    url:  'php/eliminar_trabajador.php',
+    type: 'POST',
+    data: { id: id },
+    dataType: 'json',
+    success: function (res) {
+      if (res.ok) {
+        card.animate({ opacity: 0, height: 0 }, 300, function () {
+          $(this).remove();
+        });
+      } else {
+        $btn.prop('disabled', false).text('Sí, desactivar');
+        alert('No se pudo desactivar el contacto.');
+      }
+    },
+    error: function () {
+      $btn.prop('disabled', false).text('Sí, desactivar');
+      alert('Error de comunicación. Intenta de nuevo.');
+    }
+  });
 });
 </script>

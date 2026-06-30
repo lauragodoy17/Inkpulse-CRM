@@ -13,11 +13,19 @@
         $parts = explode("/", $profe);
         if (count($parts) < 5) continue;
 
-        list($nombre,$apellido,$correo, $telefono, $area) = $parts;
+        $nombre   = $parts[0];
+        $apellido = $parts[1];
+        $correo   = $parts[2];
+        $telefono = $parts[3];
+        $area     = $parts[4];
+        $nivel    = isset($parts[5]) ? $parts[5] : '';
+
+        $niveles_validos = ['Bachillerato', 'Primaria', 'Preescolar'];
+        if (!in_array($nivel, $niveles_validos)) $nivel = null;
 
         if ($profe !="") {
 
-            $sql_p = "INSERT INTO trabajadores_colegios(id_colegio, nombre, apellido, email, telefono, area, cargo) VALUES('{$_POST['id_colegio']}', '{$nombre}','{$apellido}','{$correo}','{$telefono}','{$area}', '6')";
+            $sql_p = "INSERT INTO trabajadores_colegios(id_colegio, nombre, apellido, email, telefono, area, cargo, nivel_academico) VALUES('{$_POST['id_colegio']}', '{$nombre}','{$apellido}','{$correo}','{$telefono}','{$area}', '6', ".($nivel ? "'$nivel'" : "NULL").")";
 
 
             $query_p = $bdd->prepare( $sql_p );

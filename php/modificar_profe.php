@@ -7,11 +7,14 @@
     $id_usuario_h = intval($_SESSION["id"] ?? 0);
 
     // Fetch old values and id_colegio before UPDATE
-    $req_old_profe = $bdd->prepare("SELECT id_colegio, nombre, apellido, telefono, email, area FROM trabajadores_colegios WHERE id=:id");
+    $req_old_profe = $bdd->prepare("SELECT id_colegio, nombre, apellido, telefono, email, area, nivel_academico FROM trabajadores_colegios WHERE id=:id");
     $req_old_profe->execute([':id' => $_POST['id_profe']]);
     $old_profe = $req_old_profe->fetch();
 
-    $sql = "UPDATE trabajadores_colegios SET nombre='{$_POST['nombre_profe']}', apellido='{$_POST['apellido_profe']}', telefono='{$_POST['telefono_profe']}', email='{$_POST['correo_profe']}' , area='{$_POST['area_profe']}'  WHERE id='{$_POST['id_profe']}' ";
+    $niveles_validos = ['Bachillerato', 'Primaria', 'Preescolar'];
+    $nivel_nuevo = in_array($_POST['nivel_profe'] ?? '', $niveles_validos) ? $_POST['nivel_profe'] : null;
+
+    $sql = "UPDATE trabajadores_colegios SET nombre='{$_POST['nombre_profe']}', apellido='{$_POST['apellido_profe']}', telefono='{$_POST['telefono_profe']}', email='{$_POST['correo_profe']}', area='{$_POST['area_profe']}', nivel_academico=".($nivel_nuevo ? "'$nivel_nuevo'" : "NULL")."  WHERE id='{$_POST['id_profe']}'";
 
     $req = $bdd->prepare($sql);
     $req->execute();
@@ -31,11 +34,12 @@
         $area_new_name = $r ? $r['materia'] : (string)$_POST['area_profe'];
 
         $campos_profe = [
-            'Nombre'   => [$old_profe['nombre'],   $_POST['nombre_profe']],
-            'Apellido' => [$old_profe['apellido'], $_POST['apellido_profe']],
-            'Teléfono' => [$old_profe['telefono'], $_POST['telefono_profe']],
-            'Correo'   => [$old_profe['email'],    $_POST['correo_profe']],
-            'Área'     => [$area_old_name,          $area_new_name],
+            'Nombre'           => [$old_profe['nombre'],            $_POST['nombre_profe']],
+            'Apellido'         => [$old_profe['apellido'],          $_POST['apellido_profe']],
+            'Teléfono'         => [$old_profe['telefono'],          $_POST['telefono_profe']],
+            'Correo'           => [$old_profe['email'],             $_POST['correo_profe']],
+            'Área'             => [$area_old_name,                   $area_new_name],
+            'Nivel académico'  => [$old_profe['nivel_academico'],   $nivel_nuevo],
         ];
         foreach ($campos_profe as $nombre_campo => $vals) {
             if ((string)$vals[0] !== (string)$vals[1]) {
