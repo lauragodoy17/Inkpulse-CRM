@@ -478,10 +478,10 @@
     $req_hp->execute();
     $num_hp = $req_hp->rowCount();
 
-    $sql_exist_p = "SELECT DISTINCT id_libro_eureka FROM areas_objetivas WHERE id_colegio='".$_GET["colegio"]."' AND id_periodo='".$_GET["periodo"]."'";
+    $sql_exist_p = "SELECT DISTINCT id_libro FROM presupuestos WHERE id_colegio='".$_GET["colegio"]."' AND id_periodo='".$_GET["periodo"]."'";
     $req_exist_p = $bdd->prepare($sql_exist_p);
     $req_exist_p->execute();
-    $ids_exist_presup = array_map('intval', array_column($req_exist_p->fetchAll(PDO::FETCH_ASSOC), 'id_libro_eureka'));
+    $ids_exist_presup = array_map('intval', array_column($req_exist_p->fetchAll(PDO::FETCH_ASSOC), 'id_libro'));
 
     echo "<form action='php/actualizar_presupuesto.php' method='POST' id='pp' class='miFormulario'>";
 

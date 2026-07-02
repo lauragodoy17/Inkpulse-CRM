@@ -25,7 +25,7 @@
 			list($materia,$grado,$lib,$grado_otro) = explode("/", $libro);
 
 			// Saltar si el libro ya existe en este colegio/periodo
-			$sql_dup = "SELECT id FROM areas_objetivas WHERE id_libro_eureka='".$lib."' AND id_colegio='".$_POST["id_colegio"]."' AND id_periodo='".$gp_periodo["id"]."'";
+			$sql_dup = "SELECT id FROM presupuestos WHERE id_libro='".$lib."' AND id_colegio='".$_POST["id_colegio"]."' AND id_periodo='".$gp_periodo["id"]."'";
 			$req_dup = $bdd->prepare($sql_dup);
 			$req_dup->execute();
 			if ($req_dup->rowCount() > 0) continue;
