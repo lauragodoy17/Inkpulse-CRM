@@ -154,24 +154,37 @@
 
     /* ── Print ──────────────────────────────────────────────── */
     @media print {
-      body { background: #fff; }
+      body { background: #fff; font-size: 12px; }
       .op-container { margin: 0; padding: 0; max-width: 100%; }
       .op-actions { display: none !important; }
       a[href]:after { content: none !important; }
-      .op-header { box-shadow: none; border: 1px solid #e2e8f0; }
-      .op-meta-card, .op-card, .op-extra { box-shadow: none; border: 1px solid #cbd5e1; }
+
+      /* Título y estado: lo que más debe resaltar */
+      .op-title { font-size: 1.7rem !important; }
+      .op-status {
+        font-size: 1.05rem !important; padding: 8px 22px !important;
+        border: 2px solid currentColor !important;
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
+      }
+
+      .op-header { box-shadow: none; border: 2px solid #1e293b; page-break-inside: avoid; }
+      .op-meta-card, .op-card, .op-extra { box-shadow: none; border: 1.5px solid #94a3b8; page-break-inside: avoid; }
+      .op-meta-label { font-size: .72rem !important; }
+      .op-meta-val   { font-size: 1rem !important; }
       .op-card-head {
-        background: #eef2ff !important; border-left: 4px solid #4361ee !important;
+        background: #eef2ff !important; border-left: 5px solid #4361ee !important;
         border-bottom: 2px solid #c7d2fe !important; color: #1e3a8a !important;
+        font-size: 1rem !important; padding: 12px 18px !important;
         print-color-adjust: exact; -webkit-print-color-adjust: exact;
       }
-      .op-field { border-bottom: 1px solid #cbd5e1 !important; }
+      .op-field { border-bottom: 1px solid #cbd5e1 !important; padding: 10px 18px !important; }
+      .op-field-label { color: #1e40af !important; font-size: .75rem !important; }
+      .op-field-val   { font-size: 1rem !important; }
       .op-extra-head {
-        background: #f8fafc !important; border-left: 4px solid currentColor !important;
-        border-bottom: 2px solid #e2e8f0 !important;
+        background: #f8fafc !important; border-left: 5px solid currentColor !important;
+        border-bottom: 2px solid #e2e8f0 !important; font-size: 1rem !important;
         print-color-adjust: exact; -webkit-print-color-adjust: exact;
       }
-      .op-field-label { color: #1e40af !important; }
     }
   </style>
 </head>
