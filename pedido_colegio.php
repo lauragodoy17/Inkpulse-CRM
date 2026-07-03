@@ -139,6 +139,19 @@ $show_plataforma  = (intval($pedido['tipo'] ?? 0) == 3 || ($pedido['codzona'] ??
 $show_tipo_pedido = (intval($pedido['tipo'] ?? 0) == 3 || ($pedido['codzona'] ?? '') == '5656' || intval($pedido['tipo'] ?? 0) == 10);
 $can_act = ($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2 || $_SESSION['id'] == 21 || $_SESSION['tipo'] == 10);
 $rechazar_label = (intval($pedido['eid'] ?? 0) == 1) ? 'Rechazar' : 'Anular';
+
+// Columnas vacías en todas las filas: se ocultan al imprimir para que el resto se ajuste
+$col_isbn       = false;
+$col_desc_aprob = false;
+$col_cant_aprob = false;
+foreach ($libros as $lb) {
+  if (trim($lb['isbn'] ?? '') !== '')      $col_isbn       = true;
+  if (floatval($lb['descuento_aprob'] ?? 0) > 0) $col_desc_aprob = true;
+  if (floatval($lb['cantidad_aprob'] ?? 0) > 0)  $col_cant_aprob = true;
+}
+$ph_isbn       = $col_isbn       ? '' : ' d-print-none';
+$ph_desc_aprob = $col_desc_aprob ? '' : ' d-print-none';
+$ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -440,7 +453,7 @@ $rechazar_label = (intval($pedido['eid'] ?? 0) == 1) ? 'Rechazar' : 'Anular';
             <thead>
               <tr>
                 <th>#</th>
-                <th>ISBN</th>
+                <th class="print-col-isbn<?= $ph_isbn ?>">ISBN</th>
                 <th>Título</th>
                 <th class="d-print-none">Materia</th>
                 <th>Grado</th>
@@ -450,15 +463,15 @@ $rechazar_label = (intval($pedido['eid'] ?? 0) == 1) ? 'Rechazar' : 'Anular';
                 <th>Cantidad</th>
                 <th>Valor Venta</th>
                 <?php if ($show_plataforma): ?><th>Plataforma</th><?php endif; ?>
-                <th>Descuento Aprobado</th>
-                <th>Cantidad Aprobada</th>
+                <th class="print-col-descaprob<?= $ph_desc_aprob ?>">Descuento Aprobado</th>
+                <th class="print-col-cantaprob<?= $ph_cant_aprob ?>">Cantidad Aprobada</th>
               </tr>
             </thead>
             <tbody>
               <?php $i = 1; foreach ($libros as $lb): ?>
               <tr>
                 <td><?= $i++ ?></td>
-                <td><?= htmlspecialchars($lb['isbn']) ?></td>
+                <td class="print-col-isbn<?= $ph_isbn ?>"><?= htmlspecialchars($lb['isbn']) ?></td>
                 <td><?= htmlspecialchars($lb['libro']) ?></td>
                 <td class="d-print-none"><?= htmlspecialchars($lb['materia']) ?></td>
                 <td><?= htmlspecialchars($lb['grado']) ?></td>
@@ -470,11 +483,11 @@ $rechazar_label = (intval($pedido['eid'] ?? 0) == 1) ? 'Rechazar' : 'Anular';
                 <?php if ($show_plataforma): ?>
                 <td style="text-align:center"><?= (intval($lb['plataforma']) == 1) ? 'Sí' : 'No' ?></td>
                 <?php endif; ?>
-                <td style="text-align:center">
+                <td class="print-col-descaprob<?= $ph_desc_aprob ?>" style="text-align:center">
                   <input type="number" id="d<?= $lb['lpid'] ?>" class="ap-desc-input"
                          data-lpid="<?= $lb['lpid'] ?>" value="<?= htmlspecialchars($lb['descuento_aprob']) ?>">
                 </td>
-                <td style="text-align:center">
+                <td class="print-col-cantaprob<?= $ph_cant_aprob ?>" style="text-align:center">
                   <input type="number" id="c<?= $lb['lpid'] ?>" class="ap-qty-input"
                          data-lpid="<?= $lb['lpid'] ?>" value="<?= htmlspecialchars($lb['cantidad_aprob']) ?>">
                 </td>
@@ -484,7 +497,7 @@ $rechazar_label = (intval($pedido['eid'] ?? 0) == 1) ? 'Rechazar' : 'Anular';
             <tfoot>
               <tr>
                 <td></td>
-                <td></td>
+                <td class="print-col-isbn<?= $ph_isbn ?>"></td>
                 <td></td>
                 <td class="d-print-none"></td>
                 <td></td>
@@ -494,8 +507,8 @@ $rechazar_label = (intval($pedido['eid'] ?? 0) == 1) ? 'Rechazar' : 'Anular';
                 <td style="text-align:center;font-weight:700"><?= $total_c ?></td>
                 <td style="font-weight:700">$ <?= number_format($total_v, 0, ',', '.') ?></td>
                 <?php if ($show_plataforma): ?><td></td><?php endif; ?>
-                <td></td>
-                <td></td>
+                <td class="print-col-descaprob<?= $ph_desc_aprob ?>"></td>
+                <td class="print-col-cantaprob<?= $ph_cant_aprob ?>"></td>
               </tr>
             </tfoot>
           </table>
@@ -571,7 +584,28 @@ $('#form_pedido').on('submit', function () {
   });
 });
 
+function syncColumnasVaciasImpresion() {
+  var hayIsbn = Array.from(document.querySelectorAll('#pc-table tbody td.print-col-isbn'))
+    .some(function (td) { return td.textContent.trim() !== ''; });
+  document.querySelectorAll('#pc-table .print-col-isbn').forEach(function (el) {
+    el.classList.toggle('d-print-none', !hayIsbn);
+  });
+
+  var hayDescAprob = Array.from(document.querySelectorAll('#pc-table .ap-desc-input'))
+    .some(function (inp) { return parseFloat(inp.value) > 0; });
+  document.querySelectorAll('#pc-table .print-col-descaprob').forEach(function (el) {
+    el.classList.toggle('d-print-none', !hayDescAprob);
+  });
+
+  var hayCantAprob = Array.from(document.querySelectorAll('#pc-table .ap-qty-input'))
+    .some(function (inp) { return parseFloat(inp.value) > 0; });
+  document.querySelectorAll('#pc-table .print-col-cantaprob').forEach(function (el) {
+    el.classList.toggle('d-print-none', !hayCantAprob);
+  });
+}
+
 window.addEventListener('beforeprint', function () {
+  syncColumnasVaciasImpresion();
   $.ajax({ url:'ajax/fecha_impre.php', type:'POST', data:'feid=<?= date("Y-m-d H:i:s") ?>/<?= $id_pedido ?>' });
   document.querySelectorAll('textarea').forEach(function (ta) {
     ta._ph = ta.style.height;

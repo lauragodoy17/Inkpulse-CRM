@@ -71,6 +71,19 @@ foreach ($libros_raw as $lb) {
 $is_admin  = ($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2);
 $is_viewer = ($_SESSION['id'] == 21);
 $can_edit  = ($is_admin || $is_viewer || ($pedido['verify'] ?? 1) == 0);
+
+// Columnas vacías en todas las filas: se ocultan al imprimir para que el resto se ajuste
+$col_isbn       = false;
+$col_desc_aprob = false;
+$col_cant_aprob = false;
+foreach ($libros as $lb) {
+  if (trim($lb['isbn'] ?? '') !== '')      $col_isbn       = true;
+  if (floatval($lb['descuento_aprob'] ?? 0) > 0) $col_desc_aprob = true;
+  if (floatval($lb['cantidad_aprob'] ?? 0) > 0)  $col_cant_aprob = true;
+}
+$ph_isbn       = $col_isbn       ? '' : ' d-print-none';
+$ph_desc_aprob = $col_desc_aprob ? '' : ' d-print-none';
+$ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -98,14 +111,16 @@ $can_edit  = ($is_admin || $is_viewer || ($pedido['verify'] ?? 1) == 0);
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 
-    @page { margin: 15px; size: landscape; }
+    @page { margin: 10mm; size: portrait; }
     @media print {
       .mc-actions, .breadcrumb, .d-print-none, .left-side-bar, .header { display:none !important; }
       a[href]:after { content:none !important; }
-      body { font-size:9px; }
+      body { font-size:8px; }
       .mc-obs-wrap textarea { height:auto !important; min-height:0 !important; overflow:visible !important; white-space:pre-wrap !important; page-break-inside:avoid; }
       #psa-table td input[type="number"] { border:none !important; background:transparent !important; width:auto !important; }
       #psa-table thead, #psa-table tfoot { display: table-row-group !important; }
+      #psa-table thead th { white-space: normal !important; }
+      #psa-table thead th, #psa-table tbody td, #psa-table tfoot td { padding: 3px 4px !important; }
       .mc-table-wrap { overflow:visible !important; }
       .main-container, .pd-ltr-20 { overflow:visible !important; }
       #psa-table { width:100% !important; }
@@ -350,7 +365,7 @@ $can_edit  = ($is_admin || $is_viewer || ($pedido['verify'] ?? 1) == 0);
             <thead>
               <tr>
                 <th>#</th>
-                <th>ISBN</th>
+                <th class="print-col-isbn<?= $ph_isbn ?>">ISBN</th>
                 <th>Título</th>
                 <th>Materia</th>
                 <th>Grado</th>
@@ -360,8 +375,8 @@ $can_edit  = ($is_admin || $is_viewer || ($pedido['verify'] ?? 1) == 0);
                 <th>Cantidad</th>
                 <th>Valor venta</th>
                 <?php if ($is_admin || $is_viewer): ?>
-                <th>Descuento aprobado</th>
-                <th>Cantidad aprobada</th>
+                <th class="print-col-descaprob<?= $ph_desc_aprob ?>">Descuento aprobado</th>
+                <th class="print-col-cantaprob<?= $ph_cant_aprob ?>">Cantidad aprobada</th>
                 <?php endif; ?>
                 <?php if ($can_edit): ?><th class="d-print-none"></th><?php endif; ?>
               </tr>
@@ -370,7 +385,7 @@ $can_edit  = ($is_admin || $is_viewer || ($pedido['verify'] ?? 1) == 0);
               <?php $i = 1; foreach ($libros as $lb): ?>
               <tr id="<?= $lb['lpid'] ?>">
                 <td><?= $i++ ?></td>
-                <td><?= htmlspecialchars($lb['isbn']) ?></td>
+                <td class="print-col-isbn<?= $ph_isbn ?>"><?= htmlspecialchars($lb['isbn']) ?></td>
                 <td><?= htmlspecialchars($lb['libro']) ?></td>
                 <td><?= htmlspecialchars($lb['materia']) ?></td>
                 <td><?= htmlspecialchars($lb['grado']) ?></td>
@@ -380,12 +395,12 @@ $can_edit  = ($is_admin || $is_viewer || ($pedido['verify'] ?? 1) == 0);
                 <td style="text-align:center"><?= intval($lb['cantidad']) ?></td>
                 <td>$ <?= number_format($lb['v_venta'], 0, ',', '.') ?></td>
                 <?php if ($is_admin || $is_viewer): ?>
-                <td style="text-align:center">
+                <td class="print-col-descaprob<?= $ph_desc_aprob ?>" style="text-align:center">
                   <input type="number" id="d<?= $lb['lpid'] ?>" name="cantidad_a"
                          class="ap-desc-input" data-lpid="<?= $lb['lpid'] ?>"
                          value="<?= htmlspecialchars($lb['descuento_aprob']) ?>">
                 </td>
-                <td style="text-align:center">
+                <td class="print-col-cantaprob<?= $ph_cant_aprob ?>" style="text-align:center">
                   <input type="number" id="c<?= $lb['lpid'] ?>" name="cantidad_a"
                          class="ap-qty-input" data-lpid="<?= $lb['lpid'] ?>"
                          value="<?= htmlspecialchars($lb['cantidad_aprob']) ?>">
@@ -403,11 +418,11 @@ $can_edit  = ($is_admin || $is_viewer || ($pedido['verify'] ?? 1) == 0);
             </tbody>
             <tfoot>
               <tr>
-                <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+                <td></td><td class="print-col-isbn<?= $ph_isbn ?>"></td><td></td><td></td><td></td><td></td><td></td>
                 <td style="text-align:right;font-weight:700">Total</td>
                 <td style="text-align:center;font-weight:700"><?= $total_c ?></td>
                 <td style="font-weight:700">$ <?= number_format($total_v, 0, ',', '.') ?></td>
-                <?php if ($is_admin || $is_viewer): ?><td></td><td></td><?php endif; ?>
+                <?php if ($is_admin || $is_viewer): ?><td class="print-col-descaprob<?= $ph_desc_aprob ?>"></td><td class="print-col-cantaprob<?= $ph_cant_aprob ?>"></td><?php endif; ?>
                 <?php if ($can_edit): ?><td></td><?php endif; ?>
               </tr>
             </tfoot>
@@ -546,7 +561,28 @@ $(document).on('click', '.elim-libro', function () {
 
 $('#imprimir').on('click', function () { window.print(); });
 
+function syncColumnasVaciasImpresion() {
+  var hayIsbn = Array.from(document.querySelectorAll('#psa-table tbody td.print-col-isbn'))
+    .some(function (td) { return td.textContent.trim() !== ''; });
+  document.querySelectorAll('#psa-table .print-col-isbn').forEach(function (el) {
+    el.classList.toggle('d-print-none', !hayIsbn);
+  });
+
+  var hayDescAprob = Array.from(document.querySelectorAll('#psa-table .ap-desc-input'))
+    .some(function (inp) { return parseFloat(inp.value) > 0; });
+  document.querySelectorAll('#psa-table .print-col-descaprob').forEach(function (el) {
+    el.classList.toggle('d-print-none', !hayDescAprob);
+  });
+
+  var hayCantAprob = Array.from(document.querySelectorAll('#psa-table .ap-qty-input'))
+    .some(function (inp) { return parseFloat(inp.value) > 0; });
+  document.querySelectorAll('#psa-table .print-col-cantaprob').forEach(function (el) {
+    el.classList.toggle('d-print-none', !hayCantAprob);
+  });
+}
+
 window.addEventListener('beforeprint', function () {
+  syncColumnasVaciasImpresion();
   $.ajax({ url:'ajax/fecha_impre2.php', type:'POST', data:'feid=<?= date("Y-m-d H:i:s") ?>/<?= $id_pedido ?>' });
   document.querySelectorAll('textarea').forEach(function (ta) {
     ta._ph = ta.style.height;
