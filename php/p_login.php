@@ -11,6 +11,10 @@
 	$usuario = $req->fetch();
 		
 	if($pass==$usuario['clave']){
+
+		if ($usuario['act'] != 1) {
+			echo "<script>alert('Tu usuario está inactivo. Contacta al administrador.');window.location='../login.php';</script>";
+		} else {
 			session_start();
 	    	// inicio la sesión
 	    	$_SESSION["autentificado"]= "SI";
@@ -23,7 +27,7 @@
 
 			if ($_POST['id_pedido']!="") {
 				header("location:../pedido_colegio.php?id_pedido=".$_POST['id_pedido']."");
-				
+
 			}elseif ($_POST['id_pedido_dist']!="") {
 				header("location:../pedido_colegio2.php?id_pedido=".$_POST['id_pedido_dist']."");
 			}elseif ($_POST['id_muestreo']!="") {
@@ -32,11 +36,12 @@
 				header("location:../opd_solicitada.php?opd=".$_POST['opd']."");
 			}
 			else{
-				
+
 				header("location:../index.php");
-				
+
 			}
-			
+		}
+
 	}
 	else echo "<script>alert('Clave Invalida');window.location='../login.php';</script>";
 ?>
