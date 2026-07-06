@@ -20,6 +20,7 @@ $usuarios = $req->fetchAll();
 
 $total_usuarios = count($usuarios);
 $total_promotores = $bdd->query("SELECT COUNT(*) FROM usuarios WHERE tipo=3")->fetchColumn();
+$total_distribuidores = $bdd->query("SELECT COUNT(*) FROM usuarios WHERE tipo=6")->fetchColumn();
 
 $tipos_todos = $bdd->query("SELECT id, tipo FROM tipos_usuario ORDER BY id")->fetchAll();
 
@@ -191,6 +192,16 @@ $paises = $req_paises->fetchAll();
               <h3><?= $total_promotores ?></h3>
               <p class="stat-label">Promotores</p>
               <span class="stat-sub"><a href="usuarios.php?tipo=3">Ver solo promotores</a></span>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+          <div class="stat-card-modern">
+            <div class="stat-icon-modern sorange"><i class="bi bi-truck"></i></div>
+            <div class="stat-info-modern">
+              <h3><?= $total_distribuidores ?></h3>
+              <p class="stat-label">Distribuidores</p>
+              <span class="stat-sub"><a href="usuarios.php?tipo=6">Ver solo distribuidores</a></span>
             </div>
           </div>
         </div>
