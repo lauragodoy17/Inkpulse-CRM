@@ -15,6 +15,7 @@ $atenciones_active   = $current_page === 'lista_atenciones.php';
 $ops_active          = in_array($current_page, ['solicitar_op.php','lista_op.php','clientes_op.php']);
 $opds_active         = in_array($current_page, ['solicitar_orden_pd.php','ver_opds.php','reporte_opd.php']);
 $reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_devoluciones.php']);
+$libros_active       = $current_page === 'libros.php';
 ?>
 <!--<div class="pre-loader">
 			<div class="pre-loader-box">
@@ -489,6 +490,15 @@ $reportes_active     = in_array($current_page, ['reporte_zonificacion.php','repo
 							<a href="colegios_presup.php" class="dropdown-toggle no-arrow <?= $presupuesto_active ? 'active' : '' ?>">
 								<span class="micon bi bi-currency-dollar"></span
 								><span class="mtext">Presupuesto</span>
+							</a>
+						</li>
+						<?php }?>
+
+						<?php if ($_SESSION["tipo"] == 1) {?>
+						<li>
+							<a href="libros.php" class="dropdown-toggle no-arrow <?= $libros_active ? 'active' : '' ?>">
+								<span class="micon bi bi-book"></span
+								><span class="mtext">Libros</span>
 							</a>
 						</li>
 						<?php }?>
