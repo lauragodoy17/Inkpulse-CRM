@@ -195,6 +195,7 @@ body,html{-webkit-font-smoothing:antialiased;width:100%;height:100%}html{-webkit
 .sidebar-modern .sidebar-small-cap.proc-sec::before{background:#f97316}
 .sidebar-modern .sidebar-small-cap.gest-sec::before{background:#10b981}
 .sidebar-modern .sidebar-small-cap.anal-sec::before{background:#6366f1}
+.sidebar-modern .sidebar-small-cap.admin-sec::before{background:#ef4444}
 
 /* ===================================================
    Subgrupos dentro de submenús (Devoluciones, Reportes)

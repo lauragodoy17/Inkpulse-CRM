@@ -495,21 +495,6 @@ $usuarios_active     = $current_page === 'usuarios.php';
 						</li>
 						<?php }?>
 
-						<?php if ($_SESSION["tipo"] == 1) {?>
-						<li>
-							<a href="libros.php" class="dropdown-toggle no-arrow <?= $libros_active ? 'active' : '' ?>">
-								<span class="micon bi bi-book"></span
-								><span class="mtext">Libros</span>
-							</a>
-						</li>
-						<li>
-							<a href="usuarios.php" class="dropdown-toggle no-arrow <?= $usuarios_active ? 'active' : '' ?>">
-								<span class="micon bi bi-people"></span
-								><span class="mtext">Usuarios</span>
-							</a>
-						</li>
-						<?php }?>
-
 						<?php if ($_SESSION["tipo"] ==1 || $_SESSION["tipo"] ==2 || $_SESSION["tipo"] ==7 || $_SESSION["tipo"] ==9 ) {?>
 							<li class="dropdown <?= $atenciones_active ? 'show' : '' ?>">
 								<a href="javascript:;" class="dropdown-toggle <?= $atenciones_active ? 'active' : '' ?>">
@@ -564,6 +549,22 @@ $usuarios_active     = $current_page === 'usuarios.php';
 								</ul>
 							</li>
 						<?php } ?>
+
+						<?php if ($_SESSION["tipo"] == 1) {?>
+						<li><div class="sidebar-small-cap admin-sec">Administrativo</div></li>
+						<li>
+							<a href="libros.php" class="dropdown-toggle no-arrow <?= $libros_active ? 'active' : '' ?>">
+								<span class="micon bi bi-book"></span
+								><span class="mtext">Libros</span>
+							</a>
+						</li>
+						<li>
+							<a href="usuarios.php" class="dropdown-toggle no-arrow <?= $usuarios_active ? 'active' : '' ?>">
+								<span class="micon bi bi-people"></span
+								><span class="mtext">Usuarios</span>
+							</a>
+						</li>
+						<?php }?>
 
 						<?php if ($_SESSION["tipo"] !=8) {?>
 							<li><div class="sidebar-small-cap anal-sec">Análisis</div></li>
