@@ -15,7 +15,7 @@ $start = intval($_GET['start']);
 $length = intval($_GET['length']);
 $searchValue = $_GET['search']['value'] ?? '';
 
-$columns = ['isbn', 'libro', 'materia', 'grado', 'precio', 'presupuesto', 'acciones'];
+$columns = ['isbn', 'libro', 'materia', 'grado', 'precio', 'presupuesto', 'asociacion', 'acciones'];
 
 $orderSQL = 'ORDER BY g.id, l.libro';
 if (isset($_GET['order'][0]['column'])) {
@@ -44,7 +44,10 @@ $stmtFiltered = $bdd->prepare("SELECT COUNT(*) $baseFrom");
 $stmtFiltered->execute($params);
 $recordsFiltered = $stmtFiltered->fetchColumn();
 
-$dataSQL = "SELECT l.id, l.isbn, l.libro, l.id_materia, l.id_grado, l.precio, l.presupuesto $baseFrom $orderSQL LIMIT :start, :length";
+$dataFrom = "FROM libros l JOIN materias m ON l.id_materia = m.id JOIN grados g ON l.id_grado = g.id LEFT JOIN libros p ON l.pri_sec = p.id $searchSQL";
+$dataSQL = "SELECT l.id, l.isbn, l.libro, l.id_materia, l.id_grado, l.precio, l.presupuesto, l.pri_sec, p.libro as nombre_padre,
+            (SELECT COUNT(*) FROM libros c WHERE c.pri_sec = l.id) as num_hijos
+            $dataFrom $orderSQL LIMIT :start, :length";
 $stmt = $bdd->prepare($dataSQL);
 foreach ($params as $key => $val) {
     $stmt->bindValue($key, $val, PDO::PARAM_STR);
@@ -90,6 +93,24 @@ foreach ($rows as $libro) {
         . '<option value="0" ' . ($libro["presupuesto"] == 0 ? 'selected' : '') . '>No</option>'
         . '</select>';
 
+    $num_hijos = (int) $libro["num_hijos"];
+    $pri_sec = (int) $libro["pri_sec"];
+    $libroNombreAttr = htmlspecialchars($libro["libro"], ENT_QUOTES);
+
+    if ($num_hijos > 0) {
+        $asociacionHtml = '<span class="badge-serie badge-serie-padre" title="' . $num_hijos . ' libro(s) asociados a este como serie"><i class="bi bi-diagram-3"></i> Padre &middot; ' . $num_hijos . '</span>';
+    } elseif ($pri_sec > 0 && $libro["nombre_padre"] !== null) {
+        $asociacionHtml = '<span class="badge-serie badge-serie-hijo" title="Asociado a: ' . htmlspecialchars($libro["nombre_padre"], ENT_QUOTES) . '"><i class="bi bi-link-45deg"></i> ' . htmlspecialchars($libro["nombre_padre"]) . '</span>';
+        if ($puede_gestionar) {
+            $asociacionHtml .= ' <button type="button" class="btn-asociar-serie" data-id="' . $libro["id"] . '" data-libro="' . $libroNombreAttr . '" data-materia="' . $libro["id_materia"] . '" data-padre-id="' . $pri_sec . '" data-padre-nombre="' . htmlspecialchars($libro["nombre_padre"], ENT_QUOTES) . '" title="Cambiar asociación"><i class="bi bi-pencil"></i></button>';
+        }
+    } else {
+        $asociacionHtml = '<span class="badge-serie badge-serie-libre">Sin asociar</span>';
+        if ($puede_gestionar) {
+            $asociacionHtml .= ' <button type="button" class="btn-asociar-serie" data-id="' . $libro["id"] . '" data-libro="' . $libroNombreAttr . '" data-materia="' . $libro["id_materia"] . '" title="Asociar a una serie"><i class="bi bi-link"></i> Asociar</button>';
+        }
+    }
+
     if ($puede_gestionar) {
         $accionesHtml = '<div class="acciones-libro">'
             . '<button type="button" class="btn-save-libro" data-id="' . $libro["id"] . '" title="Guardar cambios"><i class="bi bi-check-lg"></i></button>'
@@ -106,6 +127,7 @@ foreach ($rows as $libro) {
         'grado'       => $gradoHtml,
         'precio'      => $precioHtml,
         'presupuesto' => $presupuestoHtml,
+        'asociacion'  => $asociacionHtml,
         'acciones'    => $accionesHtml,
     ];
 }
