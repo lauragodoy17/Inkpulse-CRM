@@ -17,6 +17,7 @@ $opds_active         = in_array($current_page, ['solicitar_orden_pd.php','ver_op
 $reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_devoluciones.php']);
 $libros_active       = $current_page === 'libros.php';
 $usuarios_active     = $current_page === 'usuarios.php';
+$zonas_active        = $current_page === 'zonas.php';
 ?>
 <!--<div class="pre-loader">
 			<div class="pre-loader-box">
@@ -562,6 +563,12 @@ $usuarios_active     = $current_page === 'usuarios.php';
 							<a href="usuarios.php" class="dropdown-toggle no-arrow <?= $usuarios_active ? 'active' : '' ?>">
 								<span class="micon bi bi-people"></span
 								><span class="mtext">Usuarios</span>
+							</a>
+						</li>
+						<li>
+							<a href="zonas.php" class="dropdown-toggle no-arrow <?= $zonas_active ? 'active' : '' ?>">
+								<span class="micon bi bi-geo-alt"></span
+								><span class="mtext">Zonas</span>
 							</a>
 						</li>
 						<?php }?>
