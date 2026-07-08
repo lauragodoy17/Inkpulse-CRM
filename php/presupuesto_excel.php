@@ -102,8 +102,33 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
 	$nombre_completo=$usuario["nombres"]." ".$usuario["apellidos"];
 
+	$req_periodo_ia = $bdd->prepare("SELECT periodo FROM periodos WHERE id=?");
+	$req_periodo_ia->execute([$_GET['periodo']]);
+	$mostrar_ia = ($req_periodo_ia->fetch()['periodo'] ?? 0) >= 2027;
 
-	
+	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia
+	                  FROM ia_modelos m
+	                  JOIN ia_modelo_tokens mt ON mt.id_modelo = m.id
+	                  WHERE m.activo = 1
+	                  ORDER BY mt.id DESC LIMIT 1";
+	$modelo_activo = $bdd->query($sql_costo_ia)->fetch();
+	$costo_ia = $modelo_activo['costo_ia'] ?? 0;
+
+	$trm_actual = $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch()['trm'] ?? 0;
+	$costo_ia_cop = $costo_ia * $trm_actual;
+
+	$req_cant_profes = $bdd->prepare("SELECT COUNT(*) AS total FROM trabajadores_colegios WHERE id_colegio=? AND cargo=6 AND activo=1");
+	$req_cant_profes->execute([$_GET['cole']]);
+	$cantidad_profesores = $req_cant_profes->fetch()['total'];
+
+	$req_interacciones = $bdd->prepare("SELECT interacciones FROM ia_presupuestos WHERE id_modelo_tokens=? AND id_periodo=? ORDER BY id DESC LIMIT 1");
+	$req_interacciones->execute([$modelo_activo['id_modelo_tokens'] ?? 0, $_GET['periodo']]);
+	$interacciones = $req_interacciones->fetch()['interacciones'] ?? 0;
+
+	$costo_semanal = $costo_ia_cop * $interacciones * $cantidad_profesores;
+	$costo_anual = $costo_semanal * 53;
+
+
 
 //~ Ingreo de datos en la hojda de excel
 
@@ -147,6 +172,8 @@ $objSpreadsheet->getActiveSheet()->mergeCells('G5:I5');
 $objSpreadsheet->getActiveSheet()->mergeCells('G6:I6');
 $objSpreadsheet->getActiveSheet()->mergeCells('G7:I7');
 $objSpreadsheet->getActiveSheet()->mergeCells('G8:I8');
+$objSpreadsheet->getActiveSheet()->mergeCells('G9:I9');
+$objSpreadsheet->getActiveSheet()->mergeCells('K9:M9');
 
 
 
@@ -409,6 +436,14 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("J7", "$p_sec");
 $objSpreadsheet->getActiveSheet()->SetCellValue("G8", "Promedio descuento %");
 $objSpreadsheet->getActiveSheet()->getStyle('J8')->applyFromArray($estilo_borde);
 $objSpreadsheet->getActiveSheet()->SetCellValue("J8", "$descuento_pactado");
+if ($mostrar_ia) {
+	$objSpreadsheet->getActiveSheet()->SetCellValue("G9", "Costo semanal IA (COP)");
+	$objSpreadsheet->getActiveSheet()->getStyle('J9')->applyFromArray($estilo_borde);
+	$objSpreadsheet->getActiveSheet()->SetCellValue("J9", "$".number_format($costo_semanal, 2, ",", "."));
+	$objSpreadsheet->getActiveSheet()->SetCellValue("K9", "Costo anual IA (COP)");
+	$objSpreadsheet->getActiveSheet()->getStyle('N9')->applyFromArray($estilo_borde);
+	$objSpreadsheet->getActiveSheet()->SetCellValue("N9", "$".number_format($costo_anual, 2, ",", "."));
+}
 
 $t_paralelos=array_sum($t_paralelos);
 $t_alumnos=array_sum($t_alumnos);
