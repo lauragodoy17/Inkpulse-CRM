@@ -581,6 +581,12 @@ $objSpreadsheet->getActiveSheet()->getStyle('A1:O'.$conta8)->applyFromArray($est
 
 $objSpreadsheet->getActiveSheet()->getColumnDimension('A')->setWidth('10');
 $objSpreadsheet->getActiveSheet()->getRowDimension(10)->setRowHeight(20);
+
+// Fila en blanco para separar visualmente los costos de IA de la tabla
+// (se suprime el deprecation notice interno de la librería PhpSpreadsheet en PHP 8.1+,
+// que de otro modo se imprime antes del binario y corrompe el .xlsx)
+@$objSpreadsheet->getActiveSheet()->insertNewRowBefore(10, 1);
+
 foreach (range('A', 'Z') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
