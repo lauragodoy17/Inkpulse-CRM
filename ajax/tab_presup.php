@@ -45,6 +45,35 @@
     gap: 14px;
     margin-bottom: 22px;
   }
+
+  /* ── Sección de tarjetas de IA (separada visualmente) ────── */
+  .pr-ia-section {
+    background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%);
+    border: 1.5px solid #ddd6fe;
+    border-radius: 12px;
+    padding: 16px 18px 4px;
+    margin-bottom: 22px;
+  }
+  .pr-ia-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .pr-ia-header i { color: #6d28d9; font-size: 1rem; }
+  .pr-ia-header span { font-size: 0.86rem; font-weight: 700; color: #4c1d95; }
+  .pr-ia-section .pr-cards {
+    margin-bottom: 0;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+  .pr-ia-section .pr-card {
+    background: #fff;
+    min-width: 0;
+    padding: 14px 12px;
+  }
+  .pr-ia-section .pr-card-icon { width: 36px; height: 36px; font-size: 1rem; }
+  .pr-ia-section .pr-card-val { font-size: 1rem; }
+
   .pr-card {
     background: #fff;
     border-radius: 10px;
@@ -53,7 +82,9 @@
     display: flex;
     align-items: center;
     gap: 14px;
+    min-width: 0;
   }
+  .pr-card > div { min-width: 0; }
   .pr-card-icon {
     width: 42px;
     height: 42px;
@@ -70,8 +101,8 @@
   .pr-card-icon.orange { background: #ffedd5; color: #c2410c; }
   .pr-card-icon.green  { background: #dcfce7; color: #15803d; }
   .pr-card-icon.teal   { background: #ccfbf1; color: #0f766e; }
-  .pr-card-label { font-size: 0.74rem; color: #64748b; margin: 0 0 2px 0; }
-  .pr-card-val   { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0; }
+  .pr-card-label { font-size: 0.74rem; color: #64748b; margin: 0 0 2px 0; overflow-wrap: break-word; }
+  .pr-card-val   { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0; overflow-wrap: break-word; }
 
   /* ── Encabezado ─────────────────────────────────────────────── */
   .pr-header {
@@ -298,41 +329,47 @@
   </div>
 
   <?php if ($gp_periodo["periodo"] >= 2027): ?>
-  <!-- Tarjetas de resumen -->
-  <div class="pr-cards">
-    <div class="pr-card">
-      <div class="pr-card-icon"><i class="bi bi-cpu"></i></div>
-      <div>
-        <p class="pr-card-label">Costo IA (por interacción)</p>
-        <p class="pr-card-val">$<?= number_format($costo_ia_cop, 2, ",", ".") ?> COP</p>
-      </div>
+  <!-- Tarjetas de IA (separadas visualmente) -->
+  <div class="pr-ia-section">
+    <div class="pr-ia-header">
+      <i class="bi bi-robot"></i>
+      <span>Inteligencia Artificial y tokens</span>
     </div>
-    <div class="pr-card">
-      <div class="pr-card-icon blue"><i class="bi bi-person-video3"></i></div>
-      <div>
-        <p class="pr-card-label">Cantidad de profesores</p>
-        <p class="pr-card-val"><?= $cantidad_profesores ?></p>
+    <div class="pr-cards">
+      <div class="pr-card">
+        <div class="pr-card-icon"><i class="bi bi-cpu"></i></div>
+        <div>
+          <p class="pr-card-label">Costo IA (por interacción)</p>
+          <p class="pr-card-val">$<?= number_format($costo_ia_cop, 2, ",", ".") ?> COP</p>
+        </div>
       </div>
-    </div>
-    <div class="pr-card">
-      <div class="pr-card-icon teal"><i class="bi bi-chat-dots"></i></div>
-      <div>
-        <p class="pr-card-label">Cantidad de interacciones</p>
-        <p class="pr-card-val"><?= $interacciones ?></p>
+      <div class="pr-card">
+        <div class="pr-card-icon blue"><i class="bi bi-person-video3"></i></div>
+        <div>
+          <p class="pr-card-label">Cantidad de profesores</p>
+          <p class="pr-card-val"><?= $cantidad_profesores ?></p>
+        </div>
       </div>
-    </div>
-    <div class="pr-card">
-      <div class="pr-card-icon orange"><i class="bi bi-calendar-week"></i></div>
-      <div>
-        <p class="pr-card-label">Costo semanal</p>
-        <p class="pr-card-val">$<?= number_format($costo_semanal, 2, ",", ".") ?> COP</p>
+      <div class="pr-card">
+        <div class="pr-card-icon teal"><i class="bi bi-chat-dots"></i></div>
+        <div>
+          <p class="pr-card-label">Cantidad de interacciones</p>
+          <p class="pr-card-val"><?= $interacciones ?></p>
+        </div>
       </div>
-    </div>
-    <div class="pr-card">
-      <div class="pr-card-icon green"><i class="bi bi-calendar-range"></i></div>
-      <div>
-        <p class="pr-card-label">Costo anual</p>
-        <p class="pr-card-val">$<?= number_format($costo_anual, 2, ",", ".") ?> COP</p>
+      <div class="pr-card">
+        <div class="pr-card-icon orange"><i class="bi bi-calendar-week"></i></div>
+        <div>
+          <p class="pr-card-label">Costo semanal</p>
+          <p class="pr-card-val">$<?= number_format($costo_semanal, 2, ",", ".") ?> COP</p>
+        </div>
+      </div>
+      <div class="pr-card">
+        <div class="pr-card-icon green"><i class="bi bi-calendar-range"></i></div>
+        <div>
+          <p class="pr-card-label">Costo anual</p>
+          <p class="pr-card-val">$<?= number_format($costo_anual, 2, ",", ".") ?> COP</p>
+        </div>
       </div>
     </div>
   </div>
