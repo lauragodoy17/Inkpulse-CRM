@@ -10,11 +10,68 @@
 	$req_periodo = $bdd->prepare($sql_periodo);
 	$req_periodo->execute();
 	$gp_periodo = $req_periodo->fetch();
+
+	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia
+	                  FROM ia_modelos m
+	                  JOIN ia_modelo_tokens mt ON mt.id_modelo = m.id
+	                  WHERE m.activo = 1
+	                  ORDER BY mt.id DESC LIMIT 1";
+	$modelo_activo = $bdd->query($sql_costo_ia)->fetch();
+	$costo_ia = $modelo_activo['costo_ia'] ?? 0;
+
+	$trm_actual = $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch()['trm'] ?? 0;
+	$costo_ia_cop = $costo_ia * $trm_actual;
+
+	$req_cant_profes = $bdd->prepare("SELECT COUNT(*) AS total FROM trabajadores_colegios WHERE id_colegio=? AND cargo=6 AND activo=1");
+	$req_cant_profes->execute([$_GET['colegio']]);
+	$cantidad_profesores = $req_cant_profes->fetch()['total'];
+
+	$req_interacciones = $bdd->prepare("SELECT interacciones FROM ia_presupuestos WHERE id_modelo_tokens=? AND id_periodo=? ORDER BY id DESC LIMIT 1");
+	$req_interacciones->execute([$modelo_activo['id_modelo_tokens'] ?? 0, $_GET['periodo']]);
+	$interacciones = $req_interacciones->fetch()['interacciones'] ?? 0;
+
+	$costo_semanal = $costo_ia_cop * $interacciones * $cantidad_profesores;
+	$costo_anual = $costo_semanal * 53;
 ?>
 
 <style>
   /* ── Contenedor ─────────────────────────────────────────────── */
   .pr-wrap { padding: 24px; }
+
+  /* ── Tarjetas de resumen ────────────────────────────────────── */
+  .pr-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+  .pr-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 6px rgba(15,23,42,.08);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .pr-card-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    flex-shrink: 0;
+    background: #ede9fe;
+    color: #6d28d9;
+  }
+  .pr-card-icon.blue   { background: #dbeafe; color: #1d4ed8; }
+  .pr-card-icon.orange { background: #ffedd5; color: #c2410c; }
+  .pr-card-icon.green  { background: #dcfce7; color: #15803d; }
+  .pr-card-icon.teal   { background: #ccfbf1; color: #0f766e; }
+  .pr-card-label { font-size: 0.74rem; color: #64748b; margin: 0 0 2px 0; }
+  .pr-card-val   { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0; }
 
   /* ── Encabezado ─────────────────────────────────────────────── */
   .pr-header {
@@ -239,6 +296,47 @@
       </a>
     </div>
   </div>
+
+  <?php if ($gp_periodo["periodo"] >= 2027): ?>
+  <!-- Tarjetas de resumen -->
+  <div class="pr-cards">
+    <div class="pr-card">
+      <div class="pr-card-icon"><i class="bi bi-cpu"></i></div>
+      <div>
+        <p class="pr-card-label">Costo IA (por interacción)</p>
+        <p class="pr-card-val">$<?= number_format($costo_ia_cop, 2, ",", ".") ?> COP</p>
+      </div>
+    </div>
+    <div class="pr-card">
+      <div class="pr-card-icon blue"><i class="bi bi-person-video3"></i></div>
+      <div>
+        <p class="pr-card-label">Cantidad de profesores</p>
+        <p class="pr-card-val"><?= $cantidad_profesores ?></p>
+      </div>
+    </div>
+    <div class="pr-card">
+      <div class="pr-card-icon teal"><i class="bi bi-chat-dots"></i></div>
+      <div>
+        <p class="pr-card-label">Cantidad de interacciones</p>
+        <p class="pr-card-val"><?= $interacciones ?></p>
+      </div>
+    </div>
+    <div class="pr-card">
+      <div class="pr-card-icon orange"><i class="bi bi-calendar-week"></i></div>
+      <div>
+        <p class="pr-card-label">Costo semanal</p>
+        <p class="pr-card-val">$<?= number_format($costo_semanal, 2, ",", ".") ?> COP</p>
+      </div>
+    </div>
+    <div class="pr-card">
+      <div class="pr-card-icon green"><i class="bi bi-calendar-range"></i></div>
+      <div>
+        <p class="pr-card-label">Costo anual</p>
+        <p class="pr-card-val">$<?= number_format($costo_anual, 2, ",", ".") ?> COP</p>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
 
   <!-- Modal añadir libros -->
   <style>

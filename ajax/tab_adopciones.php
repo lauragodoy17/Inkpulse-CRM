@@ -21,6 +21,28 @@
 
 	$show_guardar = ($num_hp >= 1 && $_SESSION["tipo"] != 4) &&
 		(!($_SESSION['tipo'] == 3 && $_SESSION["zona"] != '5656') || $_GET["f_cierre"] > date("Y-m-d"));
+
+	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia
+	                  FROM ia_modelos m
+	                  JOIN ia_modelo_tokens mt ON mt.id_modelo = m.id
+	                  WHERE m.activo = 1
+	                  ORDER BY mt.id DESC LIMIT 1";
+	$modelo_activo = $bdd->query($sql_costo_ia)->fetch();
+	$costo_ia = $modelo_activo['costo_ia'] ?? 0;
+
+	$trm_actual = $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch()['trm'] ?? 0;
+	$costo_ia_cop = $costo_ia * $trm_actual;
+
+	$req_cant_profes = $bdd->prepare("SELECT COUNT(*) AS total FROM trabajadores_colegios WHERE id_colegio=? AND cargo=6 AND activo=1");
+	$req_cant_profes->execute([$_GET['colegio']]);
+	$cantidad_profesores = $req_cant_profes->fetch()['total'];
+
+	$req_interacciones = $bdd->prepare("SELECT interacciones FROM ia_presupuestos WHERE id_modelo_tokens=? AND id_periodo=? ORDER BY id DESC LIMIT 1");
+	$req_interacciones->execute([$modelo_activo['id_modelo_tokens'] ?? 0, $_GET['periodo']]);
+	$interacciones = $req_interacciones->fetch()['interacciones'] ?? 0;
+
+	$costo_semanal = $costo_ia_cop * $interacciones * $cantidad_profesores;
+	$costo_anual = $costo_semanal * 53;
 ?>
 
 <style>
@@ -53,6 +75,35 @@
     gap: 14px;
     margin-bottom: 22px;
   }
+
+  /* ── Sección de tarjetas de IA (separada visualmente) ────── */
+  .ad-ia-section {
+    background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%);
+    border: 1.5px solid #ddd6fe;
+    border-radius: 12px;
+    padding: 16px 18px 4px;
+    margin-bottom: 22px;
+  }
+  .ad-ia-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .ad-ia-header i { color: #6d28d9; font-size: 1rem; }
+  .ad-ia-header span { font-size: 0.86rem; font-weight: 700; color: #4c1d95; }
+  .ad-ia-section .ad-cards {
+    margin-bottom: 0;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+  .ad-ia-section .ad-card {
+    background: #fff;
+    min-width: 0;
+    padding: 14px 12px;
+  }
+  .ad-ia-section .ad-card-icon { width: 36px; height: 36px; font-size: 1rem; }
+  .ad-ia-section .ad-card-val { font-size: 1rem; }
+
   .ad-card {
     background: #fff;
     border-radius: 10px;
@@ -61,7 +112,9 @@
     display: flex;
     align-items: center;
     gap: 14px;
+    min-width: 0;
   }
+  .ad-card > div { min-width: 0; }
   .ad-card-icon {
     width: 42px;
     height: 42px;
@@ -76,8 +129,12 @@
   .ad-card-icon.green  { background: #dcfce7; color: #15803d; }
   .ad-card-icon.orange { background: #ffedd5; color: #c2410c; }
   .ad-card-icon.purple { background: #ede9fe; color: #6d28d9; }
-  .ad-card-label { font-size: 0.74rem; color: #64748b; margin: 0 0 2px 0; }
-  .ad-card-val   { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0; }
+  .ad-card-icon.teal   { background: #ccfbf1; color: #0f766e; }
+  .ad-card-icon.rose   { background: #ffe4e6; color: #be123c; }
+  .ad-card-icon.indigo { background: #e0e7ff; color: #4338ca; }
+  .ad-card-icon.amber  { background: #fef3c7; color: #b45309; }
+  .ad-card-label { font-size: 0.74rem; color: #64748b; margin: 0 0 2px 0; overflow-wrap: break-word; }
+  .ad-card-val   { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0; overflow-wrap: break-word; }
   .ad-card-pct   { font-size: 0.75rem; color: #64748b; }
 
   /* ── Contenedor con scroll propio ────────────────────────── */
@@ -386,6 +443,53 @@
       </div>
     </div>
   </div>
+
+  <?php if ($gp_periodo["periodo"] >= 2027): ?>
+  <!-- Tarjetas de IA (separadas visualmente) -->
+  <div class="ad-ia-section">
+    <div class="ad-ia-header">
+      <i class="bi bi-robot"></i>
+      <span>Inteligencia Artificial y tokens</span>
+    </div>
+    <div class="ad-cards">
+      <div class="ad-card">
+        <div class="ad-card-icon teal"><i class="bi bi-cpu"></i></div>
+        <div>
+          <p class="ad-card-label">Costo IA (por interacción)</p>
+          <p class="ad-card-val">$<?= number_format($costo_ia_cop, 2, ",", ".") ?> COP</p>
+        </div>
+      </div>
+      <div class="ad-card">
+        <div class="ad-card-icon blue"><i class="bi bi-person-video3"></i></div>
+        <div>
+          <p class="ad-card-label">Cantidad de profesores</p>
+          <p class="ad-card-val"><?= $cantidad_profesores ?></p>
+        </div>
+      </div>
+      <div class="ad-card">
+        <div class="ad-card-icon amber"><i class="bi bi-chat-dots"></i></div>
+        <div>
+          <p class="ad-card-label">Cantidad de interacciones</p>
+          <p class="ad-card-val"><?= $interacciones ?></p>
+        </div>
+      </div>
+      <div class="ad-card">
+        <div class="ad-card-icon rose"><i class="bi bi-calendar-week"></i></div>
+        <div>
+          <p class="ad-card-label">Costo semanal</p>
+          <p class="ad-card-val">$<?= number_format($costo_semanal, 2, ",", ".") ?> COP</p>
+        </div>
+      </div>
+      <div class="ad-card">
+        <div class="ad-card-icon indigo"><i class="bi bi-calendar-range"></i></div>
+        <div>
+          <p class="ad-card-label">Costo anual</p>
+          <p class="ad-card-val">$<?= number_format($costo_anual, 2, ",", ".") ?> COP</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
 
 
   <!-- Filtro de libros + acciones (sticky) -->
