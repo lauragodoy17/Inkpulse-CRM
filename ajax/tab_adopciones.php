@@ -41,8 +41,12 @@
 	$req_interacciones->execute([$modelo_activo['id_modelo_tokens'] ?? 0, $_GET['periodo']]);
 	$interacciones = $req_interacciones->fetch()['interacciones'] ?? 0;
 
-	$costo_semanal = $costo_ia_cop * $interacciones * $cantidad_profesores;
-	$costo_anual = $costo_semanal * 53;
+	$costo_ia_semanal = $costo_ia_cop * $interacciones * $cantidad_profesores;
+	$costo_almacenamiento_anual = 10000;
+	$costo_almacenamiento_semanal = $costo_almacenamiento_anual / 53;
+
+	$costo_semanal = $costo_ia_semanal + $costo_almacenamiento_semanal;
+	$costo_anual = ($costo_ia_semanal * 53) + $costo_almacenamiento_anual;
 ?>
 
 <style>

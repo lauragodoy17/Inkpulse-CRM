@@ -352,8 +352,12 @@ foreach ($colegios as $colegio) {
 
     if ($mostrar_ia_g) {
         $cantidad_profesores_g = $profes_map_g[$colegio["id"]] ?? 0;
-        $costo_semanal_g = $costo_ia_cop_g * $interacciones_g * $cantidad_profesores_g;
-        $costo_anual_g   = $costo_semanal_g * 53;
+        $costo_ia_semanal_g = $costo_ia_cop_g * $interacciones_g * $cantidad_profesores_g;
+        $costo_almacenamiento_anual_g = 10000;
+        $costo_almacenamiento_semanal_g = $costo_almacenamiento_anual_g / 53;
+
+        $costo_semanal_g = $costo_ia_semanal_g + $costo_almacenamiento_semanal_g;
+        $costo_anual_g   = ($costo_ia_semanal_g * 53) + $costo_almacenamiento_anual_g;
 
         $objSpreadsheet->getActiveSheet()->SetCellValue("P$conta", $costo_semanal_g);
         $objSpreadsheet->getActiveSheet()->SetCellValue("Q$conta", $costo_anual_g);
