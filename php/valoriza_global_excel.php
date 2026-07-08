@@ -233,16 +233,18 @@ foreach ($bdd->query("SELECT id, departamento FROM departamentos")->fetchAll(PDO
     $dep_map_g[$row['id']] = $row['departamento'];
 
 $costo_ia_cop_g = 0;
+$costo_almacenamiento_anual_g = 0;
 $interacciones_g = 0;
 $profes_map_g = [];
 if ($mostrar_ia_g) {
-    $sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia
+    $sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia, mt.costo_almacenamiento
                       FROM ia_modelos m
                       JOIN ia_modelo_tokens mt ON mt.id_modelo = m.id
                       WHERE m.activo = 1
                       ORDER BY mt.id DESC LIMIT 1";
     $modelo_activo_g = $bdd->query($sql_costo_ia)->fetch();
     $costo_ia_g = $modelo_activo_g['costo_ia'] ?? 0;
+    $costo_almacenamiento_anual_g = $modelo_activo_g['costo_almacenamiento'] ?? 0;
 
     $trm_actual_g = $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch()['trm'] ?? 0;
     $costo_ia_cop_g = $costo_ia_g * $trm_actual_g;
@@ -353,7 +355,6 @@ foreach ($colegios as $colegio) {
     if ($mostrar_ia_g) {
         $cantidad_profesores_g = $profes_map_g[$colegio["id"]] ?? 0;
         $costo_ia_semanal_g = $costo_ia_cop_g * $interacciones_g * $cantidad_profesores_g;
-        $costo_almacenamiento_anual_g = 10000;
         $costo_almacenamiento_semanal_g = $costo_almacenamiento_anual_g / 53;
 
         $costo_semanal_g = $costo_ia_semanal_g + $costo_almacenamiento_semanal_g;

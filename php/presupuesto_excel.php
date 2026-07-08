@@ -106,7 +106,7 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 	$req_periodo_ia->execute([$_GET['periodo']]);
 	$mostrar_ia = ($req_periodo_ia->fetch()['periodo'] ?? 0) >= 2027;
 
-	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia
+	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia, mt.costo_almacenamiento
 	                  FROM ia_modelos m
 	                  JOIN ia_modelo_tokens mt ON mt.id_modelo = m.id
 	                  WHERE m.activo = 1
@@ -126,7 +126,7 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 	$interacciones = $req_interacciones->fetch()['interacciones'] ?? 0;
 
 	$costo_ia_semanal = $costo_ia_cop * $interacciones * $cantidad_profesores;
-	$costo_almacenamiento_anual = 10000;
+	$costo_almacenamiento_anual = $modelo_activo['costo_almacenamiento'] ?? 0;
 	$costo_almacenamiento_semanal = $costo_almacenamiento_anual / 53;
 
 	$costo_semanal = $costo_ia_semanal + $costo_almacenamiento_semanal;
