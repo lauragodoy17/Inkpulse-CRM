@@ -455,6 +455,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <th>#</th>
                 <th class="print-col-isbn<?= $ph_isbn ?>">ISBN</th>
                 <th>Título</th>
+                <th>Ubicación</th>
                 <th class="d-print-none">Materia</th>
                 <th>Grado</th>
                 <th>Precio de Venta</th>
@@ -473,6 +474,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <td><?= $i++ ?></td>
                 <td class="print-col-isbn<?= $ph_isbn ?>"><?= htmlspecialchars($lb['isbn']) ?></td>
                 <td><?= htmlspecialchars($lb['libro']) ?></td>
+                <td><?= htmlspecialchars($lb['ubi']) ?></td>
                 <td class="d-print-none"><?= htmlspecialchars($lb['materia']) ?></td>
                 <td><?= htmlspecialchars($lb['grado']) ?></td>
                 <td>$ <?= number_format($lb['precio'], 0, ',', '.') ?></td>
@@ -498,6 +500,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
               <tr>
                 <td></td>
                 <td class="print-col-isbn<?= $ph_isbn ?>"></td>
+                <td></td>
                 <td></td>
                 <td class="d-print-none"></td>
                 <td></td>

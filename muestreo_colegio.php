@@ -336,6 +336,7 @@
                   <th>#</th>
                   <th>ISBN</th>
                   <th>Título</th>
+                  <th>Ubicación</th>
                   <th>Materia</th>
                   <th>Grado</th>
                   <?php if (isset($_GET["id_pedido"])): ?>
@@ -351,10 +352,28 @@
                   $i = 1;
                   foreach ($libros as $libro) {
                     $total_cantidad[] = $libro["cantidad"];
+
+                    $su = $bdd->prepare(
+                      "SELECT l.id_tipo, l.lugar, u.piso, u.ubicacion, lu.posicion
+                       FROM lugares l
+                       JOIN ubicaciones u      ON l.id = u.id_lugar
+                       JOIN libros_ubicaciones lu ON u.id = lu.ubicacion
+                       WHERE lu.id_libro = ?"
+                    );
+                    $su->execute([$libro["id"]]);
+                    $ubs = $su->fetchAll();
+                    $ubi = '';
+                    foreach ($ubs as $ub)
+                      $ubi .= ($ub['id_tipo'] == 1)
+                        ? $ub['lugar'].$ub['piso'].' Pallet '.$ub['ubicacion'].' '.$ub['posicion'].', '
+                        : $ub['lugar'].' Bandeja '.$ub['ubicacion'].', ';
+                    $ubi = rtrim($ubi, ', ');
+
                     echo '<tr>';
                     echo '<td>'.($i++).'</td>';
                     echo '<td>'.htmlspecialchars($libro["isbn"]).'</td>';
                     echo '<td>'.htmlspecialchars($libro["libro"]).'</td>';
+                    echo '<td>'.htmlspecialchars($ubi).'</td>';
                     echo '<td>'.htmlspecialchars($libro["materia"]).'</td>';
                     echo '<td>'.htmlspecialchars($libro["grado"]).'</td>';
                     echo '<td style="text-align:center">'.$libro["cantidad"].'</td>';
@@ -376,7 +395,7 @@
               </tbody>
               <tfoot>
                 <tr>
-                  <td colspan="5" style="text-align:right">Total</td>
+                  <td colspan="6" style="text-align:right">Total</td>
                   <td style="text-align:center"><?= $total_c ?></td>
                   <?php if (isset($_GET["id_pedido"])): ?><td></td><?php endif; ?>
                 </tr>

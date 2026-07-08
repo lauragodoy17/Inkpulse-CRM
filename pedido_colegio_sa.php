@@ -60,8 +60,24 @@ foreach ($libros_raw as $lb) {
   $sg->execute([$lb['id_grado']]);
   $g = $sg->fetch();
 
+  $su = $bdd->prepare(
+    "SELECT l.id_tipo, l.lugar, u.piso, u.ubicacion, lu.posicion
+     FROM lugares l
+     JOIN ubicaciones u      ON l.id = u.id_lugar
+     JOIN libros_ubicaciones lu ON u.id = lu.ubicacion
+     WHERE lu.id_libro = ?"
+  );
+  $su->execute([$lb['libroid']]);
+  $ubs = $su->fetchAll();
+  $ubi = '';
+  foreach ($ubs as $ub)
+    $ubi .= ($ub['id_tipo'] == 1)
+      ? $ub['lugar'].$ub['piso'].' Pallet '.$ub['ubicacion'].' '.$ub['posicion'].', '
+      : $ub['lugar'].' Bandeja '.$ub['ubicacion'].', ';
+
   $libros[] = array_merge($lb, [
     'grado'       => $g['grado'] ?? '—',
+    'ubi'         => rtrim($ubi, ', '),
     'desc_val'    => $desc,
     'precio_fact' => $precio_fact,
     'v_venta'     => $v_venta,
@@ -367,6 +383,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <th>#</th>
                 <th class="print-col-isbn<?= $ph_isbn ?>">ISBN</th>
                 <th>Título</th>
+                <th>Ubicación</th>
                 <th>Materia</th>
                 <th>Grado</th>
                 <th>PVP</th>
@@ -387,6 +404,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <td><?= $i++ ?></td>
                 <td class="print-col-isbn<?= $ph_isbn ?>"><?= htmlspecialchars($lb['isbn']) ?></td>
                 <td><?= htmlspecialchars($lb['libro']) ?></td>
+                <td><?= htmlspecialchars($lb['ubi']) ?></td>
                 <td><?= htmlspecialchars($lb['materia']) ?></td>
                 <td><?= htmlspecialchars($lb['grado']) ?></td>
                 <td>$ <?= number_format($lb['precio'], 0, ',', '.') ?></td>
@@ -418,7 +436,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
             </tbody>
             <tfoot>
               <tr>
-                <td></td><td class="print-col-isbn<?= $ph_isbn ?>"></td><td></td><td></td><td></td><td></td><td></td>
+                <td></td><td class="print-col-isbn<?= $ph_isbn ?>"></td><td></td><td></td><td></td><td></td><td></td><td></td>
                 <td style="text-align:right;font-weight:700">Total</td>
                 <td style="text-align:center;font-weight:700"><?= $total_c ?></td>
                 <td style="font-weight:700">$ <?= number_format($total_v, 0, ',', '.') ?></td>
