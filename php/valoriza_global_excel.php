@@ -97,6 +97,8 @@ $fecha=date("Y-m-d");
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("H2", "Periodo $gp_periodo[periodo]");
 
+$mostrar_ia_g = ($gp_periodo["periodo"] >= 2027);
+
 $objSpreadsheet->getActiveSheet()->getStyle('C4')->applyFromArray($estilo_negrita);
 $objSpreadsheet->getActiveSheet()->getStyle('D4')->applyFromArray($estilo_negrita);
 
@@ -118,9 +120,13 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("L6", "Compradores activos");
 $objSpreadsheet->getActiveSheet()->SetCellValue("M6", "Valor adopciones");
 $objSpreadsheet->getActiveSheet()->SetCellValue("N6", "Venta real");
 $objSpreadsheet->getActiveSheet()->SetCellValue("O6", "Valor atenciones entregadas");
+if ($mostrar_ia_g) {
+    $objSpreadsheet->getActiveSheet()->SetCellValue("P6", "Costo semanal IA (COP)");
+    $objSpreadsheet->getActiveSheet()->SetCellValue("Q6", "Costo anual IA (COP)");
+}
 
 
-$objSpreadsheet->getActiveSheet()->getStyle('A6:O6')->applyFromArray([
+$objSpreadsheet->getActiveSheet()->getStyle($mostrar_ia_g ? 'A6:Q6' : 'A6:O6')->applyFromArray([
     'fill' => [
         'fillType' => Fill::FILL_SOLID,
         'startColor' => [
@@ -225,6 +231,33 @@ if (!empty($sz_ids_g)) {
 $dep_map_g = [];
 foreach ($bdd->query("SELECT id, departamento FROM departamentos")->fetchAll(PDO::FETCH_ASSOC) as $row)
     $dep_map_g[$row['id']] = $row['departamento'];
+
+$costo_ia_cop_g = 0;
+$interacciones_g = 0;
+$profes_map_g = [];
+if ($mostrar_ia_g) {
+    $sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia
+                      FROM ia_modelos m
+                      JOIN ia_modelo_tokens mt ON mt.id_modelo = m.id
+                      WHERE m.activo = 1
+                      ORDER BY mt.id DESC LIMIT 1";
+    $modelo_activo_g = $bdd->query($sql_costo_ia)->fetch();
+    $costo_ia_g = $modelo_activo_g['costo_ia'] ?? 0;
+
+    $trm_actual_g = $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch()['trm'] ?? 0;
+    $costo_ia_cop_g = $costo_ia_g * $trm_actual_g;
+
+    $req_interacciones_g = $bdd->prepare("SELECT interacciones FROM ia_presupuestos WHERE id_modelo_tokens=? AND id_periodo=? ORDER BY id DESC LIMIT 1");
+    $req_interacciones_g->execute([$modelo_activo_g['id_modelo_tokens'] ?? 0, $_POST['periodo']]);
+    $interacciones_g = $req_interacciones_g->fetch()['interacciones'] ?? 0;
+
+    if (!empty($cole_ids_g)) {
+        $req_profes_g = $bdd->prepare("SELECT id_colegio, COUNT(*) as total FROM trabajadores_colegios WHERE id_colegio IN ($ph_g) AND cargo=6 AND activo=1 GROUP BY id_colegio");
+        $req_profes_g->execute($cole_ids_g);
+        foreach ($req_profes_g->fetchAll(PDO::FETCH_ASSOC) as $row)
+            $profes_map_g[$row['id_colegio']] = (int)$row['total'];
+    }
+}
 // ── Fin pre-fetch ─────────────────────────────────────────────────
 
 $conta=7;
@@ -317,6 +350,15 @@ foreach ($colegios as $colegio) {
 
     $objSpreadsheet->getActiveSheet()->SetCellValue("O$conta", $total_val ?? '');
 
+    if ($mostrar_ia_g) {
+        $cantidad_profesores_g = $profes_map_g[$colegio["id"]] ?? 0;
+        $costo_semanal_g = $costo_ia_cop_g * $interacciones_g * $cantidad_profesores_g;
+        $costo_anual_g   = $costo_semanal_g * 53;
+
+        $objSpreadsheet->getActiveSheet()->SetCellValue("P$conta", $costo_semanal_g);
+        $objSpreadsheet->getActiveSheet()->SetCellValue("Q$conta", $costo_anual_g);
+    }
+
     $conta++;
 }
 
@@ -339,7 +381,21 @@ $objSpreadsheet->getActiveSheet()->getStyle("M7:M$conta")
           '_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)'
         );
 
-    
+if ($mostrar_ia_g) {
+    $objSpreadsheet->getActiveSheet()->getStyle("P7:P$conta")
+              ->getNumberFormat()
+              ->setFormatCode(
+              '_("$"* #,##0.00_);_("$"* \(#,##0.00\);_("$"* "-"??_);_(@_)'
+            );
+
+    $objSpreadsheet->getActiveSheet()->getStyle("Q7:Q$conta")
+              ->getNumberFormat()
+              ->setFormatCode(
+              '_("$"* #,##0.00_);_("$"* \(#,##0.00\);_("$"* "-"??_);_(@_)'
+            );
+}
+
+
 
 
 foreach (range('A', 'Z') as $columnID) {
