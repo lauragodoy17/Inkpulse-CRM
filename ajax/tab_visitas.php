@@ -31,13 +31,16 @@ $sql = "SELECT
             v.efectiva,
             v.fecha            AS fecha_ejecutada,
             z.zona,
-            CONCAT(u.nombres,' ',u.apellidos) AS promotor
+            CONCAT(u.nombres,' ',u.apellidos) AS promotor,
+            t.nombre AS prof_nombre, t.apellido AS prof_apellido, c.cargo AS prof_cargo
         FROM plan_trabajo p
         LEFT JOIN objetivos o ON o.id = p.id_objetivo
         LEFT JOIN visitas v   ON v.id_plan_trabajo = p.id
         LEFT JOIN usuarios u  ON u.id = p.id_promotor
         JOIN colegios col     ON col.id = p.id_colegio
         JOIN zonas z          ON z.codigo = col.cod_zona
+        LEFT JOIN trabajadores_colegios t ON t.id = p.id_profesor
+        LEFT JOIN cargos c    ON c.id = t.cargo
         WHERE p.id_colegio = :id_colegio
           AND YEAR(p.start)  = :anio_sel
         ORDER BY p.start DESC";
@@ -140,6 +143,9 @@ $visitas = $stmt->fetchAll(PDO::FETCH_ASSOC);
           $modal_id = 'vd_modal_' . $i;
           $fp = $v['fecha_plan'] ?? '';
           $fe = $v['fecha_ejecutada'] ?? '';
+          $profesor_display = $v['prof_nombre']
+            ? trim($v['prof_nombre'].' '.$v['prof_apellido']).' ('.$v['prof_cargo'].')'
+            : 'Sin profesor asignado';
         ?>
         <tr>
           <td style="white-space:nowrap;color:#374151;font-weight:500">
@@ -196,6 +202,10 @@ $visitas = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="vd-field">
                       <label>Promotor</label>
                       <span><?= htmlspecialchars($v['promotor'] ?? '—') ?></span>
+                    </div>
+                    <div class="vd-field">
+                      <label>Profesor</label>
+                      <span><?= htmlspecialchars($profesor_display) ?></span>
                     </div>
                   </div>
                   <div class="vd-row mt-3">
