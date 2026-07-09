@@ -246,7 +246,11 @@ if ($mostrar_ia_g) {
     $costo_ia_g = $modelo_activo_g['costo_ia'] ?? 0;
     $costo_almacenamiento_anual_g = $modelo_activo_g['costo_almacenamiento'] ?? 0;
 
-    $trm_actual_g = $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch()['trm'] ?? 0;
+    try { $bdd->exec("ALTER TABLE ia_trm ADD COLUMN id_periodo INT NULL"); } catch (Exception $e) {}
+    $req_trm_g = $bdd->prepare("SELECT trm FROM ia_trm WHERE id_periodo = ? ORDER BY fecha DESC, id DESC LIMIT 1");
+    $req_trm_g->execute([$_POST['periodo']]);
+    $trm_row_g = $req_trm_g->fetch() ?: $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch();
+    $trm_actual_g = $trm_row_g['trm'] ?? 0;
     $costo_ia_cop_g = $costo_ia_g * $trm_actual_g;
 
     $req_interacciones_g = $bdd->prepare("SELECT interacciones FROM ia_presupuestos WHERE id_modelo_tokens=? AND id_periodo=? ORDER BY id DESC LIMIT 1");

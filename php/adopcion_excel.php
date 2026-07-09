@@ -139,7 +139,11 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 	$modelo_activo = $bdd->query($sql_costo_ia)->fetch();
 	$costo_ia = $modelo_activo['costo_ia'] ?? 0;
 
-	$trm_actual = $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch()['trm'] ?? 0;
+	try { $bdd->exec("ALTER TABLE ia_trm ADD COLUMN id_periodo INT NULL"); } catch (Exception $e) {}
+	$req_trm = $bdd->prepare("SELECT trm FROM ia_trm WHERE id_periodo = ? ORDER BY fecha DESC, id DESC LIMIT 1");
+	$req_trm->execute([$_GET['periodo']]);
+	$trm_row = $req_trm->fetch() ?: $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch();
+	$trm_actual = $trm_row['trm'] ?? 0;
 	$costo_ia_cop = $costo_ia * $trm_actual;
 
 	$req_cant_profes = $bdd->prepare("SELECT COUNT(*) AS total FROM trabajadores_colegios WHERE id_colegio=? AND cargo=6 AND activo=1");
