@@ -145,14 +145,14 @@ $hasta=$_POST["hasta"]." "."23:59:59";
 
 	if ($_POST["promo"] =="todos") {
 
-		$sql = "SELECT p.id as planid, p.resultado, p.cod_profesor, p.id_objetivo, p.otro_lugar, p.otro_participante, p.otro_objetivo, c.id as cid, UPPER(c.colegio) as colegio, p.start, CONCAT(u.nombres,' ',u.apellidos) as promotor FROM plan_trabajo p LEFT JOIN colegios c ON p.id_colegio=c.id JOIN usuarios u ON p.id_promotor=u.id WHERE p.start BETWEEN '".$desde."' AND '".$hasta."' ORDER BY start ASC";
+		$sql = "SELECT p.id as planid, p.resultado, p.id_profesor, p.id_objetivo, p.otro_lugar, p.otro_participante, p.otro_objetivo, c.id as cid, UPPER(c.colegio) as colegio, p.start, CONCAT(u.nombres,' ',u.apellidos) as promotor FROM plan_trabajo p LEFT JOIN colegios c ON p.id_colegio=c.id JOIN usuarios u ON p.id_promotor=u.id WHERE p.start BETWEEN '".$desde."' AND '".$hasta."' ORDER BY start ASC";
 		$req = $bdd->prepare($sql);
 		$req->execute();
 		$planes = $req->fetchAll();
 
 	}else{
 
-		$sql = "SELECT p.id as planid, p.resultado, p.cod_profesor, p.id_objetivo, p.otro_lugar, p.otro_participante, p.otro_objetivo, c.id as cid, UPPER(c.colegio) as colegio, p.start FROM plan_trabajo p LEFT JOIN colegios c ON p.id_colegio=c.id WHERE p.id_promotor='".$_POST["promo"]."' AND p.start BETWEEN '".$desde."' AND '".$hasta."' ORDER BY start ASC";
+		$sql = "SELECT p.id as planid, p.resultado, p.id_profesor, p.id_objetivo, p.otro_lugar, p.otro_participante, p.otro_objetivo, c.id as cid, UPPER(c.colegio) as colegio, p.start FROM plan_trabajo p LEFT JOIN colegios c ON p.id_colegio=c.id WHERE p.id_promotor='".$_POST["promo"]."' AND p.start BETWEEN '".$desde."' AND '".$hasta."' ORDER BY start ASC";
 		$req = $bdd->prepare($sql);
 		$req->execute();
 		$planes = $req->fetchAll();
@@ -172,10 +172,11 @@ foreach($planes as $plan) {
 		$visitas = $req->fetch();
 	}
 
-	$sql_profe = "SELECT t.nombre, t.codigo, t.cargo as id_cargo, t.area, c.cargo FROM trabajadores_colegios t JOIN cargos c ON c.id=t.cargo WHERE codigo='".$plan["cod_profesor"]."' AND codigo!=''";
+	$sql_profe = "SELECT t.nombre, t.apellido, t.codigo, t.cargo as id_cargo, t.area, c.cargo FROM trabajadores_colegios t JOIN cargos c ON c.id=t.cargo WHERE t.id='".intval($plan["id_profesor"])."'";
 	$req_profe = $bdd->prepare($sql_profe);
 	$req_profe->execute();
 	$profe = $req_profe->fetch();
+	$profe_nombre = trim(($profe["nombre"] ?? '').' '.($profe["apellido"] ?? ''));
 
 	$sql_objetivo = "SELECT objetivo FROM objetivos WHERE id='".$plan["id_objetivo"]."'";
 	$req_objetivo = $bdd->prepare($sql_objetivo);
@@ -195,8 +196,8 @@ foreach($planes as $plan) {
 			$cargo= $profe["cargo"]." ".$area["materia"];
 
 		}elseif ($profe["id_cargo"]==6) {
-			
-			$sql_area = "SELECT m.materia FROM materias m JOIN grados_materias gm ON m.id=gm.id_materia WHERE gm.cod_profesor='".$profe["codigo"]."'";
+
+			$sql_area = "SELECT materia FROM materias WHERE id='".$profe["area"]."'";
 			$req_area = $bdd->prepare($sql_area);
 			$req_area->execute();
 
@@ -206,7 +207,7 @@ foreach($planes as $plan) {
 			}else{
 				$cargo= $profe["cargo"]." ".$area["materia"];
 			}
-			
+
 
 
 		}else {
@@ -248,8 +249,8 @@ foreach($planes as $plan) {
 			$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$status[status]");
 		}
 
-		if (!empty($profe["nombre"])) {
-			$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$profe[nombre]");
+		if (!empty($profe_nombre)) {
+			$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", $profe_nombre);
 		}else{
 			$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "");
 		}
@@ -299,8 +300,8 @@ foreach($planes as $plan) {
 			$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$status[status]");
 		}
 
-		if (!empty($profe["nombre"])) {
-			$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$profe[nombre]");
+		if (!empty($profe_nombre)) {
+			$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", $profe_nombre);
 		}else{
 			$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "");
 		}

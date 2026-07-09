@@ -110,18 +110,6 @@
                 $objetivo = $req_objetivo->fetch();
               }
 
-              $sql_grado = "SELECT grado FROM grados a JOIN grados_materias b ON a.id=b.id_grado WHERE cod_profesor='".$visita["cod_profesor"]."'";
-
-              $req_grado = $bdd->prepare($sql_grado);
-              $req_grado->execute();
-              $grado = $req_grado->fetch();
-
-              $sql_materia = "SELECT materia FROM materias a JOIN grados_materias b ON a.id=b.id_materia WHERE cod_profesor='".$visita["cod_profesor"]."'";
-
-              $req_materia = $bdd->prepare($sql_materia);
-              $req_materia->execute();
-              $materia = $req_materia->fetch();
-
               $sql_parti = "SELECT CONCAT (nombres, ' ', apellidos) as parti, t.tipo FROM usuarios u JOIN plan_trabajo p ON u.id=p.id_promotor JOIN tipos_notifi t ON t.id=p.agendamiento WHERE p.codigo='".$visita['codigo']."' GROUP BY p.codigo, u.id";
               $req_parti = $bdd->prepare($sql_parti);
               $req_parti->execute();
@@ -172,7 +160,7 @@
 
             <h6>Descripción: <?php echo $visita["descripcion"] ?></h6><br>
             <?php 
-              $sql_profesor = "SELECT t.nombre,t.cargo,t.area, c.cargo as nombrecargo FROM trabajadores_colegios t JOIN cargos c ON t.cargo=c.id WHERE t.codigo='".$visita["cod_profesor"]."' AND t.codigo!=''";
+              $sql_profesor = "SELECT t.nombre,t.apellido,t.cargo,t.area,t.nivel_academico, c.cargo as nombrecargo FROM trabajadores_colegios t JOIN cargos c ON t.cargo=c.id WHERE t.id='".intval($visita["id_profesor"])."'";
 
                 $req_profesor = $bdd->prepare($sql_profesor);
                 $req_profesor->execute();
@@ -191,7 +179,7 @@
                 
               <table class="table table-bordered table-hover">
                 <tr>
-                  <td>Nombre: <?php echo $profesor['nombre']; ?></td>
+                  <td>Nombre: <?php echo $profesor['nombre'].' '.$profesor['apellido']; ?></td>
                   <td>Cargo: <?php echo $profesor['nombrecargo']; ?></td>
                 </tr>
               </table>
@@ -203,7 +191,7 @@
                 
               <table class="table table-bordered table-hover">
                 <tr>
-                  <td>Nombre: <?php echo $profesor['nombre']; ?></td>
+                  <td>Nombre: <?php echo $profesor['nombre'].' '.$profesor['apellido']; ?></td>
                   <td>Cargo: Coordinador académico</td>
                 </tr>
               </table>
@@ -219,18 +207,25 @@
 
                 <table class="table table-bordered table-hover">
                   <tr>
-                    <td>Nombre: <?php echo $profesor['nombre']; ?></td>
+                    <td>Nombre: <?php echo $profesor['nombre'].' '.$profesor['apellido']; ?></td>
                     <td>Jefe de area: <?php echo $materia["materia"]; ?></td>
                   </tr>
                 </table>
-              <?php } if($profesor["cargo"]== 6){?>
-              
+              <?php } if($profesor["cargo"]== 6){
+
+                $sql_materia = "SELECT materia FROM materias WHERE id='".$profesor["area"]."'";
+
+                $req_materia = $bdd->prepare($sql_materia);
+                $req_materia->execute();
+                $materia = $req_materia->fetch() ?: ['materia' => ''];
+              ?>
+
                 <table class="table table-bordered table-hover">
                   <tr>
-                    <td>Nombre: <?php echo $profesor['nombre']; ?></td>
+                    <td>Nombre: <?php echo $profesor['nombre'].' '.$profesor['apellido']; ?></td>
                   </tr>
                   <tr>
-                    <td>Grado: <?php echo $grado['grado']; ?></td>
+                    <td>Grado: <?php echo $profesor['nivel_academico']; ?></td>
                     <td>Materia: <?php echo $materia['materia']; ?></td>
                   </tr>
                 </table>

@@ -206,19 +206,13 @@
 									</div><br>
 									
 								  <div class="form-group ocultar_oficina">
-								  	<?php if ($_SESSION["id"] != 16) { ?>
 									<label for="profesor" class="col-sm-4 control-label">Profesor</label>
 									<div class="col-sm-8">
-									  <input type="text" name="profesor" class="form-control" id="profesor" placeholder="Nombre del profesor" autocomplete="off" onkeyup="bus_h()">
-									  <input type="hidden" name="profe" id="profe"><div id="suggestions"></div>
+									  <select name="profe" id="profesor" class="form-control custom-select2" style="width: 300px;">
+									    <option value="">Selecciona un colegio primero</option>
+									  </select>
+									  <input type="hidden" name="profesor" id="profesor_nombre">
 									</div>
-									<?php }else { ?>
-									<label for="profesor" class="col-sm-4 control-label">Profesor</label>
-									<div class="col-sm-8">
-									  <input type="text" name="profesor" class="form-control" id="profesor" placeholder="Nombre del profesor" autocomplete="off" onkeyup="bus_h()">
-									  <input type="hidden" name="profe" id="profe"><div id="suggestions"></div>
-									</div>
-									<?php } ?>
 								  </div><br>
 
 								  <div class="form-group ocultar_oficina">
@@ -539,10 +533,45 @@
 
 			})
 
+			function cargarProfesores(idColegio) {
+				var $sel = $('#profesor');
+				$sel.empty();
+				if (!idColegio) {
+					$sel.append($('<option>', { value: '', text: 'Selecciona un colegio primero' }));
+					$sel.trigger('change');
+					return;
+				}
+				$.getJSON('ajax/profesores_colegio.php', { id_colegio: idColegio }, function (profes) {
+					$sel.empty();
+					if (!profes.length) {
+						$sel.append($('<option>', { value: '', text: 'Sin profesores registrados' }));
+					} else {
+						$sel.append($('<option>', { value: '', text: 'Seleccione...' }));
+						$.each(profes, function (i, p) {
+							$sel.append($('<option>', { value: p.id, text: p.nombre }));
+						});
+					}
+					$sel.trigger('change');
+				});
+			}
+
+			$('#cole').on('change', function () {
+				cargarProfesores($(this).val());
+			});
+
+			$('#profesor').on('change', function () {
+				$('#profesor_nombre').val($(this).find('option:selected').text());
+			});
+
 			$(document).ready(function() {
 				$(".custom-select2").select2({
 					 dropdownParent: $('#ModalAdd')
 				});
+
+				var idColeInicial = $('#cole').val();
+				if (idColeInicial) {
+					cargarProfesores(idColeInicial);
+				}
 
 				$('#parti').on('change', function() {
 					var vals = $(this).val() || [];
