@@ -3,7 +3,7 @@ require_once("aut.php");
 require_once("../conexion/bdd.php");
 header('Content-Type: application/json');
 
-if ($_SESSION["tipo"] != 1) {
+if ($_SESSION["tipo"] != 1 && ($_SESSION["id"] ?? null) != 21) {
     echo json_encode(['results' => []]);
     exit;
 }

@@ -552,7 +552,7 @@ $ubicaciones_active  = in_array($current_page, ['ubicaciones.php','ubicacion_det
 							</li>
 						<?php } ?>
 
-						<?php if ($_SESSION["tipo"] == 1) {?>
+						<?php if ($_SESSION["tipo"] == 1 || $_SESSION["id"] == 21) {?>
 						<li><div class="sidebar-small-cap admin-sec">Administrativo</div></li>
 						<li>
 							<a href="libros.php" class="dropdown-toggle no-arrow <?= $libros_active ? 'active' : '' ?>">
@@ -560,6 +560,7 @@ $ubicaciones_active  = in_array($current_page, ['ubicaciones.php','ubicacion_det
 								><span class="mtext">Libros</span>
 							</a>
 						</li>
+						<?php if ($_SESSION["tipo"] == 1) {?>
 						<li>
 							<a href="usuarios.php" class="dropdown-toggle no-arrow <?= $usuarios_active ? 'active' : '' ?>">
 								<span class="micon bi bi-people"></span
@@ -572,6 +573,7 @@ $ubicaciones_active  = in_array($current_page, ['ubicaciones.php','ubicacion_det
 								><span class="mtext">Zonas</span>
 							</a>
 						</li>
+						<?php }?>
 						<li>
 							<a href="ubicaciones.php" class="dropdown-toggle no-arrow <?= $ubicaciones_active ? 'active' : '' ?>">
 								<span class="micon bi bi-columns-gap"></span

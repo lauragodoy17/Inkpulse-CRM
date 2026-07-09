@@ -3,7 +3,7 @@ require_once("aut.php");
 require_once("../conexion/bdd.php");
 header('Content-Type: application/json');
 
-if ($_SESSION["tipo"] != 1 || !isset($_POST["id_libro"])) {
+if (($_SESSION["tipo"] != 1 && ($_SESSION["id"] ?? null) != 21) || !isset($_POST["id_libro"])) {
     echo json_encode(['success' => false, 'message' => 'No autorizado.']);
     exit;
 }

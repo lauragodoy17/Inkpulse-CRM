@@ -4,7 +4,7 @@ require_once("../conexion/bdd.php");
 
 $draw = intval($_GET['draw']);
 
-if ($_SESSION["tipo"] != 1) {
+if ($_SESSION["tipo"] != 1 && ($_SESSION["id"] ?? null) != 21) {
     echo json_encode(['draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => []]);
     exit;
 }

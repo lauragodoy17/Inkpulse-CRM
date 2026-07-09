@@ -2,12 +2,12 @@
 require_once("php/aut.php");
 require_once("conexion/bdd.php");
 
-if (($_SESSION["autentificado"] ?? '') === "SI" && ($_SESSION["tipo"] ?? null) != 1) {
+if (($_SESSION["autentificado"] ?? '') === "SI" && ($_SESSION["tipo"] ?? null) != 1 && ($_SESSION["id"] ?? null) != 21) {
     header("Location: index.php");
     exit;
 }
 
-$puede_gestionar = ($_SESSION["tipo"] == 1);
+$puede_gestionar = ($_SESSION["tipo"] == 1 || $_SESSION["id"] == 21);
 
 $total_libros = $bdd->query("SELECT COUNT(*) FROM libros l JOIN materias m ON l.id_materia = m.id JOIN grados g ON l.id_grado = g.id")->fetchColumn();
 $total_activos = $bdd->query("SELECT COUNT(*) FROM libros l JOIN materias m ON l.id_materia = m.id JOIN grados g ON l.id_grado = g.id WHERE l.presupuesto=1")->fetchColumn();
