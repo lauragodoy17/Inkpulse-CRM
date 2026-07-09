@@ -15,7 +15,7 @@ $start = intval($_GET['start']);
 $length = intval($_GET['length']);
 $searchValue = $_GET['search']['value'] ?? '';
 
-$columns = ['isbn', 'libro', 'materia', 'grado', 'precio', 'presupuesto', 'asociacion', 'acciones'];
+$columns = ['isbn', 'libro', 'ubicacion', 'materia', 'grado', 'precio', 'presupuesto', 'asociacion', 'acciones'];
 
 $orderSQL = 'ORDER BY g.id, l.libro';
 if (isset($_GET['order'][0]['column'])) {
@@ -60,38 +60,63 @@ $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $materias = $bdd->query("SELECT id, materia FROM materias ORDER BY materia")->fetchAll(PDO::FETCH_ASSOC);
 $grados = $bdd->query("SELECT id, grado FROM grados ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
 
+// ── Ubicaciones en bodega (batch fetch para evitar N+1) ──────────
+$ubi_map = [];
+$libro_ids = array_column($rows, 'id');
+if (!empty($libro_ids)) {
+    $ph = implode(',', array_fill(0, count($libro_ids), '?'));
+    $req_ubi = $bdd->prepare(
+        "SELECT lu.id_libro, lu.posicion, u.id AS ubicacion_id, u.piso, u.ubicacion AS slot,
+                l.id AS lugar_id, l.id_tipo, l.lugar
+         FROM libros_ubicaciones lu
+         JOIN ubicaciones u ON u.id = lu.ubicacion
+         JOIN lugares l     ON l.id = u.id_lugar
+         WHERE lu.id_libro IN ($ph)
+         ORDER BY lu.id"
+    );
+    $req_ubi->execute($libro_ids);
+    foreach ($req_ubi->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $ubi_map[$row['id_libro']][] = $row;
+    }
+}
+
 $data = [];
 foreach ($rows as $libro) {
     $es_serie = ($libro["id_grado"] == 15 || $libro["id_grado"] == 16);
-    $disabled = $puede_gestionar ? '' : 'disabled';
 
-    $isbnHtml = '<input type="text" class="dt-isbn" value="' . htmlspecialchars($libro["isbn"]) . '" ' . $disabled . '>';
-    $libroHtml = '<input type="text" class="dt-libro" value="' . htmlspecialchars($libro["libro"]) . '" ' . $disabled . '>';
+    $isbnHtml = htmlspecialchars($libro["isbn"]);
+    $libroHtml = htmlspecialchars($libro["libro"]);
 
-    $materiaHtml = '<select class="dt-materia" ' . $disabled . '>';
+    $materia_nombre = '';
     foreach ($materias as $materia) {
-        $sel = ($materia["id"] == $libro["id_materia"]) ? 'selected' : '';
-        $materiaHtml .= '<option value="' . $materia["id"] . '" ' . $sel . '>' . htmlspecialchars($materia["materia"]) . '</option>';
+        if ($materia["id"] == $libro["id_materia"]) { $materia_nombre = $materia["materia"]; break; }
     }
-    $materiaHtml .= '</select>';
+    $materiaHtml = htmlspecialchars($materia_nombre);
 
-    $gradoHtml = '<select class="dt-grado" ' . $disabled . '>';
+    $grado_nombre = '';
     foreach ($grados as $grado) {
-        $sel = ($grado["id"] == $libro["id_grado"]) ? 'selected' : '';
-        $gradoHtml .= '<option value="' . $grado["id"] . '" ' . $sel . '>' . htmlspecialchars($grado["grado"]) . '</option>';
+        if ($grado["id"] == $libro["id_grado"]) { $grado_nombre = $grado["grado"]; break; }
     }
-    $gradoHtml .= '</select>';
+    $gradoHtml = htmlspecialchars($grado_nombre);
 
-    if ($es_serie) {
-        $precioHtml = '<span class="text-muted">&mdash;</span>';
-    } else {
-        $precioHtml = '<input type="number" class="dt-precio" value="' . htmlspecialchars($libro["precio"]) . '" step="any" ' . $disabled . '>';
+    $precioHtml = $es_serie
+        ? '<span class="text-muted">&mdash;</span>'
+        : '$ ' . number_format((float) $libro["precio"], 0, ',', '.');
+
+    $presupuestoHtml = ($libro["presupuesto"] == 1)
+        ? '<span class="badge-serie" style="background:#dcfce7;color:#15803d;">Sí</span>'
+        : '<span class="badge-serie" style="background:#f1f5f9;color:#64748b;">No</span>';
+
+    $ubis = $ubi_map[$libro["id"]] ?? [];
+    $ubi_str = '';
+    foreach ($ubis as $ub) {
+        $ubi_str .= ($ub['id_tipo'] == 1)
+            ? $ub['lugar'] . $ub['piso'] . ' Pallet ' . $ub['slot'] . ' ' . $ub['posicion'] . ', '
+            : $ub['lugar'] . ' Bandeja ' . $ub['slot'] . ', ';
     }
-
-    $presupuestoHtml = '<select class="dt-presupuesto" ' . $disabled . '>'
-        . '<option value="1" ' . ($libro["presupuesto"] == 1 ? 'selected' : '') . '>Sí</option>'
-        . '<option value="0" ' . ($libro["presupuesto"] == 0 ? 'selected' : '') . '>No</option>'
-        . '</select>';
+    $ubi_str = rtrim($ubi_str, ', ');
+    $ubicacionHtml = $ubi_str !== '' ? htmlspecialchars($ubi_str) : '<span class="text-muted">&mdash;</span>';
+    $ubi_actual = $ubis[0] ?? null;
 
     $num_hijos = (int) $libro["num_hijos"];
     $pri_sec = (int) $libro["pri_sec"];
@@ -113,8 +138,21 @@ foreach ($rows as $libro) {
 
     if ($puede_gestionar) {
         $accionesHtml = '<div class="acciones-libro">'
-            . '<button type="button" class="btn-save-libro" data-id="' . $libro["id"] . '" title="Guardar cambios"><i class="bi bi-check-lg"></i></button>'
-            . '<button type="button" class="btn-delete-libro" data-id="' . $libro["id"] . '" data-titulo="' . htmlspecialchars($libro["libro"], ENT_QUOTES) . '" title="Eliminar libro"><i class="bi bi-trash3"></i></button>'
+            . '<button type="button" class="btn-editar-libro"'
+            . ' data-id="' . $libro["id"] . '"'
+            . ' data-isbn="' . htmlspecialchars($libro["isbn"], ENT_QUOTES) . '"'
+            . ' data-libro="' . $libroNombreAttr . '"'
+            . ' data-materia="' . $libro["id_materia"] . '"'
+            . ' data-grado="' . $libro["id_grado"] . '"'
+            . ' data-precio="' . htmlspecialchars($libro["precio"], ENT_QUOTES) . '"'
+            . ' data-presupuesto="' . (int) $libro["presupuesto"] . '"'
+            . ' data-serie="' . ($es_serie ? '1' : '0') . '"'
+            . ' data-lugar="' . ($ubi_actual['lugar_id'] ?? '') . '"'
+            . ' data-piso="' . htmlspecialchars($ubi_actual['piso'] ?? '', ENT_QUOTES) . '"'
+            . ' data-ubicacion-id="' . ($ubi_actual['ubicacion_id'] ?? '') . '"'
+            . ' data-ubicacion-posicion="' . htmlspecialchars($ubi_actual['posicion'] ?? '', ENT_QUOTES) . '"'
+            . ' title="Editar libro"><i class="bi bi-pencil-square"></i></button>'
+            . '<button type="button" class="btn-eliminar-libro" data-id="' . $libro["id"] . '" data-titulo="' . htmlspecialchars($libro["libro"], ENT_QUOTES) . '" title="Eliminar libro"><i class="bi bi-trash3"></i></button>'
             . '</div>';
     } else {
         $accionesHtml = '<span class="text-muted">&mdash;</span>';
@@ -127,6 +165,7 @@ foreach ($rows as $libro) {
         'grado'       => $gradoHtml,
         'precio'      => $precioHtml,
         'presupuesto' => $presupuestoHtml,
+        'ubicacion'   => $ubicacionHtml,
         'asociacion'  => $asociacionHtml,
         'acciones'    => $accionesHtml,
     ];
