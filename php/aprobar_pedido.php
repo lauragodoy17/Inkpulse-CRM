@@ -58,14 +58,14 @@ try {
     <h2>¡Pedido aprobado!</h2>
     <p>El pedido #<?= $id_pedido ?> fue aprobado correctamente.</p>
     <p class="countdown" id="msg">Redirigiendo en 3 segundos...</p>
-    <a href="../pedido_colegio.php?id_pedido=<?= $id_pedido ?>&tp=3" class="btn btn-ok">Ver pedido</a>
+    <a href="../lista_pedidos.php?tp=2" class="btn btn-ok">Ver pendientes</a>
   </div>
   <script>
     var s = 3;
     var t = setInterval(function () {
       s--;
       document.getElementById('msg').textContent = 'Redirigiendo en ' + s + ' segundo' + (s !== 1 ? 's' : '') + '...';
-      if (s <= 0) { clearInterval(t); window.location.href = '../pedido_colegio.php?id_pedido=<?= $id_pedido ?>&tp=3'; }
+      if (s <= 0) { clearInterval(t); window.location.href = '../lista_pedidos.php?tp=2'; }
     }, 1000);
   </script>
 
