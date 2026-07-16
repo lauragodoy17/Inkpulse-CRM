@@ -7,7 +7,10 @@ $es_admin = $tipo_sesion === 1;
 // Promotores y distribuidores ven el mismo panel pero acotado a su propia
 // información (sin selector de rol/persona); el resto de tipos no lo ve.
 $dash_rol_fijo = $tipo_sesion === 3 ? 'promotor' : ($tipo_sesion === 6 ? 'distribuidor' : null);
-$dash_visible = $es_admin || $dash_rol_fijo !== null;
+// Tipo 4 solo ve la sección de Visitas ejecutadas, acotada a sus propias visitas
+// (igual que promotores/distribuidores, el filtro por usuario lo fuerza el backend).
+$solo_visitas_dash = $tipo_sesion === 4;
+$dash_visible = $es_admin || $dash_rol_fijo !== null || $solo_visitas_dash;
 
 if ($dash_visible) {
     $periodos_dash = $bdd->query("SELECT id, periodo FROM periodos ORDER BY id DESC")->fetchAll();
@@ -167,7 +170,7 @@ if ($es_admin) {
 							</select>
 							<?php else: ?>
 							<select id="dash-rol" style="display:none;">
-								<option value="<?= htmlspecialchars($dash_rol_fijo) ?>" selected><?= htmlspecialchars($dash_rol_fijo) ?></option>
+								<option value="<?= htmlspecialchars($dash_rol_fijo ?? '') ?>" selected><?= htmlspecialchars($dash_rol_fijo ?? '') ?></option>
 							</select>
 							<select id="dash-persona" style="display:none;">
 								<option value="">Todos</option>
@@ -197,6 +200,7 @@ if ($es_admin) {
 					</div>
 					<?php endif; ?>
 
+					<?php if (!$solo_visitas_dash): ?>
 					<!-- ── Presupuestos ── -->
 					<h5 class="dash-section-title"><i class="bi bi-cash-coin"></i> Presupuestos</h5>
 
@@ -347,6 +351,7 @@ if ($es_admin) {
 						</div>
 					</div>
 					<?php endif; ?>
+					<?php endif; // !$solo_visitas_dash ?>
 
 					<!-- ── Visitas ejecutadas ── -->
 					<div id="dash-visitas-section">
@@ -387,7 +392,7 @@ if ($es_admin) {
 							<div class="col-xl-4 col-lg-4 col-md-6">
 								<div class="chart-card">
 									<div class="chart-card-head">
-										<h5><i class="bi bi-bar-chart mr-2"></i><?= $dash_rol_fijo === 'promotor' ? 'Visitas ejecutadas' : 'Top promotores por visitas ejecutadas' ?></h5>
+										<h5><i class="bi bi-bar-chart mr-2"></i><?= ($dash_rol_fijo === 'promotor' || $solo_visitas_dash) ? 'Visitas ejecutadas' : 'Top promotores por visitas ejecutadas' ?></h5>
 										<span id="dv-ranking-sub">Período seleccionado</span>
 									</div>
 									<div id="chart-ranking-promotores"></div>
@@ -834,6 +839,7 @@ if ($es_admin) {
 			});
 			chartObjetivosVisitas.render();
 
+			<?php if (!$solo_visitas_dash): ?>
 			// ── Presupuestos ──
 			var chartProbabilidadPresup = new ApexCharts(document.querySelector("#chart-probabilidad-presup"), {
 				series: [],
@@ -932,6 +938,7 @@ if ($es_admin) {
 			});
 			chartEditorialAdop.render();
 			<?php endif; ?>
+			<?php endif; // !$solo_visitas_dash ?>
 
 			<?php if ($es_admin): ?>
 			var chartAsesores = new ApexCharts(document.querySelector("#chart-asesores"), {
@@ -1069,7 +1076,11 @@ if ($es_admin) {
 
 			function cargarPanel() {
 				mostrarCargando();
+				<?php if ($solo_visitas_dash): ?>
+				$.when(cargarVisitas()).always(ocultarCargando);
+				<?php else: ?>
 				$.when(cargarVisitas(), cargarPresupuestos(), cargarAdopciones()<?php if ($es_admin): ?>, cargarAsesores()<?php endif; ?>).always(ocultarCargando);
+				<?php endif; ?>
 			}
 
 			cargarPanel();
