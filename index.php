@@ -6,7 +6,9 @@ $tipo_sesion = intval($_SESSION["tipo"] ?? 0);
 $es_admin = $tipo_sesion === 1;
 // Promotores y distribuidores ven el mismo panel pero acotado a su propia
 // información (sin selector de rol/persona); el resto de tipos no lo ve.
-$dash_rol_fijo = $tipo_sesion === 3 ? 'promotor' : ($tipo_sesion === 6 ? 'distribuidor' : null);
+// Tipo 10 ve el mismo panel que un promotor (Presupuestos, Adopciones y Visitas),
+// también acotado únicamente a su propia información.
+$dash_rol_fijo = ($tipo_sesion === 3 || $tipo_sesion === 10) ? 'promotor' : ($tipo_sesion === 6 ? 'distribuidor' : null);
 // Tipo 4 solo ve la sección de Visitas ejecutadas, acotada a sus propias visitas
 // (igual que promotores/distribuidores, el filtro por usuario lo fuerza el backend).
 $solo_visitas_dash = $tipo_sesion === 4;

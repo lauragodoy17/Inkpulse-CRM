@@ -4,7 +4,7 @@ require_once("../conexion/bdd.php");
 header('Content-Type: application/json');
 
 $tipo_sesion = intval($_SESSION["tipo"] ?? 0);
-if (!in_array($tipo_sesion, [1, 3, 4, 6], true)) {
+if (!in_array($tipo_sesion, [1, 3, 4, 6, 10], true)) {
     echo json_encode(['success' => false, 'message' => 'No autorizado']);
     exit;
 }
