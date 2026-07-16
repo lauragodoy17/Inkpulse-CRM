@@ -53,7 +53,7 @@ $ventaPotencialExpr = "(CASE WHEN p.tasa_compra_d = 0
     ELSE (p.precio - p.precio * p.descuento_d) * FLOOR(COALESCE(gp.alumnos, 0) * p.tasa_compra_d) END)";
 
 $gradoJoin = "LEFT JOIN areas_objetivas ao ON ao.codigo = p.cod_area AND p.cod_area <> '' AND p.cod_area IS NOT NULL
-    LEFT JOIN (SELECT id_colegio, id_grado, id_periodo, SUM(alumnos) as alumnos FROM grados_paralelos GROUP BY id_colegio, id_grado, id_periodo) gp
+    LEFT JOIN (SELECT id_colegio, id_grado, id_periodo, SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_periodo = $periodo GROUP BY id_colegio, id_grado, id_periodo) gp
         ON gp.id_colegio = p.id_colegio AND gp.id_grado = COALESCE(ao.id_grado_otro, l.id_grado) AND gp.id_periodo = p.id_periodo";
 
 $baseFrom = "FROM presupuestos p JOIN libros l ON p.id_libro = l.id $gradoJoin

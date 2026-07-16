@@ -43,7 +43,7 @@ $nombre_periodo = $sql_periodo->fetchColumn();
 // (alumnos * tasa_compra), para poder comparar en las mismas unidades (COP) el presupuesto en
 // definición contra lo ya adoptado, agrupado por asesor (presupuestos.id_usuario).
 $gradoJoin = "LEFT JOIN areas_objetivas ao ON ao.codigo = p.cod_area AND p.cod_area <> '' AND p.cod_area IS NOT NULL
-    LEFT JOIN (SELECT id_colegio, id_grado, id_periodo, SUM(alumnos) as alumnos FROM grados_paralelos GROUP BY id_colegio, id_grado, id_periodo) gp
+    LEFT JOIN (SELECT id_colegio, id_grado, id_periodo, SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_periodo = $periodo GROUP BY id_colegio, id_grado, id_periodo) gp
         ON gp.id_colegio = p.id_colegio AND gp.id_grado = COALESCE(ao.id_grado_otro, l.id_grado) AND gp.id_periodo = p.id_periodo";
 
 $ventaPotencialExpr = "((p.precio - p.precio * p.descuento) * FLOOR(COALESCE(gp.alumnos, 0) * p.tasa_compra))";
