@@ -88,12 +88,26 @@ $objSpreadsheet->getActiveSheet()->getStyle('H2')->applyFromArray($estilo_centra
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("E2", "REPORTE de valorización global");
 
-$sql_periodo="SELECT periodo FROM periodos WHERE id='".$_POST["periodo"]."'";
+$sql_periodo="SELECT periodo, id_calendario FROM periodos WHERE id='".$_POST["periodo"]."'";
 
 $req_periodo = $bdd->prepare($sql_periodo);
 $req_periodo->execute();
 $gp_periodo = $req_periodo->fetch();
 $fecha=date("Y-m-d");
+
+// Un colegio solo debe aparecer en el período de su propio calendario (A/B); sin este filtro,
+// un presupuesto mal cargado en el período del calendario equivocado (error de captura real
+// que se dio con al menos 2 colegios) se sigue sumando aunque el colegio no pertenezca ahí.
+$calendario_periodo_g = intval($gp_periodo["id_calendario"]);
+
+// "Dueño de zona" del colegio: el criterio real de negocio para "de quién es" un colegio
+// es la zona (colegios.cod_zona -> usuarios.cod_zona), NO quién cargó la línea de
+// presupuesto (presupuestos.id_usuario) — ver la explicación completa en
+// php/dashboard_presupuestos_stats.php. Los admins (tipo=1) nunca cuentan como dueños de
+// zona; Hector Morales (id=69, tipo=10) sí, por la misma excepción de negocio que ya
+// aplican los demás endpoints del dashboard. Verificado que ningún usuario activo tipo 3/6
+// comparte cod_zona con otro, así que este LEFT JOIN nunca duplica filas.
+$ownerJoin_g = "LEFT JOIN usuarios owner ON owner.cod_zona = c.cod_zona AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("H2", "Periodo $gp_periodo[periodo]");
 
@@ -135,33 +149,41 @@ $objSpreadsheet->getActiveSheet()->getStyle($mostrar_ia_g ? 'A6:Q6' : 'A6:O6')->
     ]
 ]);
 
+// Columnas Empresa/Zona/Asesor siempre se derivan del dueño de zona del colegio (owner) y
+// de la zona propia del colegio (c.cod_zona), no de un uid elegido arbitrariamente por
+// GROUP BY ni del cod_zona guardado en la línea de presupuesto (que puede quedar
+// desactualizado). Cuando el colegio no tiene dueño de zona, se muestra "Sin asesor
+// asignado" en vez de perderse o atribuirse a quien cargó la línea.
+$selectColegio = "SELECT c.id, c.dane, p.sub_zona, p.conse, p.year, c.responsable, c.departamento,c.ciudad, c.colegio, c.direccion, c.barrio,c.telefono,
+    COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), 'Sin asesor asignado') as promotor, owner.tipo as tipouser, z.zona
+    FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio LEFT JOIN zonas z ON z.codigo = c.cod_zona $ownerJoin_g";
+
 if ($_SESSION['tipo']==1 || $_SESSION['tipo']==2 || $_SESSION['tipo']==7) {
 
-
-
-    
-    if ($_POST['promotor']!=0) {
-
-
-     $sql = "SELECT c.id, c.dane, p.sub_zona, p.conse, p.year, c.responsable, c.departamento,c.ciudad, c.colegio, c.direccion, c.barrio,c.telefono, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, u.id as uid, z.zona FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN zonas z ON p.cod_zona=z.codigo JOIN usuarios u on u.id=p.id_usuario WHERE p.id_usuario='".$_POST['promotor']."' AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' GROUP BY c.id ORDER BY p.conse DESC";
-                                  
-
- 
-
-    }else{
-
-         $sql = "SELECT c.id, c.dane, p.sub_zona, p.conse, p.year, c.responsable, c.departamento,c.ciudad, c.colegio, c.direccion, c.barrio,c.telefono, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, u.id as uid, z.zona FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN zonas z ON p.cod_zona=z.codigo JOIN usuarios u on u.id=p.id_usuario WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' GROUP BY c.id ORDER BY p.conse DESC";
-     
+    $promotor_id_g = intval($_POST['promotor'] ?? 0);
+    if ($promotor_id_g !== 0) {
+        // Un asesor/distribuidor real (tipo 3/6) o Hector Morales (id=69) se filtra por la
+        // zona del colegio; cualquier otro tipo (admins sin territorio) usa el criterio
+        // viejo (quién cargó la línea), porque no tiene zona/territorio asignado.
+        $tipo_promotor_g = intval($bdd->query("SELECT tipo FROM usuarios WHERE id=$promotor_id_g")->fetchColumn());
+        if (in_array($tipo_promotor_g, [3, 6], true) || $promotor_id_g === 69) {
+            $scopeFilter_g = " AND owner.id=$promotor_id_g";
+        } else {
+            $scopeFilter_g = " AND p.id_usuario=$promotor_id_g";
+        }
+    } else {
+        $scopeFilter_g = "";
     }
 
+    $sql = "$selectColegio WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND c.id_calendario=$calendario_periodo_g" . $scopeFilter_g . " GROUP BY c.id ORDER BY p.conse DESC";
+
 }elseif($_SESSION['tipo']==3){
+    // La sesión tipo=3 siempre es un asesor real, así que se filtra por su propia zona.
+    $sql = "$selectColegio WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND owner.id='".$_SESSION['id']."' AND c.id_calendario=$calendario_periodo_g GROUP BY c.id ORDER BY p.conse DESC";
 
-    $sql = "SELECT c.id, c.dane, p.sub_zona, p.conse, p.year, c.responsable, c.departamento,c.ciudad, c.colegio, c.direccion, c.barrio,c.telefono, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, u.id as uid, z.zona FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN zonas z ON p.cod_zona=z.codigo JOIN usuarios u on u.id=p.id_usuario WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_SESSION['id']."' GROUP BY c.id ORDER BY p.conse DESC";
-
-  
 }else{
-
-     $sql = "SELECT c.id, c.dane, p.sub_zona, p.conse, p.year, c.responsable, c.departamento,c.ciudad, c.colegio, c.direccion, c.barrio,c.telefono, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, u.id as uid, z.zona FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN zonas z ON p.cod_zona=z.codigo JOIN usuarios u on u.id=p.id_usuario WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."') GROUP BY c.id ORDER BY p.conse DESC";
+    // Alcance por zona propia (permiso de visibilidad, no de atribución): no cambia.
+    $sql = "$selectColegio WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."') AND c.id_calendario=$calendario_periodo_g GROUP BY c.id ORDER BY p.conse DESC";
 }
 
 
@@ -180,7 +202,7 @@ $ph_g = !empty($cole_ids_g) ? implode(',', array_fill(0, count($cole_ids_g), '?'
 
 $pres_map_g = [];
 if (!empty($cole_ids_g)) {
-    $req_pres = $bdd->prepare("SELECT p.id_colegio, p.id_usuario, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id as idlibro, l.id_grado FROM presupuestos p JOIN libros l ON p.id_libro=l.id WHERE p.id_colegio IN ($ph_g) AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo=?");
+    $req_pres = $bdd->prepare("SELECT p.id_colegio, p.id_usuario, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id_grado FROM presupuestos p JOIN libros l ON p.id_libro=l.id WHERE p.id_colegio IN ($ph_g) AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo=?");
     $req_pres->execute(array_merge($cole_ids_g, [$_POST['periodo']]));
     foreach ($req_pres->fetchAll(PDO::FETCH_ASSOC) as $row)
         $pres_map_g[$row['id_colegio']][$row['id_usuario']][] = $row;
@@ -194,12 +216,20 @@ if (!empty($cole_ids_g)) {
         $vreal_map_g[$row['id_colegio']] = $row['venta_real'];
 }
 
+// Mismo criterio que php/dashboard_presupuestos_stats.php: se matchea solo por
+// (id_colegio, codigo), sin distinguir libro, y se descarta la coincidencia si el colegio
+// tiene más de un registro ambiguo (distinto id_grado_otro) para el mismo código de área,
+// en vez de arriesgar a escoger uno cualquiera.
 $ao_map_g = [];
 if (!empty($cole_ids_g)) {
-    $req_ao_g = $bdd->prepare("SELECT id_colegio, id_libro_eureka, codigo, id_grado_otro FROM areas_objetivas WHERE id_colegio IN ($ph_g) AND id_periodo=?");
+    $req_ao_g = $bdd->prepare("SELECT id_colegio, codigo, MAX(id_grado_otro) as id_grado_otro
+        FROM areas_objetivas
+        WHERE id_colegio IN ($ph_g) AND id_periodo=? AND codigo <> ''
+        GROUP BY id_colegio, codigo
+        HAVING COUNT(*) = 1");
     $req_ao_g->execute(array_merge($cole_ids_g, [$_POST['periodo']]));
     foreach ($req_ao_g->fetchAll(PDO::FETCH_ASSOC) as $row)
-        $ao_map_g[$row['id_colegio']][$row['id_libro_eureka']][$row['codigo']] = $row['id_grado_otro'];
+        $ao_map_g[$row['id_colegio']][$row['codigo']] = $row['id_grado_otro'];
 }
 
 $gp_map_g = [];
@@ -269,22 +299,40 @@ if ($mostrar_ia_g) {
 $conta=7;
 foreach ($colegios as $colegio) {
 
-    $adopciones = $pres_map_g[$colegio["id"]][$colegio["uid"]] ?? [];
+    // Siempre suma el presupuesto/adopción de TODOS los que hayan cargado algo en el
+    // colegio (no solo el dueño de zona mostrado en la columna Asesor): la propiedad del
+    // colegio es por zona, pero su valor incluye cualquier línea cargada ahí (p.ej. un
+    // distribuidor vendiendo títulos puntuales en un colegio que por zona es de un asesor).
+    $adopciones = [];
+    foreach ($pres_map_g[$colegio["id"]] ?? [] as $porAsesor) {
+        $adopciones = array_merge($adopciones, $porAsesor);
+    }
     $vr_val     = $vreal_map_g[$colegio["id"]] ?? null;
     $v_real     = (is_numeric($vr_val) && $vr_val > 0) ? ['venta_real' => $vr_val] : false;
 
     foreach ($adopciones as $adopcion) {
 
-        if ($adopcion["id_grado"] != 17 && $adopcion["cod_area"] == "") {
-            $grado_lookup = $adopcion["id_grado"];
+        // trim(): MySQL compara cod_area ignorando espacios finales (así lo hace el JOIN de
+        // php/dashboard_adopciones_stats.php), pero un array de PHP compara la clave exacta.
+        // Una fila real tenía cod_area="6521      " (con espacios) y aquí no matcheaba contra
+        // el "6521" limpio de areas_objetivas, cayendo mal al grado propio del libro en vez del
+        // grado del área objetiva — eso causaba una diferencia de $507.000 frente al dashboard.
+        $cod_area = trim($adopcion["cod_area"]);
+        if ($cod_area !== "" && isset($ao_map_g[$colegio['id']][$cod_area])) {
+            $grado_lookup = $ao_map_g[$colegio['id']][$cod_area];
         } else {
-            $grado_lookup = $ao_map_g[$colegio['id']][$adopcion["idlibro"]][$adopcion["cod_area"]] ?? 0;
+            $grado_lookup = $adopcion["id_grado"];
         }
 
         $alumnos_gp = $gp_map_g[$colegio["id"]][$grado_lookup] ?? 0;
 
         if ($adopcion["pre_definido"] == 1) {
-            $alumnos_tasa = floor($alumnos_gp * $adopcion["tasa_compra"]);
+            // round() antes de floor(): tasa_compra viene de un DECIMAL(10,2), pero PDO lo entrega
+            // como string y PHP lo castea a float binario (ej. 90 * 0.70 da 62.999999999999993 en
+            // vez de 63), lo que hacía que floor() truncara mal y descontara unidades enteras de
+            // alumnos_tasa frente al mismo cálculo hecho en SQL (donde la aritmética con DECIMAL es
+            // exacta), como en php/dashboard_presupuestos_stats.php.
+            $alumnos_tasa = floor(round($alumnos_gp * $adopcion["tasa_compra"], 6));
             $precio_neto  = $adopcion["precio"] - ($adopcion["precio"] * $adopcion["descuento"]);
             $valor_presup[$colegio["id"]][] = $precio_neto * $alumnos_tasa;
             $cant_presup[$colegio["id"]][]  = $alumnos_tasa;
@@ -292,10 +340,10 @@ foreach ($colegios as $colegio) {
 
         if ($adopcion["definido"] != 0) {
             if ($adopcion["tasa_compra_d"] == 0.00) {
-                $alumnos_tasa_d = floor($alumnos_gp * $adopcion["tasa_compra"]);
+                $alumnos_tasa_d = floor(round($alumnos_gp * $adopcion["tasa_compra"], 6));
                 $precio_neto_d  = $adopcion["precio"] - ($adopcion["precio"] * $adopcion["descuento"]);
             } else {
-                $alumnos_tasa_d = floor($alumnos_gp * $adopcion["tasa_compra_d"]);
+                $alumnos_tasa_d = floor(round($alumnos_gp * $adopcion["tasa_compra_d"], 6));
                 $precio_neto_d  = $adopcion["precio"] - ($adopcion["precio"] * $adopcion["descuento_d"]);
             }
 
@@ -321,7 +369,7 @@ foreach ($colegios as $colegio) {
     $conse = $colegio["year"]."-".$colegio["conse"];
     $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$conse");
     if ($colegio["tipouser"] != 6) {
-        list($empresa, $n_zona) = explode("/", $colegio["zona"]);
+        list($empresa, $n_zona) = array_pad(explode("/", $colegio["zona"] ?? ""), 2, "");
         $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$empresa");
         $objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$n_zona");
         $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$colegio[promotor]");

@@ -213,7 +213,7 @@ if ($es_admin) {
 								<div>
 									<p class="stat-label-hero">Venta potencial estimada</p>
 									<h2 id="dp-venta-potencial">—</h2>
-									<p class="stat-sub-hero" id="dp-venta-potencial-sub">Ítems en definición, excluye probabilidad "Perdida"</p>
+									<p class="stat-sub-hero" id="dp-venta-potencial-sub">Ítems en definición</p>
 								</div>
 							</div>
 						</div>
@@ -1002,7 +1002,7 @@ if ($es_admin) {
 					var s = resp.stats;
 
 					$('#dp-venta-potencial').text(fmtCOP(s.venta_potencial));
-					$('#dp-venta-potencial-sub').text('Período ' + resp.periodo + ' · ítems en definición, excluye probabilidad "Perdida"');
+					$('#dp-venta-potencial-sub').text('Período ' + resp.periodo + ' · ítems en definición');
 					$('#dp-total').text(s.total_items.toLocaleString('es-CO'));
 					$('#dp-definidos').text(s.pct_definidos + '%');
 					$('#dp-definidos-sub').text(s.definidos.toLocaleString('es-CO') + ' de ' + s.total_items.toLocaleString('es-CO') + ' ítems');
