@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 	/*ini_set("display_errors", 1);
 
 	ini_set("display_startup_errors", 1);
@@ -41,8 +41,8 @@
 	$req_cant_profes->execute([$_GET['colegio']]);
 	$cantidad_profesores = $req_cant_profes->fetch()['total'];
 
-	// Si ya se guardÃ³ una cantidad manual para este colegio+periodo, esa reemplaza
-	// el conteo automÃ¡tico de trabajadores_colegios.
+	// Si ya se guardó una cantidad manual para este colegio+periodo, esa reemplaza
+	// el conteo automático de trabajadores_colegios.
 	try { $bdd->exec("CREATE TABLE IF NOT EXISTS ia_profesores_colegio (id INT AUTO_INCREMENT PRIMARY KEY, id_colegio INT NOT NULL, id_periodo INT NOT NULL, cantidad_profesores INT NOT NULL, UNIQUE KEY uniq_colegio_periodo (id_colegio, id_periodo))"); } catch (Exception $e) {}
 	$req_profes_manual = $bdd->prepare("SELECT cantidad_profesores FROM ia_profesores_colegio WHERE id_colegio=? AND id_periodo=?");
 	$req_profes_manual->execute([$_GET['colegio'], $_GET['periodo']]);
@@ -64,10 +64,10 @@
 ?>
 
 <style>
-  /* â”€â”€ Contenedor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ── Contenedor ───────────────────────────────────────────── */
   .adop-wrap { padding: 24px; }
 
-  /* â”€â”€ Encabezado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ── Encabezado ───────────────────────────────────────────── */
   .adop-header {
     display: flex;
     align-items: flex-start;
@@ -86,7 +86,7 @@
   .adop-subtitle { font-size: 0.82rem; color: #718096; margin: 0; }
   .adop-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-  /* â”€â”€ Tarjetas de resumen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ── Tarjetas de resumen ──────────────────────────────────── */
   .adop-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -94,7 +94,7 @@
     margin-bottom: 22px;
   }
 
-  /* â”€â”€ SecciÃ³n de tarjetas de IA (separada visualmente) â”€â”€â”€â”€â”€â”€ */
+  /* ── Sección de tarjetas de IA (separada visualmente) ────── */
   .adop-ia-section {
     background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%);
     border: 1.5px solid #ddd6fe;
@@ -161,7 +161,7 @@
   .adop-card-input:focus   { outline: none; border-color: #4f46e5; background: #fff; box-shadow: 0 0 0 2px rgba(79,70,229,.15); }
   .adop-card-pct   { font-size: 0.75rem; color: #64748b; }
 
-  /* â”€â”€ Contenedor con scroll propio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ── Contenedor con scroll propio ────────────────────────── */
   .adop-table-wrap {
     border-radius: 10px;
     overflow: auto;
@@ -175,7 +175,7 @@
   .adop-table-wrap::-webkit-scrollbar-thumb  { background: #4361ee; border-radius: 10px; border: 2px solid #e2e8f0; }
   .adop-table-wrap::-webkit-scrollbar-thumb:hover { background: #2a3fc7; }
 
-  /* â”€â”€ Tabla â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ── Tabla ────────────────────────────────────────────────── */
   #dataTables-adop {
     width: 100%;
     font-size: 0.81rem;
@@ -203,7 +203,7 @@
   #dataTables-adop thead th.sorting_asc,
   #dataTables-adop thead th.sorting_desc { background-image: none !important; padding-right: 8px !important; }
 
-  /* Precio venta padre mÃ¡s ancho */
+  /* Precio venta padre más ancho */
   input.precio-padre-inp {
     width: 90px !important;
     border: 1px solid #cbd5e0;
@@ -255,7 +255,7 @@
     background: #fff;
     box-shadow: 0 0 0 2px rgba(99,102,241,.2);
   }
-  /* checkbox adopciÃ³n */
+  /* checkbox adopción */
   #dataTables-adop input[type="checkbox"] {
     width: 16px;
     height: 16px;
@@ -276,7 +276,7 @@
   }
   #dataTables-adop tfoot td:first-child { text-align: left; padding-left: 14px; }
 
-  /* â”€â”€ SecciÃ³n inferior â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ── Sección inferior ─────────────────────────────────────── */
   .adop-footer-form {
     margin-top: 22px;
     background: #fff;
@@ -315,7 +315,7 @@
   .adop-footer-form input[type="file"] { display: none; }
   .adop-file-name { font-size: 0.79rem; color: #6366f1; margin-top: 5px; font-weight: 600; word-break: break-all; }
 
-  /* Controles del footer con borde mÃ¡s visible */
+  /* Controles del footer con borde más visible */
   .adop-footer-form select.form-control,
   .adop-footer-form textarea.form-control {
     border: 1.5px solid #cbd5e0;
@@ -325,7 +325,7 @@
     background: #f8fafc;
     transition: border-color .15s, box-shadow .15s;
     resize: vertical;       /* textarea redimensionable verticalmente */
-    min-height: 80px;       /* altura mÃ­nima para ver observaciones */
+    min-height: 80px;       /* altura mínima para ver observaciones */
   }
   .adop-footer-form select.form-control {
     min-height: unset;
@@ -361,7 +361,7 @@
     border-top: 1px solid #e2e8f0;
   }
 
-  /* â”€â”€ Filtro de libros (sticky) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ── Filtro de libros (sticky) ───────────────────────────── */
   .adop-filter-bar {
     position: sticky;
     top: 0;
@@ -441,7 +441,7 @@
     <div class="adop-card">
       <div class="adop-card-icon blue"><i class="bi bi-book"></i></div>
       <div>
-        <p class="adop-card-label">Total de tÃ­tulos adoptados</p>
+        <p class="adop-card-label">Total de títulos adoptados</p>
         <p class="adop-card-val"><?= $total_adoptados ?></p>
       </div>
     </div>
@@ -449,21 +449,21 @@
       <div class="adop-card-icon green"><i class="bi bi-check2-circle"></i></div>
       <div>
         <p class="adop-card-label">Venta potencial</p>
-        <p class="adop-card-val" id="adop-card-vp">â€”</p>
+        <p class="adop-card-val" id="adop-card-vp">—</p>
       </div>
     </div>
     <div class="adop-card">
       <div class="adop-card-icon orange"><i class="bi bi-graph-up"></i></div>
       <div>
         <p class="adop-card-label">Venta real</p>
-        <p class="adop-card-val" id="adop-card-vr">â€”</p>
+        <p class="adop-card-val" id="adop-card-vr">—</p>
       </div>
     </div>
     <div class="adop-card" id="adop-card-cum-wrap">
       <div class="adop-card-icon purple" id="adop-card-cum-icon"><i class="bi bi-percent"></i></div>
       <div>
         <p class="adop-card-label">% Cumplimiento</p>
-        <p class="adop-card-val" id="adop-card-cum">â€”</p>
+        <p class="adop-card-val" id="adop-card-cum">—</p>
       </div>
     </div>
   </div>
@@ -479,7 +479,7 @@
       <div class="adop-card">
         <div class="adop-card-icon teal"><i class="bi bi-cpu"></i></div>
         <div>
-          <p class="adop-card-label">Costo IA (por interacciÃ³n)</p>
+          <p class="adop-card-label">Costo IA (por interacción)</p>
           <p class="adop-card-val">$<?= number_format($costo_ia_cop, 2, ",", ".") ?> COP</p>
         </div>
       </div>
@@ -549,11 +549,11 @@
           error: function(){ alert("No se pudo guardar la cantidad de profesores."); }
         });
 
-        // Refleja el cambio en la pestaÃ±a de Presupuesto si ya estÃ¡ cargada en la pÃ¡gina.
+        // Refleja el cambio en la pestaña de Presupuesto si ya está cargada en la página.
         $(document).trigger('ia:cantidadProfesoresActualizada', [cantidad]);
       });
 
-      // Si el valor se editÃ³ desde la pestaÃ±a de Presupuesto, se refleja aquÃ­ sin volver a guardar.
+      // Si el valor se editó desde la pestaña de Presupuesto, se refleja aquí sin volver a guardar.
       $(document).on('ia:cantidadProfesoresActualizada', function(e, cantidad){
         var input = $('#cantidad_profesores_ia_adop');
         if (!input.length || input.val() == cantidad) return;
@@ -578,7 +578,7 @@
     </div>
     <div class="adop-filter-right">
       <a href="#" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal_adopciones">
-        <i class="bi bi-plus-circle"></i> AÃ±adir libros
+        <i class="bi bi-plus-circle"></i> Añadir libros
       </a>
       <?php if ($show_guardar): ?>
       <button type="submit" form="form_definicion" class="btn btn-success btn-sm miBoton">
@@ -623,10 +623,10 @@
 
         <div class="modal-header">
           <div>
-            <h5 class="modal-title">AÃ±adir libros</h5>
-            <p class="modal-subtitle">Completa la informaciÃ³n del libro que quieres aÃ±adir a las adopciones</p>
+            <h5 class="modal-title">Añadir libros</h5>
+            <p class="modal-subtitle">Completa la información del libro que quieres añadir a las adopciones</p>
           </div>
-          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">Ã—</button>
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
         </div>
 
         <form action="php/areas_cumplimiento.php" method="POST" class="miFormulario">
@@ -666,7 +666,7 @@
                 </div>
                 <div class="col-sm col-6 g_otrod d-none">
                   <div class="form-group">
-                    <label for="grado_otrod" id="l_grado_otrod">Grado especÃ­fico <span class="lb-req">*</span></label>
+                    <label for="grado_otrod" id="l_grado_otrod">Grado específico <span class="lb-req">*</span></label>
                     <select name="grado_otrod" id="grado_otrod" class="form-control">
                       <option value="">Seleccionar</option>
                       <?php
@@ -724,7 +724,7 @@
                 </div>
                 <div class="col-sm col-6 g_otrod<?= $i ?> d-none">
                   <div class="form-group">
-                    <label id="l_grado_otrod<?= $i ?>">Grado especÃ­fico <span class="lb-req">*</span></label>
+                    <label id="l_grado_otrod<?= $i ?>">Grado específico <span class="lb-req">*</span></label>
                     <select name="grado_otrod" id="grado_otrod<?= $i ?>" class="form-control">
                       <option value="">Seleccionar</option>
                       <?php
@@ -763,7 +763,7 @@
             <?php if ($_SESSION["zona"] == $_GET["cod_zona"] || $_SESSION["tipo"] == 1): ?>
               <?php if ($_GET["f_cierre"] > date("Y-m-d")): ?>
                 <button type="button" class="lb-add-btn" id="agregar_aod">
-                  <i class="bi bi-plus-circle"></i> AÃ±adir otro libro
+                  <i class="bi bi-plus-circle"></i> Añadir otro libro
                 </button>
                 <button type="submit" class="btn btn-primary miBoton">
                   <i class="bi bi-floppy"></i> Guardar libros
@@ -806,7 +806,7 @@
                 <table id='dataTables-adop'>
                 <thead>
                   <tr>
-                    <th>TÃ­tulo</th>
+                    <th>Título</th>
                     <th>Materia</th>
                     <th>Grado</th>
                     <th>Alumnos</th>
@@ -816,7 +816,7 @@
                     <th>Precio neto</th>
                     <th>Venta potencial</th>
                     <th>Precio venta padre</th>
-                    <th>AdopciÃ³n <input type='checkbox' id='seleccionar_pre'></th>
+                    <th>Adopción <input type='checkbox' id='seleccionar_pre'></th>
                     <th>Unidades venta real</th>
                     <th>Venta real</th>
                   </tr>
@@ -1696,7 +1696,7 @@
                           $recursos = $req_rec->fetch();
                           $count    = $req_rec->rowCount();
 
-                          // â”€â”€ SecciÃ³n inferior estilizada â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                          // ── Sección inferior estilizada ──────────────────────────
                           echo '<div class="adop-footer-form">';
                           echo '<div class="row g-3 align-items-start">';
 
@@ -1718,7 +1718,7 @@
                           }
                           echo '</select></div>';
 
-                          // Documento de adopciÃ³n (solo para tipos 1, 3, 10)
+                          // Documento de adopción (solo para tipos 1, 3, 10)
                           if (in_array($_SESSION['tipo'], [1, 3, 10])) {
                               $arch_existente = ($count > 0 && !empty($recursos['archivo'])) ? $recursos['archivo'] : '';
                               $periodo_activo = $_GET["f_cierre"] > date("Y-m-d");
@@ -1727,7 +1727,7 @@
                                   // Periodo activo: upload interactivo
                                   $arch_label_class = $arch_existente ? ' has-file' : '';
                                   $arch_icon_text   = $arch_existente
-                                      ? '<i class="bi bi-check-circle-fill" style="font-size:1.2rem;"></i><span id="adop-file-text">Documento cargado â€” clic para reemplazar</span>'
+                                      ? '<i class="bi bi-check-circle-fill" style="font-size:1.2rem;"></i><span id="adop-file-text">Documento cargado — clic para reemplazar</span>'
                                       : '<i class="bi bi-cloud-upload" style="font-size:1.2rem;"></i><span id="adop-file-text">Haz clic para seleccionar un archivo</span>';
                                   $arch_name_html = $arch_existente
                                       ? '<p class="adop-file-name" id="adop-file-name">'.htmlspecialchars(basename($arch_existente)).'</p>'
@@ -1736,7 +1736,7 @@
 
                                   echo '<div class="col-sm-4">
                                           <span class="form-label-sm">
-                                            <i class="bi bi-paperclip"></i> Acuerdo de adopciÃ³n'.$arch_req_badge.'
+                                            <i class="bi bi-paperclip"></i> Acuerdo de adopción'.$arch_req_badge.'
                                           </span>
                                           <label class="adop-file-label'.$arch_label_class.'" id="adop-file-label" for="archivo_adopcion">
                                             '.$arch_icon_text.'
@@ -1750,7 +1750,7 @@
                                   // Periodo cerrado: solo lectura
                                   echo '<div class="col-sm-4">
                                           <span class="form-label-sm">
-                                            <i class="bi bi-paperclip"></i> Acuerdo de adopciÃ³n
+                                            <i class="bi bi-paperclip"></i> Acuerdo de adopción
                                           </span>';
                                   if ($arch_existente) {
                                       echo '<p class="adop-file-name"><i class="bi bi-file-earmark-check" style="color:#16a34a;margin-right:4px;"></i>'.htmlspecialchars(basename($arch_existente)).'</p>';
@@ -1771,7 +1771,7 @@
                                     <i class="bi bi-chat-left-text"></i> Observaciones
                                   </span>
                                   <textarea class="form-control" name="observaciones" rows="4"
-                                    placeholder="Escribe las observaciones sobre la adopciÃ³n...">'.$obs_val.'</textarea>
+                                    placeholder="Escribe las observaciones sobre la adopción...">'.$obs_val.'</textarea>
                                 </div>';
 
                           echo '</div>';
@@ -1794,9 +1794,9 @@
         $.fn.dataTable.ext.errMode = 'none';
         $('#dataTables-adop').dataTable({
           "language": {
-            "lengthMenu": "Display _MENU_ registros por pÃ¡gina",
+            "lengthMenu": "Display _MENU_ registros por página",
             "zeroRecords": "Nada encontrado, lo siento",
-            "emptyTable": "No hay informaciÃ³n para mostrar",
+            "emptyTable": "No hay información para mostrar",
             "info": "",
             "infoEmpty": "",
             "infoFiltered": "",
@@ -1805,7 +1805,7 @@
               first:"Primero",
               previous:"Anterior",
                 next:"Siguiente",
-                last:"Ãšltimo"
+                last:"Último"
             }
           },
           "paging": false,
@@ -2039,7 +2039,7 @@
     })
 
     function setCumCard(pct) {
-        var text = isNaN(pct) ? 'â€”' : pct.toFixed(1) + '%';
+        var text = isNaN(pct) ? '—' : pct.toFixed(1) + '%';
         $('#cumplimiento').text(text);
         $('#adop-card-cum').text(text);
         var $card = $('#adop-card-cum-wrap');
@@ -2086,12 +2086,12 @@
 
    	var cumplimiento=(total_uni_vr_d / total_vp_d) * 100;
 
-    // â”€â”€ Actualizar tarjetas de resumen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    $('#adop-card-vp').text($('#total_vp_d').text() || 'â€”');
-    $('#adop-card-vr').text($('#total_vr').text()   || 'â€”');
+    // ── Actualizar tarjetas de resumen ────────────────────────
+    $('#adop-card-vp').text($('#total_vp_d').text() || '—');
+    $('#adop-card-vr').text($('#total_vr').text()   || '—');
     setCumCard(cumplimiento);
 
-    // â”€â”€ Filtro todos / adoptados â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Filtro todos / adoptados ──────────────────────────────
     var $filas = $('#dataTables-adop tbody tr');
 
     $('.adop-filter-btn').on('click', function(){
@@ -2105,7 +2105,7 @@
       }
     });
 
-    // â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Toast ────────────────────────────────────────────────────
     function adToast(msg, tipo) {
         var $t = $('#adop-toast');
         var icon = tipo === 'error' ? 'bi bi-x-circle-fill' : 'bi bi-check-circle-fill';
@@ -2116,7 +2116,7 @@
         setTimeout(function(){ $t.removeClass('show'); }, 3500);
     }
 
-    // â”€â”€ Validar duplicados al guardar libros en adopciones â”€â”€â”€â”€â”€â”€â”€
+    // ── Validar duplicados al guardar libros en adopciones ───────
     $('#modal_adopciones form.miFormulario').on('submit', function(e) {
         var ids = [];
         var errMsg = '';
@@ -2142,7 +2142,7 @@
         }
     });
 
-    // â”€â”€ Campo de archivo: mostrar nombre seleccionado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Campo de archivo: mostrar nombre seleccionado ────────────
     $('#archivo_adopcion').on('change', function() {
         var $label = $('#adop-file-label');
         var $name  = $('#adop-file-name');
@@ -2158,10 +2158,10 @@
         }
     });
 
-    // â”€â”€ Validar archivo antes de guardar adopciones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Validar archivo antes de guardar adopciones ──────────────
     var requiereAcuerdo = <?= ($gp_periodo["periodo"] >= 2027) ? 'true' : 'false'; ?>;
 
-    // â”€â”€ Validar archivo antes de guardar adopciones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Validar archivo antes de guardar adopciones ──────────────
     $('#form_definicion').on('submit', function(e) {
 
         if (!requiereAcuerdo) {
@@ -2173,7 +2173,7 @@
 
         if (!adArchivoGuardado && !tieneNuevo) {
             e.preventDefault();
-            adToast('Debes adjuntar el acuerdo de adopciÃ³n antes de guardar.', 'error');
+            adToast('Debes adjuntar el acuerdo de adopción antes de guardar.', 'error');
             $('#adop-file-label').css({'border-color':'#dc2626','background':'#fef2f2'});
             setTimeout(function(){
                 $('#adop-file-label').css({'border-color':'','background':''});
