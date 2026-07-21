@@ -118,6 +118,9 @@ if ($es_admin) {
 			.chart-card .chart-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 			.chart-card .chart-card-head h5{font-size:15px;font-weight:600;color:#2d3748;margin:0}
 			.chart-card .chart-card-head span{font-size:12px;color:#94a3b8}
+			.chart-card-head-actions{display:flex;align-items:center;gap:10px}
+			.btn-exportar-mini{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#e9f9f0;color:#1b9e5a;font-size:14px;transition:background .15s,color .15s;flex-shrink:0}
+			.btn-exportar-mini:hover{background:#1b9e5a;color:#fff;text-decoration:none}
 			.dash-cole-link{cursor:pointer}
 			.dash-cole-link:hover{fill:#2a78d6;text-decoration:underline}
 			.badge-efectiva{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:700;padding:4px 10px;border-radius:20px}
@@ -188,18 +191,32 @@ if ($es_admin) {
 					</div>
 
 					<?php if ($es_admin): ?>
-					<!-- ── Presupuesto y adopciones por asesor ── -->
+					<!-- ── Presupuesto, adopciones y venta real por asesor ── -->
 					<div class="row">
 						<div class="col-12">
 							<div class="chart-card">
 								<div class="chart-card-head">
-									<h5><i class="bi bi-bar-chart mr-2"></i>Presupuesto y adopciones por asesor</h5>
-									<span id="da-asesores-sub">Período seleccionado</span>
+									<h5><i class="bi bi-bar-chart mr-2"></i>Presupuesto, adopciones y venta real por asesor</h5>
+									<div class="chart-card-head-actions">
+										<span id="da-asesores-sub">Período seleccionado</span>
+										<a href="#" id="btn-valorizacion-global" class="btn-exportar-mini" title="Descargar valorización global (según usuario y período seleccionados)">
+											<i class="bi bi-file-earmark-excel"></i>
+										</a>
+									</div>
 								</div>
 								<div id="chart-asesores"></div>
 							</div>
 						</div>
 					</div>
+
+					<!-- Descarga silenciosa (sin navegar ni abrir pestaña): el form apunta a un iframe
+					     oculto, así el navegador solo procesa la descarga del Excel. -->
+					<iframe name="valoriza-global-frame" style="display:none;"></iframe>
+					<form id="form-valoriza-global" action="php/valoriza_global_excel.php" method="POST" target="valoriza-global-frame" style="display:none;">
+						<input type="hidden" name="periodo" id="vg-periodo">
+						<input type="hidden" name="promotor" id="vg-promotor">
+						<input type="hidden" name="rol" id="vg-rol">
+					</form>
 					<?php endif; ?>
 
 					<?php if (!$solo_visitas_dash): ?>
@@ -251,7 +268,7 @@ if ($es_admin) {
 						<div class="col-xl-8 col-lg-7">
 							<div class="chart-card">
 								<div class="chart-card-head">
-									<h5><i class="bi bi-bar-chart mr-2"></i>Top colegios por venta potencial</h5>
+									<h5><i class="bi bi-bar-chart mr-2"></i>Top colegios por venta potencial (presupuesto)</h5>
 									<span id="dp-ranking-sub">Período seleccionado</span>
 								</div>
 								<div id="chart-ranking-presup"></div>
@@ -264,7 +281,7 @@ if ($es_admin) {
 						<div class="col-12">
 							<div class="chart-card">
 								<div class="chart-card-head">
-									<h5><i class="bi bi-bar-chart mr-2"></i>Venta potencial por editorial</h5>
+									<h5><i class="bi bi-bar-chart mr-2"></i>Venta potencial por editorial (presupuesto)</h5>
 									<span id="dp-editorial-sub">Período seleccionado</span>
 								</div>
 								<div id="chart-editorial-presup"></div>
@@ -324,7 +341,12 @@ if ($es_admin) {
 							<div class="chart-card">
 								<div class="chart-card-head">
 									<h5><i class="bi bi-bar-chart mr-2"></i>Colegios con más descuento</h5>
-									<span id="da-descuento-sub">Período seleccionado</span>
+									<div class="chart-card-head-actions">
+										<span id="da-descuento-sub">Período seleccionado</span>
+										<a href="#" id="btn-exportar-descuento" class="btn-exportar-mini" title="Exportar a Excel" target="_blank">
+											<i class="bi bi-file-earmark-excel"></i>
+										</a>
+									</div>
 								</div>
 								<div id="chart-descuento-adop"></div>
 							</div>
@@ -332,7 +354,7 @@ if ($es_admin) {
 						<div class="col-xl-6">
 							<div class="chart-card">
 								<div class="chart-card-head">
-									<h5><i class="bi bi-bar-chart mr-2"></i>Top colegios por venta potencial</h5>
+									<h5><i class="bi bi-bar-chart mr-2"></i>Top colegios por venta potencial (adopciones)</h5>
 									<span id="da-ranking-sub">Período seleccionado</span>
 								</div>
 								<div id="chart-ranking-adop"></div>
@@ -349,6 +371,58 @@ if ($es_admin) {
 									<span id="da-editorial-sub">Período seleccionado</span>
 								</div>
 								<div id="chart-editorial-adop"></div>
+							</div>
+						</div>
+					</div>
+					<?php endif; ?>
+
+					<!-- ── Venta real ── -->
+					<h5 class="dash-section-title"><i class="bi bi-wallet2"></i> Venta real</h5>
+
+					<div class="row">
+						<div class="col-12 col-lg-6">
+							<div class="stat-card-hero">
+								<div class="stat-icon-hero"><i class="bi bi-cash-coin"></i></div>
+								<div>
+									<p class="stat-label-hero">Venta real</p>
+									<h2 id="dvr-total">—</h2>
+									<p class="stat-sub-hero">En el período seleccionado</p>
+								</div>
+							</div>
+						</div>
+						<div class="col-12 col-lg-6">
+							<div class="stat-card-modern">
+								<div class="stat-icon-modern sgreen"><i class="bi bi-building-check"></i></div>
+								<div class="stat-info-modern">
+									<h3 id="dvr-colegios">—</h3>
+									<p class="stat-label">Colegios con venta real</p>
+									<span class="stat-sub">En el período seleccionado</span>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="row">
+						<div class="col-12">
+							<div class="chart-card">
+								<div class="chart-card-head">
+									<h5><i class="bi bi-bar-chart mr-2"></i>Top colegios por venta real</h5>
+									<span id="dvr-ranking-sub">Período seleccionado</span>
+								</div>
+								<div id="chart-ranking-ventareal"></div>
+							</div>
+						</div>
+					</div>
+
+					<?php if ($es_admin): ?>
+					<div class="row">
+						<div class="col-12">
+							<div class="chart-card">
+								<div class="chart-card-head">
+									<h5><i class="bi bi-bar-chart mr-2"></i>Venta real por editorial</h5>
+									<span id="dvr-editorial-sub">Período seleccionado</span>
+								</div>
+								<div id="chart-editorial-ventareal"></div>
 							</div>
 						</div>
 					</div>
@@ -780,6 +854,7 @@ if ($es_admin) {
 			var rankingPresupCodigos = [];
 			var rankingAdopCodigos = [];
 			var rankingDescuentoCodigos = [];
+			var rankingVentaRealCodigos = [];
 
 			function irAColegio(codigo, tab) {
 				if (!codigo) return;
@@ -940,13 +1015,46 @@ if ($es_admin) {
 			});
 			chartEditorialAdop.render();
 			<?php endif; ?>
+
+			var chartRankingVentaReal = new ApexCharts(document.querySelector("#chart-ranking-ventareal"), {
+				series: [{ name: 'Venta real', data: [] }],
+				chart: { type: 'bar', height: 320, toolbar: { show: false } },
+				colors: dashBarColors,
+				plotOptions: { bar: { borderRadius: 6, horizontal: true, barHeight: '55%', distributed: true } },
+				legend: { show: false },
+				dataLabels: { enabled: true, formatter: fmtCOPShort },
+				xaxis: { categories: [], labels: { formatter: fmtCOPShort } },
+				yaxis: { labels: { style: { cssClass: 'dash-cole-link' } } },
+				grid: { strokeDashArray: 4 },
+				tooltip: { y: { formatter: fmtCOP } },
+				noData: { text: 'Sin datos para mostrar' },
+			});
+			chartRankingVentaReal.render();
+			bindColegioLabelClicks('#chart-ranking-ventareal', function () { return rankingVentaRealCodigos; }, 'adopciones');
+
+			<?php if ($es_admin): ?>
+			var chartEditorialVentaReal = new ApexCharts(document.querySelector("#chart-editorial-ventareal"), {
+				series: [{ name: 'Venta real', data: [] }],
+				chart: { type: 'bar', height: 320, toolbar: { show: false } },
+				colors: dashBarColors,
+				plotOptions: { bar: { borderRadius: 6, horizontal: false, columnWidth: '55%', distributed: true } },
+				legend: { show: false },
+				dataLabels: { enabled: true, formatter: fmtCOPShort },
+				xaxis: { categories: [] },
+				yaxis: { labels: { formatter: fmtCOPShort } },
+				grid: { strokeDashArray: 4 },
+				tooltip: { shared: false, intersect: false, y: { formatter: fmtCOP } },
+				noData: { text: 'Sin datos para mostrar' },
+			});
+			chartEditorialVentaReal.render();
+			<?php endif; ?>
 			<?php endif; // !$solo_visitas_dash ?>
 
 			<?php if ($es_admin): ?>
 			var chartAsesores = new ApexCharts(document.querySelector("#chart-asesores"), {
-				series: [{ name: 'Presupuesto potencial', data: [] }, { name: 'Venta potencial adopciones', data: [] }],
+				series: [{ name: 'Presupuesto', data: [] }, { name: 'Adopciones', data: [] }, { name: 'Venta real', data: [] }],
 				chart: { type: 'bar', height: 340, toolbar: { show: false } },
-				colors: [dashBarColors[0], dashBarColors[1]],
+				colors: [dashBarColors[0], dashBarColors[1], dashBarColors[3]],
 				plotOptions: { bar: { borderRadius: 6, horizontal: false, columnWidth: '60%' } },
 				legend: { show: true, position: 'top', fontSize: '12px' },
 				dataLabels: { enabled: false },
@@ -1047,6 +1155,7 @@ if ($es_admin) {
 					rankingDescuentoCodigos = resp.descuentos.codigos || [];
 					chartDescuentoAdop.updateOptions({ xaxis: { categories: resp.descuentos.labels } });
 					chartDescuentoAdop.updateSeries([{ name: 'Descuento promedio', data: resp.descuentos.data }]);
+					$('#btn-exportar-descuento').attr('href', 'php/descuento_adopciones_excel.php?' + $.param(filtros()));
 
 					rankingAdopCodigos = resp.ranking.codigos || [];
 					chartRankingAdop.updateOptions({ xaxis: { categories: resp.ranking.labels } });
@@ -1060,17 +1169,40 @@ if ($es_admin) {
 				});
 			}
 
+			function cargarVentaReal() {
+				return $.getJSON('php/dashboard_ventareal_stats.php', filtros(), function (resp) {
+					if (!resp.success) return;
+					var s = resp.stats;
+
+					$('#dvr-total').text(fmtCOP(s.venta_real_total));
+					$('#dvr-colegios').text(s.colegios_con_venta.toLocaleString('es-CO'));
+					$('#dvr-ranking-sub').text('Período ' + resp.periodo);
+
+					rankingVentaRealCodigos = resp.ranking.codigos || [];
+					chartRankingVentaReal.updateOptions({ xaxis: { categories: resp.ranking.labels } });
+					chartRankingVentaReal.updateSeries([{ name: 'Venta real', data: resp.ranking.data }]);
+
+					<?php if ($es_admin): ?>
+					$('#dvr-editorial-sub').text('Período ' + resp.periodo);
+					chartEditorialVentaReal.updateOptions({ xaxis: { categories: resp.editoriales.labels } });
+					chartEditorialVentaReal.updateSeries([{ name: 'Venta real', data: resp.editoriales.data }]);
+					<?php endif; ?>
+				});
+			}
+
 			<?php if ($es_admin): ?>
 			function cargarAsesores() {
 				return $.getJSON('php/dashboard_asesores_stats.php', filtros(), function (resp) {
 					if (!resp.success) return;
 
 					$('#da-asesores-sub').text('Período ' + resp.periodo);
+					$('#btn-valorizacion-global').attr('href', 'reporte_valoriza_global.php?periodo=' + $('#dash-periodo').val());
 
 					chartAsesores.updateOptions({ xaxis: { categories: resp.asesores.labels } });
 					chartAsesores.updateSeries([
-						{ name: 'Presupuesto potencial', data: resp.asesores.presupuesto },
-						{ name: 'Venta potencial adopciones', data: resp.asesores.adopciones },
+						{ name: 'Presupuesto', data: resp.asesores.presupuesto },
+						{ name: 'Adopciones', data: resp.asesores.adopciones },
+						{ name: 'Venta real', data: resp.asesores.venta_real },
 					]);
 				});
 			}
@@ -1081,13 +1213,27 @@ if ($es_admin) {
 				<?php if ($solo_visitas_dash): ?>
 				$.when(cargarVisitas()).always(ocultarCargando);
 				<?php else: ?>
-				$.when(cargarVisitas(), cargarPresupuestos(), cargarAdopciones()<?php if ($es_admin): ?>, cargarAsesores()<?php endif; ?>).always(ocultarCargando);
+				$.when(cargarVisitas(), cargarPresupuestos(), cargarAdopciones(), cargarVentaReal()<?php if ($es_admin): ?>, cargarAsesores()<?php endif; ?>).always(ocultarCargando);
 				<?php endif; ?>
 			}
 
 			cargarPanel();
 
 			$('#dash-periodo, #dash-persona').on('change', cargarPanel);
+
+			<?php if ($es_admin): ?>
+			$('#btn-valorizacion-global').on('click', function (e) {
+				e.preventDefault();
+				// promotor: el usuario específico seleccionado en el filtro del dashboard, o
+				// "0" (Todos) cuando no hay uno puntual elegido. rol: el grupo seleccionado
+				// (Eureka/Distribuidores/Otros) cuando no se eligió una persona puntual — sin
+				// esto, el reporte ignoraba el filtro de rol y traía todos los grupos.
+				$('#vg-periodo').val($('#dash-periodo').val());
+				$('#vg-promotor').val($('#dash-persona').val() || '0');
+				$('#vg-rol').val($('#dash-rol').val() || '');
+				$('#form-valoriza-global').trigger('submit');
+			});
+			<?php endif; ?>
 		});
 		</script>
 		<?php endif; ?>

@@ -1,4 +1,7 @@
-<?php require_once("php/aut.php"); ?>
+<?php
+require_once("php/aut.php");
+$periodo_preseleccionado = intval($_GET['periodo'] ?? 0);
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -57,8 +60,10 @@
                   <?php
                     $sql = "SELECT id, periodo FROM periodos ORDER BY id DESC";
                     $req = $bdd->prepare($sql); $req->execute();
-                    foreach ($req->fetchAll() as $p)
-                      echo '<option value="'.$p['id'].'">'.$p['periodo'].'</option>';
+                    foreach ($req->fetchAll() as $p) {
+                      $sel = ($periodo_preseleccionado > 0 && $p['id'] == $periodo_preseleccionado) ? ' selected' : '';
+                      echo '<option value="'.$p['id'].'"'.$sel.'>'.$p['periodo'].'</option>';
+                    }
                   ?>
                 </select>
               </div>

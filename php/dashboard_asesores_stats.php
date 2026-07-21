@@ -84,6 +84,11 @@ $ventaAdopcionExpr = "(CASE WHEN p.tasa_compra_d = 0
     THEN (p.precio - p.precio * p.descuento) * FLOOR(COALESCE(gp.alumnos, 0) * p.tasa_compra)
     ELSE (p.precio - p.precio * p.descuento_d) * FLOOR(COALESCE(gp.alumnos, 0) * p.tasa_compra_d) END)";
 
+// Mismo criterio que usa php/valoriza_excel.php ("valorización libro a libro") para que la
+// venta real cuente igual en dashboard y reporte: excluye probabilidad "Perdida" (id=3) y
+// las líneas sin ninguna tasa de compra asignada (ni propia ni de distribuidor).
+$condicionesNegocio = " AND p.probabilidad != 3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00)";
+
 // Se exige el JOIN a colegios en ambas consultas porque hay presupuestos "huérfanos" que
 // referencian id_colegio de colegios ya eliminados; sin este join se seguían sumando aunque
 // no pertenezcan a ningún colegio visible, mientras que php/valoriza_global_excel.php los
@@ -117,21 +122,77 @@ $stmt = $bdd->prepare("SELECT COALESCE(owner.id, 0) as id_usuario, COALESCE(UPPE
 $stmt->execute([$periodo]);
 $adopcionesPorAsesor = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// ── Combina ambos grupos por asesor (no es un JOIN porque un asesor puede tener
+// ── Venta real por asesor ──
+// Mismo criterio que php/valoriza_global_excel.php: por colegio, si recursos.venta_real
+// está capturado (>0) ese valor manual reemplaza por completo al calculado (precio neto de
+// adopción * unidades de venta real); si no, se usa el calculado. La decisión es por
+// colegio (no se pueden sumar ambas fuentes), así que primero se arma el total por colegio
+// y luego se agrupa por el dueño de zona.
+// JOIN presupuestos en la consulta de recursos: solo para poder aplicar el mismo
+// $userFilter (basado en p.id_usuario/owner.id) que las otras dos métricas; como puede
+// haber varias líneas de presupuesto por colegio, se colapsa con MAX(r.venta_real) para no
+// duplicar el valor manual (una sola fila por colegio en recursos).
+$stmt = $bdd->prepare("SELECT p.id_colegio, COALESCE(owner.id, 0) as id_usuario, COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), 'SIN ASESOR ASIGNADO') as asesor,
+        SUM(CASE WHEN p.tasa_compra_d = 0
+            THEN (p.precio - p.precio * p.descuento) * p.uni_vr
+            ELSE (p.precio - p.precio * p.descuento_d) * p.uni_vr END) as venta_calculada
+    FROM presupuestos p
+    JOIN colegios c ON p.id_colegio = c.id
+    $ownerJoin
+    WHERE p.id_periodo = ? AND p.definido != 0" . $condicionesNegocio . $userFilter . "
+    GROUP BY p.id_colegio, COALESCE(owner.id, 0), asesor");
+$stmt->execute([$periodo]);
+$ventaCalculadaPorColegio = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$stmt = $bdd->prepare("SELECT r.id_colegio, COALESCE(owner.id, 0) as id_usuario, COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), 'SIN ASESOR ASIGNADO') as asesor, MAX(r.venta_real) as venta_real
+    FROM recursos r
+    JOIN colegios c ON r.id_colegio = c.id
+    JOIN presupuestos p ON p.id_colegio = c.id AND p.id_periodo = r.id_periodo
+    $ownerJoin
+    WHERE r.id_periodo = ? AND r.venta_real > 0" . $userFilter . "
+    GROUP BY r.id_colegio, COALESCE(owner.id, 0), asesor");
+$stmt->execute([$periodo]);
+$ventaManualPorColegio = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$ventaRealColegio = [];
+foreach ($ventaCalculadaPorColegio as $row) {
+    $ventaRealColegio[$row['id_colegio']] = ['id_usuario' => $row['id_usuario'], 'asesor' => $row['asesor'], 'total' => floatval($row['venta_calculada'])];
+}
+foreach ($ventaManualPorColegio as $row) {
+    // El manual reemplaza al calculado para ese colegio, sin importar si ya había uno.
+    $ventaRealColegio[$row['id_colegio']] = ['id_usuario' => $row['id_usuario'], 'asesor' => $row['asesor'], 'total' => floatval($row['venta_real'])];
+}
+
+$ventaRealPorAsesor = [];
+foreach ($ventaRealColegio as $fila) {
+    if (!isset($ventaRealPorAsesor[$fila['id_usuario']])) {
+        $ventaRealPorAsesor[$fila['id_usuario']] = ['asesor' => $fila['asesor'], 'total' => 0.0];
+    }
+    $ventaRealPorAsesor[$fila['id_usuario']]['total'] += $fila['total'];
+}
+
+// ── Combina los tres grupos por asesor (no es un JOIN porque un asesor puede tener
 // presupuesto sin adopciones todavía, o viceversa) ──
 $porAsesor = [];
 foreach ($presupuestoPorAsesor as $row) {
-    $porAsesor[$row['id_usuario']] = ['asesor' => $row['asesor'], 'presupuesto' => floatval($row['total']), 'adopciones' => 0.0];
+    $porAsesor[$row['id_usuario']] = ['asesor' => $row['asesor'], 'presupuesto' => floatval($row['total']), 'adopciones' => 0.0, 'venta_real' => 0.0];
 }
 foreach ($adopcionesPorAsesor as $row) {
     if (!isset($porAsesor[$row['id_usuario']])) {
-        $porAsesor[$row['id_usuario']] = ['asesor' => $row['asesor'], 'presupuesto' => 0.0, 'adopciones' => 0.0];
+        $porAsesor[$row['id_usuario']] = ['asesor' => $row['asesor'], 'presupuesto' => 0.0, 'adopciones' => 0.0, 'venta_real' => 0.0];
     }
     $porAsesor[$row['id_usuario']]['adopciones'] = floatval($row['total']);
 }
+foreach ($ventaRealPorAsesor as $id_usuario => $row) {
+    if ($row['total'] <= 0) continue;
+    if (!isset($porAsesor[$id_usuario])) {
+        $porAsesor[$id_usuario] = ['asesor' => $row['asesor'], 'presupuesto' => 0.0, 'adopciones' => 0.0, 'venta_real' => 0.0];
+    }
+    $porAsesor[$id_usuario]['venta_real'] = $row['total'];
+}
 
 usort($porAsesor, function ($a, $b) {
-    return ($b['presupuesto'] + $b['adopciones']) <=> ($a['presupuesto'] + $a['adopciones']);
+    return ($b['presupuesto'] + $b['adopciones'] + $b['venta_real']) <=> ($a['presupuesto'] + $a['adopciones'] + $a['venta_real']);
 });
 $porAsesor = array_slice($porAsesor, 0, 8);
 
@@ -142,5 +203,6 @@ echo json_encode([
         'labels' => array_column($porAsesor, 'asesor'),
         'presupuesto' => array_column($porAsesor, 'presupuesto'),
         'adopciones' => array_column($porAsesor, 'adopciones'),
+        'venta_real' => array_column($porAsesor, 'venta_real'),
     ],
 ]);
