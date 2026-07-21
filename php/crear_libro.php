@@ -2,7 +2,8 @@
 require_once("aut.php");
 require_once("../conexion/bdd.php");
 
-if (($_SESSION["tipo"] != 1 && ($_SESSION["id"] ?? null) != 21) || !isset($_POST["libro"])) {
+// Carlos Puentes (id=21) puede ver/editar ubicación de bodega, pero no crear libros.
+if ($_SESSION["tipo"] != 1 || !isset($_POST["libro"])) {
     header("Location: ../libros.php");
     exit;
 }

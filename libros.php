@@ -8,6 +8,12 @@ if (($_SESSION["autentificado"] ?? '') === "SI" && ($_SESSION["tipo"] ?? null) !
 }
 
 $puede_gestionar = ($_SESSION["tipo"] == 1 || $_SESSION["id"] == 21);
+// Carlos Puentes (id=21) solo puede consultar y actualizar la ubicación en bodega de un
+// libro: no puede crear, eliminar, ni cambiar isbn/título/materia/grado/precio/presupuesto.
+$puede_crear_eliminar = ($_SESSION["tipo"] == 1);
+$es_solo_ubicacion = ($_SESSION["id"] == 21 && $_SESSION["tipo"] != 1);
+// Asociar libros a una serie es exclusivo del usuario id=1.
+$puede_asociar = ($_SESSION["id"] == 1);
 
 $total_libros = $bdd->query("SELECT COUNT(*) FROM libros l JOIN materias m ON l.id_materia = m.id JOIN grados g ON l.id_grado = g.id")->fetchColumn();
 $total_activos = $bdd->query("SELECT COUNT(*) FROM libros l JOIN materias m ON l.id_materia = m.id JOIN grados g ON l.id_grado = g.id WHERE l.presupuesto=1")->fetchColumn();
@@ -209,7 +215,7 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
               </ol>
             </nav>
           </div>
-          <?php if ($puede_gestionar): ?>
+          <?php if ($puede_crear_eliminar): ?>
           <div class="col-md-6 col-sm-12 text-md-right">
             <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#ModalCrearLibro">
               <i class="bi bi-plus-circle mr-1"></i> Crear libro
@@ -276,7 +282,7 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
       </div>
 
       <!-- Modal: Crear libro -->
-      <?php if ($puede_gestionar): ?>
+      <?php if ($puede_crear_eliminar): ?>
       <div class="modal fade" id="ModalCrearLibro" tabindex="-1" role="dialog" aria-labelledby="ModalCrearLibroLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
           <div class="modal-content">
@@ -361,33 +367,35 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
                 <div class="ml-icon-badge"><i class="bi bi-pencil-square"></i></div>
                 <div style="flex:1;">
                   <h5 class="ml-title" id="ModalEditarLibroLabel">Editar libro</h5>
-                  <p class="ml-subtitle">Actualiza los datos del título</p>
+                  <p class="ml-subtitle"><?= $es_solo_ubicacion ? 'Solo puedes actualizar la ubicación en bodega' : 'Actualiza los datos del título' ?></p>
                 </div>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
               </div>
 
               <div class="ml-body">
 
+                <?php $solo_ubi_attr = $es_solo_ubicacion ? 'disabled' : ''; ?>
+
                 <div class="ml-row">
                   <div class="ml-field">
                     <label class="ml-label" for="editar_isbn">ISBN<span class="req">*</span></label>
-                    <input type="text" name="isbn" id="editar_isbn" class="ml-input" required>
+                    <input type="text" name="isbn" id="editar_isbn" class="ml-input" <?= $solo_ubi_attr ?> <?= $es_solo_ubicacion ? '' : 'required' ?>>
                   </div>
                   <div class="ml-field" id="campo-editar-precio">
                     <label class="ml-label" for="editar_precio">Precio $</label>
-                    <input type="number" name="precio" id="editar_precio" class="ml-input" step="any">
+                    <input type="number" name="precio" id="editar_precio" class="ml-input" step="any" <?= $solo_ubi_attr ?>>
                   </div>
                 </div>
 
                 <div class="ml-field">
                   <label class="ml-label" for="editar_libro">Título<span class="req">*</span></label>
-                  <input type="text" name="libro" id="editar_libro" class="ml-input" required>
+                  <input type="text" name="libro" id="editar_libro" class="ml-input" <?= $solo_ubi_attr ?> <?= $es_solo_ubicacion ? '' : 'required' ?>>
                 </div>
 
                 <div class="ml-row">
                   <div class="ml-field">
                     <label class="ml-label" for="editar_materia">Materia<span class="req">*</span></label>
-                    <select name="materia" id="editar_materia" class="ml-select" required>
+                    <select name="materia" id="editar_materia" class="ml-select" <?= $solo_ubi_attr ?> <?= $es_solo_ubicacion ? '' : 'required' ?>>
                       <option value="">Seleccione</option>
                       <?php foreach ($materias as $materia): ?>
                         <option value="<?= $materia["id"] ?>"><?= htmlspecialchars($materia["materia"]) ?></option>
@@ -396,7 +404,7 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
                   </div>
                   <div class="ml-field">
                     <label class="ml-label" for="editar_grado">Grado<span class="req">*</span></label>
-                    <select name="grado" id="editar_grado" class="ml-select" required>
+                    <select name="grado" id="editar_grado" class="ml-select" <?= $solo_ubi_attr ?> <?= $es_solo_ubicacion ? '' : 'required' ?>>
                       <option value="">Seleccione</option>
                       <?php foreach ($grados as $grado): ?>
                         <option value="<?= $grado["id"] ?>"><?= htmlspecialchars($grado["grado"]) ?></option>
@@ -407,7 +415,7 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
 
                 <div class="ml-field">
                   <label class="ml-label" for="editar_presupuesto">¿Activo en presupuesto?<span class="req">*</span></label>
-                  <select name="presupuesto" id="editar_presupuesto" class="ml-select" required>
+                  <select name="presupuesto" id="editar_presupuesto" class="ml-select" <?= $solo_ubi_attr ?> <?= $es_solo_ubicacion ? '' : 'required' ?>>
                     <option value="1">Sí</option>
                     <option value="0">No</option>
                   </select>
@@ -450,7 +458,7 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
       <?php endif; ?>
 
       <!-- Modal: Asociar a serie -->
-      <?php if ($puede_gestionar): ?>
+      <?php if ($puede_asociar): ?>
       <div class="modal fade" id="ModalAsociarSerie" tabindex="-1" role="dialog" aria-labelledby="ModalAsociarSerieLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
           <div class="modal-content">
@@ -499,6 +507,7 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
 <script>
   var LUGARES_BODEGA = <?= json_encode($lugares_bodega) ?>;
   var UBICACIONES_BODEGA = <?= json_encode($ubicaciones_bodega) ?>;
+  var SOLO_UBICACION = <?= json_encode($es_solo_ubicacion) ?>;
 
 $(document).ready(function () {
   $.fn.dataTable.ext.errMode = 'none';
@@ -660,13 +669,19 @@ $(document).ready(function () {
       posicion:     $('#editar_posicion').val() || '',
     };
 
-    $.when(
-      $.post('php/modificar_libro.php', payload, null, 'json'),
-      $.post('php/guardar_ubicacion_libro.php', payloadUbicacion, null, 'json')
-    ).done(function (r1, r2) {
-      var resp1 = r1[0], resp2 = r2[0];
-      var ok = resp1.success && resp2.success;
-      var msg = !resp1.success ? resp1.message : (!resp2.success ? resp2.message : resp1.message);
+    // Carlos Puentes (SOLO_UBICACION) solo puede tocar la ubicación en bodega:
+    // no se llama a modificar_libro.php para no intentar cambiar isbn/título/etc.
+    var llamadas = [$.post('php/guardar_ubicacion_libro.php', payloadUbicacion, null, 'json')];
+    if (!SOLO_UBICACION) {
+      llamadas.unshift($.post('php/modificar_libro.php', payload, null, 'json'));
+    }
+
+    $.when.apply($, llamadas).done(function () {
+      var respuestas = llamadas.length === 1
+        ? [arguments[0]]
+        : Array.prototype.slice.call(arguments).map(function (a) { return a[0]; });
+      var ok = respuestas.every(function (r) { return r.success; });
+      var msg = respuestas.map(function (r) { return r.message; }).filter(Boolean)[0];
       inkToast(msg, ok ? 'ok' : 'error');
       if (ok) {
         $('#ModalEditarLibro').modal('hide');

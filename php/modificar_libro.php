@@ -3,7 +3,9 @@ require_once("aut.php");
 require_once("../conexion/bdd.php");
 header('Content-Type: application/json');
 
-if (($_SESSION["tipo"] != 1 && ($_SESSION["id"] ?? null) != 21) || !isset($_POST["id_libro"])) {
+// Carlos Puentes (id=21) solo puede actualizar la ubicación en bodega (guardar_ubicacion_libro.php),
+// no isbn/título/materia/grado/precio/presupuesto.
+if ($_SESSION["tipo"] != 1 || !isset($_POST["id_libro"])) {
     echo json_encode(['success' => false, 'message' => 'No autorizado.']);
     exit;
 }

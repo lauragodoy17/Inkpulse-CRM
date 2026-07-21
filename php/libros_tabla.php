@@ -10,6 +10,11 @@ if ($_SESSION["tipo"] != 1 && ($_SESSION["id"] ?? null) != 21) {
 }
 
 $puede_gestionar = true;
+// Carlos Puentes (id=21) puede ver y abrir "Editar" (limitado a la ubicación en bodega
+// desde libros.php), pero nunca eliminar libros.
+$puede_eliminar = ($_SESSION["tipo"] == 1);
+// Asociar libros a una serie es exclusivo del usuario id=1.
+$puede_asociar = ($_SESSION["id"] == 1);
 
 $start = intval($_GET['start']);
 $length = intval($_GET['length']);
@@ -126,12 +131,12 @@ foreach ($rows as $libro) {
         $asociacionHtml = '<span class="badge-serie badge-serie-padre" title="' . $num_hijos . ' libro(s) asociados a este como serie"><i class="bi bi-diagram-3"></i> Padre &middot; ' . $num_hijos . '</span>';
     } elseif ($pri_sec > 0 && $libro["nombre_padre"] !== null) {
         $asociacionHtml = '<span class="badge-serie badge-serie-hijo" title="Asociado a: ' . htmlspecialchars($libro["nombre_padre"], ENT_QUOTES) . '"><i class="bi bi-link-45deg"></i> ' . htmlspecialchars($libro["nombre_padre"]) . '</span>';
-        if ($puede_gestionar) {
+        if ($puede_asociar) {
             $asociacionHtml .= ' <button type="button" class="btn-asociar-serie" data-id="' . $libro["id"] . '" data-libro="' . $libroNombreAttr . '" data-materia="' . $libro["id_materia"] . '" data-padre-id="' . $pri_sec . '" data-padre-nombre="' . htmlspecialchars($libro["nombre_padre"], ENT_QUOTES) . '" title="Cambiar asociación"><i class="bi bi-pencil"></i></button>';
         }
     } else {
         $asociacionHtml = '<span class="badge-serie badge-serie-libre">Sin asociar</span>';
-        if ($puede_gestionar) {
+        if ($puede_asociar) {
             $asociacionHtml .= ' <button type="button" class="btn-asociar-serie" data-id="' . $libro["id"] . '" data-libro="' . $libroNombreAttr . '" data-materia="' . $libro["id_materia"] . '" title="Asociar a una serie"><i class="bi bi-link"></i> Asociar</button>';
         }
     }
@@ -151,9 +156,11 @@ foreach ($rows as $libro) {
             . ' data-piso="' . htmlspecialchars($ubi_actual['piso'] ?? '', ENT_QUOTES) . '"'
             . ' data-ubicacion-id="' . ($ubi_actual['ubicacion_id'] ?? '') . '"'
             . ' data-ubicacion-posicion="' . htmlspecialchars($ubi_actual['posicion'] ?? '', ENT_QUOTES) . '"'
-            . ' title="Editar libro"><i class="bi bi-pencil-square"></i></button>'
-            . '<button type="button" class="btn-eliminar-libro" data-id="' . $libro["id"] . '" data-titulo="' . htmlspecialchars($libro["libro"], ENT_QUOTES) . '" title="Eliminar libro"><i class="bi bi-trash3"></i></button>'
-            . '</div>';
+            . ' title="Editar libro"><i class="bi bi-pencil-square"></i></button>';
+        if ($puede_eliminar) {
+            $accionesHtml .= '<button type="button" class="btn-eliminar-libro" data-id="' . $libro["id"] . '" data-titulo="' . htmlspecialchars($libro["libro"], ENT_QUOTES) . '" title="Eliminar libro"><i class="bi bi-trash3"></i></button>';
+        }
+        $accionesHtml .= '</div>';
     } else {
         $accionesHtml = '<span class="text-muted">&mdash;</span>';
     }
