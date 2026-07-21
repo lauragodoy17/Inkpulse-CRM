@@ -149,17 +149,24 @@ $objSpreadsheet->getActiveSheet()->getStyle($mostrar_ia_g ? 'A6:Q6' : 'A6:O6')->
     ]
 ]);
 
-// Columnas Empresa/Zona/Asesor siempre se derivan del dueño de zona del colegio (owner) y
+// Columnas Empresa/Zona/Asesor se derivan primero del dueño de zona del colegio (owner) y
 // de la zona propia del colegio (c.cod_zona), no de un uid elegido arbitrariamente por
-// GROUP BY ni del cod_zona guardado en la línea de presupuesto (que puede quedar
-// desactualizado). Cuando el colegio no tiene dueño de zona, se muestra "Sin asesor
-// asignado" en vez de perderse o atribuirse a quien cargó la línea.
+// GROUP BY. Cuando el colegio no tiene dueño de zona activo, se cae a los valores de
+// cod_zona/responsable que trae la propia línea de presupuesto (mismo respaldo que usa
+// php/descuento_adopciones_excel.php) antes de mostrar "Sin asesor asignado" como último
+// recurso.
 $selectColegio = "SELECT c.id, c.dane, p.sub_zona, p.conse, p.year, c.responsable, c.departamento,c.ciudad, c.colegio, c.direccion, c.barrio,c.telefono,
-    COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), 'Sin asesor asignado') as promotor, owner.tipo as tipouser, z.zona
-    FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio LEFT JOIN zonas z ON z.codigo = c.cod_zona $ownerJoin_g";
+    COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), NULLIF(UPPER(p.responsable), ''), 'Sin asesor asignado') as promotor, owner.tipo as tipouser,
+    COALESCE(z.zona, z_p.zona) as zona
+    FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio LEFT JOIN zonas z ON z.codigo = c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo = p.cod_zona $ownerJoin_g";
 
 if ($_SESSION['tipo']==1 || $_SESSION['tipo']==2 || $_SESSION['tipo']==7) {
 
+    // Mismo agrupamiento por rol que usan los endpoints del dashboard (dashboard_presupuestos_stats.php
+    // y similares): "promotor" (Eureka) = tipo 3 + Hector Morales (id=69); "distribuidor" = tipo 6;
+    // "otros" = admins/tipos sin territorio, filtrados por quién cargó la línea porque no tienen zona.
+    $rolCondiciones_g = ['promotor' => '(owner.tipo = 3 OR owner.id = 69)', 'distribuidor' => 'owner.tipo = 6', 'otros' => 'p.id_usuario IN (SELECT id FROM usuarios WHERE tipo IN (1,4,10) AND id <> 69)'];
+    $rol_g = $_POST['rol'] ?? '';
     $promotor_id_g = intval($_POST['promotor'] ?? 0);
     if ($promotor_id_g !== 0) {
         // Un asesor/distribuidor real (tipo 3/6) o Hector Morales (id=69) se filtra por la
@@ -171,6 +178,10 @@ if ($_SESSION['tipo']==1 || $_SESSION['tipo']==2 || $_SESSION['tipo']==7) {
         } else {
             $scopeFilter_g = " AND p.id_usuario=$promotor_id_g";
         }
+    } elseif ($rol_g === 'otros') {
+        $scopeFilter_g = " AND " . $rolCondiciones_g['otros'];
+    } elseif (isset($rolCondiciones_g[$rol_g])) {
+        $scopeFilter_g = " AND " . $rolCondiciones_g[$rol_g];
     } else {
         $scopeFilter_g = "";
     }
@@ -370,6 +381,13 @@ foreach ($colegios as $colegio) {
     $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$conse");
     if ($colegio["tipouser"] != 6) {
         list($empresa, $n_zona) = array_pad(explode("/", $colegio["zona"] ?? ""), 2, "");
+        // zonas.zona no siempre trae "Empresa/Zona": cuando la zona resuelta es la de un
+        // distribuidor (esquema de zonas.php), el nombre de la sub-zona no vive dentro de
+        // zonas.zona sino en la tabla sub_zonas (via cod_zona), así que si no vino en el
+        // split se busca ahí, igual que ya hace la rama tipouser==6 más abajo.
+        if ($n_zona === '') {
+            $n_zona = $sz_map_g[$colegio["sub_zona"]] ?? '';
+        }
         $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$empresa");
         $objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$n_zona");
         $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$colegio[promotor]");

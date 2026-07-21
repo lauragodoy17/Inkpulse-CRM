@@ -144,22 +144,25 @@ if ($_SESSION['tipo']==1 || $_SESSION['tipo']==2 || $_SESSION['tipo']==7) {
     
     if ($_POST['promotor']!=0) {
 
-    $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_POST['promotor']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+    // z_p/cod_zona: mismo respaldo que php/descuento_adopciones_excel.php y
+    // php/valoriza_global_excel.php — si el colegio no tiene una zona propia resoluble
+    // (c.cod_zona), se usa la que trae la línea de presupuesto.
+    $sql ="SELECT COALESCE(z.zona, z_p.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_POST['promotor']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
 
 
 
     }else{
-        $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+        $sql ="SELECT COALESCE(z.zona, z_p.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
 
     }
 
 }elseif($_SESSION['tipo']==3) {
 
-    $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_SESSION['id']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+    $sql ="SELECT COALESCE(z.zona, z_p.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_SESSION['id']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
 
 }elseif($_SESSION['tipo']==10) {
 
-    $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'  AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."')  AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+    $sql ="SELECT COALESCE(z.zona, z_p.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'  AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."')  AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
 
 }
 
@@ -279,6 +282,10 @@ $cache_precio_venta = [];
 foreach ($colegios as $colegio) {
     $descuento_p=0;
     $descuento_d=0;
+    // Se reinicia en cada vuelta: si no, una fila con definido=0 (o cualquier otro caso que
+    // no la reasigne) mostraría en la columna T el valor de venta real de la fila ANTERIOR
+    // del loop (de otro libro/colegio), en vez de la suya propia.
+    $venta_real=0;
 
     // Se busca el grado en areas_objetivas SOLO si hay una coincidencia real para este
     // colegio+código de área; si no la hay, se usa el grado propio del libro en vez de
@@ -367,14 +374,14 @@ foreach ($colegios as $colegio) {
                
             
             $descuento_d=$colegio["descuento_d"] * 100;
-            
-           
-            $venta_ppto_d=$precio_neto_d * $alumnos_tasa_d;
 
-            $venta_real= $precio_neto_d * $colegio["uni_vr"];
+
+            $venta_ppto_d=$precio_neto_d * $alumnos_tasa_d;
         }
 
-        
+        // Fuera del if/else: aplica para ambos casos (tasa propia o de distribuidor), igual
+        // que php/valoriza_global_excel.php y php/dashboard_ventareal_stats.php.
+        $venta_real = $precio_neto_d * $colegio["uni_vr"];
 
     }
    
@@ -385,6 +392,13 @@ foreach ($colegios as $colegio) {
 
     if ($colegio["tipouser"]!=6) {
         list($empresa, $n_zona) = array_pad(explode("/", $colegio["zona"] ?? ''), 2, '');
+        // zonas.zona no siempre trae "Empresa/Zona": cuando la zona resuelta es la de un
+        // distribuidor, el nombre de la sub-zona vive en sub_zonas (via cod_zona), no dentro
+        // de zonas.zona, así que si no vino en el split se busca ahí, igual que ya hace la
+        // rama tipouser==6 más abajo.
+        if ($n_zona === '') {
+            $n_zona = $sz_map_v[$colegio["sub_zona"]] ?? '';
+        }
         $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$empresa");
         $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$colegio[promotor]");
         $objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$n_zona");
