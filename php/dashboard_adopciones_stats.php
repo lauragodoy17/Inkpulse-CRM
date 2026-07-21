@@ -31,6 +31,11 @@ if ($periodo <= 0) {
 // comparte cod_zona con otro, así que este LEFT JOIN nunca duplica filas.
 $ownerJoin = "LEFT JOIN usuarios owner ON owner.cod_zona = c.cod_zona AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
 
+// Mismo criterio que usa php/valoriza_excel.php ("valorización libro a libro") para que
+// adopciones cuente igual en dashboard y reporte: excluye probabilidad "Perdida" (id=3) y
+// las líneas sin ninguna tasa de compra asignada (ni propia ni de distribuidor).
+$condicionesNegocio = " AND p.probabilidad != 3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00)";
+
 // El rol "promotor" (etiqueta "Eureka" en el filtro) agrupa tipo=3 y además a
 // Hector Morales (id=69, tipo=10) por pedido del negocio; se excluye de "otros"
 // para no duplicarlo en ambos grupos. Ver también index.php ($promotores_dash/$otros_dash).
@@ -103,7 +108,7 @@ $gradoJoin = "LEFT JOIN (
 // pertenezcan a ningún colegio visible, mientras que php/valoriza_global_excel.php los
 // excluye automáticamente al partir su consulta principal de la tabla colegios.
 $baseFrom = "FROM presupuestos p JOIN colegios c ON p.id_colegio = c.id JOIN libros l ON p.id_libro = l.id $gradoJoin $ownerJoin
-    WHERE p.id_periodo = ? AND p.definido = 1 AND c.id_calendario = $calendario_periodo" . $userFilter;
+    WHERE p.id_periodo = ? AND p.definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $userFilter;
 
 // ── Tarjetas de estadística ──
 $stmt = $bdd->prepare("SELECT COUNT(*) as total, COUNT(DISTINCT p.id_colegio) as colegios, SUM($ventaPotencialExpr) as venta_potencial
@@ -156,7 +161,7 @@ if ($tipo_sesion === 1) {
         FROM presupuestos p JOIN colegios c ON p.id_colegio = c.id JOIN libros l ON p.id_libro = l.id JOIN editoriales e ON l.editorial = e.id
         $gradoJoin
         $ownerJoin
-        WHERE p.id_periodo = ? AND p.definido = 1 AND c.id_calendario = $calendario_periodo" . $userFilter . "
+        WHERE p.id_periodo = ? AND p.definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $userFilter . "
         GROUP BY l.editorial, e.editorial HAVING total > 0 ORDER BY total DESC LIMIT 10");
     $stmt->execute([$periodo]);
     $editoriales = $stmt->fetchAll(PDO::FETCH_ASSOC);

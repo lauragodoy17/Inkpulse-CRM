@@ -86,12 +86,18 @@ $objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_negrit
 $objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_centrar);
 $objSpreadsheet->getActiveSheet()->SetCellValue("C2", "REPORTE DE VALORIZACIÓN");
 
-$sql_periodo="SELECT periodo FROM periodos WHERE id='".$_POST["periodo"]."'";
+$sql_periodo="SELECT periodo, id_calendario FROM periodos WHERE id='".$_POST["periodo"]."'";
 
 $req_periodo = $bdd->prepare($sql_periodo);
 $req_periodo->execute();
 $gp_periodo = $req_periodo->fetch();
 $fecha=date("Y-m-d");
+
+// Un colegio solo debe aparecer en el período de su propio calendario (A/B); sin este
+// filtro, un presupuesto mal cargado en el período del calendario equivocado (error de
+// captura real) se sigue contando aunque el colegio no pertenezca ahí — mismo criterio
+// que ya usan php/dashboard_adopciones_stats.php y php/valoriza_global_excel.php.
+$calendario_periodo_v = intval($gp_periodo["id_calendario"]);
 
 $objSpreadsheet->getActiveSheet()->getStyle('C4')->applyFromArray($estilo_negrita);
 $objSpreadsheet->getActiveSheet()->getStyle('D4')->applyFromArray($estilo_negrita);
@@ -138,22 +144,22 @@ if ($_SESSION['tipo']==1 || $_SESSION['tipo']==2 || $_SESSION['tipo']==7) {
     
     if ($_POST['promotor']!=0) {
 
-    $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id JOIN zonas z ON z.codigo=c.cod_zona  WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_POST['promotor']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+    $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_POST['promotor']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
 
 
 
     }else{
-        $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id JOIN zonas z ON z.codigo=c.cod_zona  WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+        $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
 
     }
 
 }elseif($_SESSION['tipo']==3) {
 
-    $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id JOIN zonas z ON z.codigo=c.cod_zona  WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_SESSION['id']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+    $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_SESSION['id']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
 
 }elseif($_SESSION['tipo']==10) {
 
-    $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id JOIN zonas z ON z.codigo=c.cod_zona  WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'  AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."')  AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+    $sql ="SELECT z.zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'  AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."')  AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
 
 }
 
@@ -183,12 +189,22 @@ $probabilidad_map = [];
 foreach ($bdd->query("SELECT id, probabilidad, valor FROM probabilidades")->fetchAll(PDO::FETCH_ASSOC) as $row)
     $probabilidad_map[$row['id']] = $row['probabilidad'].' ('.$row['valor'].'%)';
 
+// Mismo criterio que php/dashboard_presupuestos_stats.php y php/valoriza_global_excel.php:
+// se matchea solo por (id_colegio, codigo), sin distinguir libro, y se descarta la
+// coincidencia si el colegio tiene más de un registro ambiguo (distinto id_grado_otro)
+// para el mismo código de área, en vez de arriesgar a escoger uno cualquiera (antes este
+// reporte se quedaba con el último que llegara de MySQL, sin orden garantizado, causando
+// una pequeña diferencia frente al dashboard en los colegios con ese dato duplicado).
 $ao_map_v = [];
 if (!empty($v_cole_ids)) {
-    $req_ao = $bdd->prepare("SELECT id_colegio, id_libro_eureka, codigo, id_grado_otro FROM areas_objetivas WHERE id_colegio IN ($ph_vc) AND id_periodo = ?");
+    $req_ao = $bdd->prepare("SELECT id_colegio, codigo, MAX(id_grado_otro) as id_grado_otro
+        FROM areas_objetivas
+        WHERE id_colegio IN ($ph_vc) AND id_periodo = ? AND codigo <> ''
+        GROUP BY id_colegio, codigo
+        HAVING COUNT(*) = 1");
     $req_ao->execute(array_merge($v_cole_ids, [$_POST['periodo']]));
     foreach ($req_ao->fetchAll(PDO::FETCH_ASSOC) as $row)
-        $ao_map_v[$row['id_colegio']][$row['id_libro_eureka']][$row['codigo']] = $row['id_grado_otro'];
+        $ao_map_v[$row['id_colegio']][trim($row['codigo'])] = $row['id_grado_otro'];
 }
 
 $muestras_map = [];
@@ -264,14 +280,21 @@ foreach ($colegios as $colegio) {
     $descuento_p=0;
     $descuento_d=0;
 
-    if ($colegio["id_grado"] != 17 && $colegio["cod_area"] == "") {
-        $alumnos      = $alumnos_map_v[$colegio["id"]][$colegio["id_grado"]] ?? 0;
-        $n_grado_str  = $grados_map[$colegio["id_grado"]] ?? '';
+    // Se busca el grado en areas_objetivas SOLO si hay una coincidencia real para este
+    // colegio+código de área; si no la hay, se usa el grado propio del libro en vez de
+    // asumir grado 0 (sin alumnos). Antes, cualquier libro con cod_area no vacío pero
+    // SIN coincidencia en areas_objetivas (por tener un cod_area residual aunque su grado
+    // ya fuera uno real, no "Otro") quedaba en 0 alumnos aunque el libro sí tuviera
+    // población real en su propio grado — mismo criterio que ya usa
+    // php/dashboard_presupuestos_stats.php y php/valoriza_global_excel.php.
+    $cod_area_v = trim($colegio["cod_area"] ?? '');
+    if ($cod_area_v !== "" && isset($ao_map_v[$colegio['id']][$cod_area_v])) {
+        $grado_lookup = $ao_map_v[$colegio['id']][$cod_area_v];
     } else {
-        $grado_o_id   = $ao_map_v[$colegio['id']][$colegio["idlibro"]][$colegio["cod_area"]] ?? 0;
-        $alumnos      = $alumnos_map_v[$colegio["id"]][$grado_o_id] ?? 0;
-        $n_grado_str  = $grados_map[$grado_o_id] ?? '';
+        $grado_lookup = $colegio["id_grado"];
     }
+    $alumnos      = $alumnos_map_v[$colegio["id"]][$grado_lookup] ?? 0;
+    $n_grado_str  = $grados_map[$grado_lookup] ?? '';
 
 
 
@@ -281,7 +304,13 @@ foreach ($colegios as $colegio) {
         $key_calc = $alumnos . "_" . $colegio["tasa_compra"];
 
         if (!isset($cache_calculo_tasa[$key_calc])) {
-            $alumnos_tasa = floor($alumnos * $colegio["tasa_compra"]);
+            // round() antes de floor(): tasa_compra viene de un DECIMAL(10,2), pero PDO lo
+            // entrega como string y PHP lo castea a float binario (ej. 90 * 0.70 da
+            // 62.999999999999993 en vez de 63), lo que hacía que floor() truncara mal y
+            // descontara unidades enteras de alumnos_tasa frente al mismo cálculo hecho en
+            // SQL (donde la aritmética con DECIMAL es exacta), como en
+            // php/dashboard_presupuestos_stats.php y php/valoriza_global_excel.php.
+            $alumnos_tasa = floor(round($alumnos * $colegio["tasa_compra"], 6));
             $cache_calculo_tasa[$key_calc] = $alumnos_tasa;
         }
 
@@ -315,8 +344,8 @@ foreach ($colegios as $colegio) {
     if ($colegio["definido"] !=0) {
         if ($colegio["tasa_compra_d"] == 0.00) {
 
-            $alumnos_tasa_d = floor($alumnos * $colegio["tasa_compra"]);
-            
+            $alumnos_tasa_d = floor(round($alumnos * $colegio["tasa_compra"], 6));
+
             $key_precio = $colegio["precio"] . "_" . $colegio["descuento"] . "_" . $alumnos_tasa;
 
 
@@ -330,7 +359,7 @@ foreach ($colegios as $colegio) {
            
         }else{
            
-            $alumnos_tasa_d = floor($alumnos * $colegio["tasa_compra_d"]);
+            $alumnos_tasa_d = floor(round($alumnos * $colegio["tasa_compra_d"], 6));
 
          
             $precio_neto_d = $colegio["precio"] - ($colegio["precio"] * $colegio["descuento_d"]);

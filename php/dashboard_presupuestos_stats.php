@@ -31,6 +31,12 @@ if ($periodo <= 0) {
 // comparte cod_zona con otro, así que este LEFT JOIN nunca duplica filas.
 $ownerJoin = "LEFT JOIN usuarios owner ON owner.cod_zona = c.cod_zona AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
 
+// Mismos criterios que usa php/valoriza_excel.php ("valorización libro a libro") para que
+// presupuesto/adopciones cuenten igual en dashboard y reporte: excluye probabilidad
+// "Perdida" (id=3) y las líneas sin ninguna tasa de compra asignada (ni propia ni de
+// distribuidor), que no representan una venta proyectable.
+$condicionesNegocio = " AND p.probabilidad != 3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00)";
+
 // El rol "promotor" (etiqueta "Eureka" en el filtro) agrupa tipo=3 y además a
 // Hector Morales (id=69, tipo=10) por pedido del negocio; se excluye de "otros"
 // para no duplicarlo en ambos grupos. Ver también index.php ($promotores_dash/$otros_dash).
@@ -162,7 +168,7 @@ if ($tipo_sesion === 1) {
         JOIN editoriales e ON l.editorial = e.id
         $gradoJoin
         $ownerJoin
-        WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $userFilter . "
+        WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $userFilter . "
         GROUP BY l.editorial, e.editorial HAVING total > 0 ORDER BY total DESC LIMIT 10");
     $stmt->execute([$periodo]);
     $editoriales = $stmt->fetchAll(PDO::FETCH_ASSOC);
