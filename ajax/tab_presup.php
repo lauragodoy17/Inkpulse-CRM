@@ -30,6 +30,16 @@
 	$req_cant_profes->execute([$_GET['colegio']]);
 	$cantidad_profesores = $req_cant_profes->fetch()['total'];
 
+	// Si ya se guardó una cantidad manual para este colegio+periodo, esa reemplaza
+	// el conteo automático de trabajadores_colegios.
+	try { $bdd->exec("CREATE TABLE IF NOT EXISTS ia_profesores_colegio (id INT AUTO_INCREMENT PRIMARY KEY, id_colegio INT NOT NULL, id_periodo INT NOT NULL, cantidad_profesores INT NOT NULL, UNIQUE KEY uniq_colegio_periodo (id_colegio, id_periodo))"); } catch (Exception $e) {}
+	$req_profes_manual = $bdd->prepare("SELECT cantidad_profesores FROM ia_profesores_colegio WHERE id_colegio=? AND id_periodo=?");
+	$req_profes_manual->execute([$_GET['colegio'], $_GET['periodo']]);
+	$profes_manual = $req_profes_manual->fetch();
+	if ($profes_manual) {
+		$cantidad_profesores = (int)$profes_manual['cantidad_profesores'];
+	}
+
 	$req_interacciones = $bdd->prepare("SELECT interacciones FROM ia_presupuestos WHERE id_modelo_tokens=? AND id_periodo=? ORDER BY id DESC LIMIT 1");
 	$req_interacciones->execute([$modelo_activo['id_modelo_tokens'] ?? 0, $_GET['periodo']]);
 	$interacciones = $req_interacciones->fetch()['interacciones'] ?? 0;
@@ -111,6 +121,12 @@
   .pr-card-icon.teal   { background: #ccfbf1; color: #0f766e; }
   .pr-card-label { font-size: 0.74rem; color: #64748b; margin: 0 0 2px 0; overflow-wrap: break-word; }
   .pr-card-val   { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0; overflow-wrap: break-word; }
+  .pr-card-input {
+    border: 1px solid transparent; border-radius: 6px; width: 80px; padding: 1px 4px;
+    background: transparent; font-family: inherit;
+  }
+  .pr-card-input:hover   { border-color: #cbd5e1; }
+  .pr-card-input:focus   { outline: none; border-color: #4f46e5; background: #fff; box-shadow: 0 0 0 2px rgba(79,70,229,.15); }
 
   /* ── Encabezado ─────────────────────────────────────────────── */
   .pr-header {
@@ -355,7 +371,10 @@
         <div class="pr-card-icon blue"><i class="bi bi-person-video3"></i></div>
         <div>
           <p class="pr-card-label">Cantidad de profesores</p>
-          <p class="pr-card-val"><?= $cantidad_profesores ?></p>
+          <input type="number" min="0" step="1" class="pr-card-val pr-card-input" id="cantidad_profesores_ia_pr"
+            value="<?= $cantidad_profesores ?>"
+            data-colegio="<?= htmlspecialchars($_GET['colegio']) ?>"
+            data-periodo="<?= htmlspecialchars($_GET['periodo']) ?>">
         </div>
       </div>
       <div class="pr-card">
@@ -369,18 +388,64 @@
         <div class="pr-card-icon orange"><i class="bi bi-calendar-week"></i></div>
         <div>
           <p class="pr-card-label">Costo semanal</p>
-          <p class="pr-card-val">$<?= number_format($costo_semanal, 2, ",", ".") ?> COP</p>
+          <p class="pr-card-val" id="costo_semanal_ia_pr">$<?= number_format($costo_semanal, 2, ",", ".") ?> COP</p>
         </div>
       </div>
       <div class="pr-card">
         <div class="pr-card-icon green"><i class="bi bi-calendar-range"></i></div>
         <div>
           <p class="pr-card-label">Costo anual</p>
-          <p class="pr-card-val">$<?= number_format($costo_anual, 2, ",", ".") ?> COP</p>
+          <p class="pr-card-val" id="costo_anual_ia_pr">$<?= number_format($costo_anual, 2, ",", ".") ?> COP</p>
         </div>
       </div>
     </div>
   </div>
+
+  <script>
+    (function(){
+      var costoIaCop  = <?= json_encode((float)$costo_ia_cop) ?>;
+      var interacciones = <?= json_encode((float)$interacciones) ?>;
+      var costoAlmSemanal = <?= json_encode((float)$costo_almacenamiento_semanal) ?>;
+      var costoAlmAnual   = <?= json_encode((float)$costo_almacenamiento_anual) ?>;
+
+      function formatCop(valor) {
+        return '$' + valor.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' COP';
+      }
+
+      function actualizarCostosPr(cantidad) {
+        var costoIaSemanal = costoIaCop * interacciones * cantidad;
+        $('#costo_semanal_ia_pr').text(formatCop(costoIaSemanal + costoAlmSemanal));
+        $('#costo_anual_ia_pr').text(formatCop((costoIaSemanal * 53) + costoAlmAnual));
+      }
+
+      $('#cantidad_profesores_ia_pr').on('change', function(){
+        var input = $(this);
+        var cantidad = parseInt(input.val(), 10);
+        if (isNaN(cantidad) || cantidad < 0) cantidad = 0;
+        input.val(cantidad);
+        actualizarCostosPr(cantidad);
+
+        $.ajax({
+          url: "ajax/guardar_cantidad_profesores_ia.php",
+          type: "POST",
+          data: { colegio: input.data('colegio'), periodo: input.data('periodo'), cantidad: cantidad },
+          dataType: "json",
+          error: function(){ alert("No se pudo guardar la cantidad de profesores."); }
+        });
+
+        // Refleja el cambio en la pestaña de Adopciones si ya está cargada en la página.
+        $(document).trigger('ia:cantidadProfesoresActualizada', [cantidad]);
+      });
+
+      // Si el valor se editó desde la pestaña de Adopciones, se refleja aquí sin volver a guardar.
+      $(document).on('ia:cantidadProfesoresActualizada', function(e, cantidad){
+        var input = $('#cantidad_profesores_ia_pr');
+        if (!input.length || input.val() == cantidad) return;
+        input.val(cantidad);
+        actualizarCostosPr(cantidad);
+      });
+    })();
+  </script>
   <?php endif; ?>
 
   <!-- Modal añadir libros -->
