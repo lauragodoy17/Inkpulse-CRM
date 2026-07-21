@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 	/*ini_set("display_errors", 1);
 
 	ini_set("display_startup_errors", 1);
@@ -41,8 +41,8 @@
 	$req_cant_profes->execute([$_GET['colegio']]);
 	$cantidad_profesores = $req_cant_profes->fetch()['total'];
 
-	// Si ya se guardó una cantidad manual para este colegio+periodo, esa reemplaza
-	// el conteo automático de trabajadores_colegios.
+	// Si ya se guardÃ³ una cantidad manual para este colegio+periodo, esa reemplaza
+	// el conteo automÃ¡tico de trabajadores_colegios.
 	try { $bdd->exec("CREATE TABLE IF NOT EXISTS ia_profesores_colegio (id INT AUTO_INCREMENT PRIMARY KEY, id_colegio INT NOT NULL, id_periodo INT NOT NULL, cantidad_profesores INT NOT NULL, UNIQUE KEY uniq_colegio_periodo (id_colegio, id_periodo))"); } catch (Exception $e) {}
 	$req_profes_manual = $bdd->prepare("SELECT cantidad_profesores FROM ia_profesores_colegio WHERE id_colegio=? AND id_periodo=?");
 	$req_profes_manual->execute([$_GET['colegio'], $_GET['periodo']]);
@@ -64,11 +64,11 @@
 ?>
 
 <style>
-  /* ── Contenedor ───────────────────────────────────────────── */
-  .ad-wrap { padding: 24px; }
+  /* â”€â”€ Contenedor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  .adop-wrap { padding: 24px; }
 
-  /* ── Encabezado ───────────────────────────────────────────── */
-  .ad-header {
+  /* â”€â”€ Encabezado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  .adop-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -76,53 +76,53 @@
     gap: 12px;
     margin-bottom: 20px;
   }
-  .ad-title {
+  .adop-title {
     font-size: 1.05rem;
     font-weight: 700;
     color: #0f172a;
     margin: 0 0 2px 0;
   }
-  .ad-title i { color: #6c63ff; margin-right: 6px; }
-  .ad-subtitle { font-size: 0.82rem; color: #718096; margin: 0; }
-  .ad-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .adop-title i { color: #6c63ff; margin-right: 6px; }
+  .adop-subtitle { font-size: 0.82rem; color: #718096; margin: 0; }
+  .adop-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-  /* ── Tarjetas de resumen ──────────────────────────────────── */
-  .ad-cards {
+  /* â”€â”€ Tarjetas de resumen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  .adop-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 14px;
     margin-bottom: 22px;
   }
 
-  /* ── Sección de tarjetas de IA (separada visualmente) ────── */
-  .ad-ia-section {
+  /* â”€â”€ SecciÃ³n de tarjetas de IA (separada visualmente) â”€â”€â”€â”€â”€â”€ */
+  .adop-ia-section {
     background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%);
     border: 1.5px solid #ddd6fe;
     border-radius: 12px;
     padding: 16px 18px 4px;
     margin-bottom: 22px;
   }
-  .ad-ia-header {
+  .adop-ia-header {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 12px;
   }
-  .ad-ia-header i { color: #6d28d9; font-size: 1rem; }
-  .ad-ia-header span { font-size: 0.86rem; font-weight: 700; color: #4c1d95; }
-  .ad-ia-section .ad-cards {
+  .adop-ia-header i { color: #6d28d9; font-size: 1rem; }
+  .adop-ia-header span { font-size: 0.86rem; font-weight: 700; color: #4c1d95; }
+  .adop-ia-section .adop-cards {
     margin-bottom: 0;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
-  .ad-ia-section .ad-card {
+  .adop-ia-section .adop-card {
     background: #fff;
     min-width: 0;
     padding: 14px 12px;
   }
-  .ad-ia-section .ad-card-icon { width: 36px; height: 36px; font-size: 1rem; }
-  .ad-ia-section .ad-card-val { font-size: 1rem; }
+  .adop-ia-section .adop-card-icon { width: 36px; height: 36px; font-size: 1rem; }
+  .adop-ia-section .adop-card-val { font-size: 1rem; }
 
-  .ad-card {
+  .adop-card {
     background: #fff;
     border-radius: 10px;
     padding: 16px 18px;
@@ -132,8 +132,8 @@
     gap: 14px;
     min-width: 0;
   }
-  .ad-card > div { min-width: 0; }
-  .ad-card-icon {
+  .adop-card > div { min-width: 0; }
+  .adop-card-icon {
     width: 42px;
     height: 42px;
     border-radius: 10px;
@@ -143,26 +143,26 @@
     font-size: 1.15rem;
     flex-shrink: 0;
   }
-  .ad-card-icon.blue   { background: #dbeafe; color: #1d4ed8; }
-  .ad-card-icon.green  { background: #dcfce7; color: #15803d; }
-  .ad-card-icon.orange { background: #ffedd5; color: #c2410c; }
-  .ad-card-icon.purple { background: #ede9fe; color: #6d28d9; }
-  .ad-card-icon.teal   { background: #ccfbf1; color: #0f766e; }
-  .ad-card-icon.rose   { background: #ffe4e6; color: #be123c; }
-  .ad-card-icon.indigo { background: #e0e7ff; color: #4338ca; }
-  .ad-card-icon.amber  { background: #fef3c7; color: #b45309; }
-  .ad-card-label { font-size: 0.74rem; color: #64748b; margin: 0 0 2px 0; overflow-wrap: break-word; }
-  .ad-card-val   { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0; overflow-wrap: break-word; }
-  .ad-card-input {
+  .adop-card-icon.blue   { background: #dbeafe; color: #1d4ed8; }
+  .adop-card-icon.green  { background: #dcfce7; color: #15803d; }
+  .adop-card-icon.orange { background: #ffedd5; color: #c2410c; }
+  .adop-card-icon.purple { background: #ede9fe; color: #6d28d9; }
+  .adop-card-icon.teal   { background: #ccfbf1; color: #0f766e; }
+  .adop-card-icon.rose   { background: #ffe4e6; color: #be123c; }
+  .adop-card-icon.indigo { background: #e0e7ff; color: #4338ca; }
+  .adop-card-icon.amber  { background: #fef3c7; color: #b45309; }
+  .adop-card-label { font-size: 0.74rem; color: #64748b; margin: 0 0 2px 0; overflow-wrap: break-word; }
+  .adop-card-val   { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0; overflow-wrap: break-word; }
+  .adop-card-input {
     border: 1px solid transparent; border-radius: 6px; width: 80px; padding: 1px 4px;
     background: transparent; font-family: inherit;
   }
-  .ad-card-input:hover   { border-color: #cbd5e1; }
-  .ad-card-input:focus   { outline: none; border-color: #4f46e5; background: #fff; box-shadow: 0 0 0 2px rgba(79,70,229,.15); }
-  .ad-card-pct   { font-size: 0.75rem; color: #64748b; }
+  .adop-card-input:hover   { border-color: #cbd5e1; }
+  .adop-card-input:focus   { outline: none; border-color: #4f46e5; background: #fff; box-shadow: 0 0 0 2px rgba(79,70,229,.15); }
+  .adop-card-pct   { font-size: 0.75rem; color: #64748b; }
 
-  /* ── Contenedor con scroll propio ────────────────────────── */
-  .ad-table-wrap {
+  /* â”€â”€ Contenedor con scroll propio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  .adop-table-wrap {
     border-radius: 10px;
     overflow: auto;
     max-height: 60vh;
@@ -170,12 +170,12 @@
     scrollbar-width: thin;
     scrollbar-color: #4361ee #e2e8f0;
   }
-  .ad-table-wrap::-webkit-scrollbar        { height: 10px; width: 10px; }
-  .ad-table-wrap::-webkit-scrollbar-track  { background: #e2e8f0; border-radius: 0 0 10px 10px; }
-  .ad-table-wrap::-webkit-scrollbar-thumb  { background: #4361ee; border-radius: 10px; border: 2px solid #e2e8f0; }
-  .ad-table-wrap::-webkit-scrollbar-thumb:hover { background: #2a3fc7; }
+  .adop-table-wrap::-webkit-scrollbar        { height: 10px; width: 10px; }
+  .adop-table-wrap::-webkit-scrollbar-track  { background: #e2e8f0; border-radius: 0 0 10px 10px; }
+  .adop-table-wrap::-webkit-scrollbar-thumb  { background: #4361ee; border-radius: 10px; border: 2px solid #e2e8f0; }
+  .adop-table-wrap::-webkit-scrollbar-thumb:hover { background: #2a3fc7; }
 
-  /* ── Tabla ────────────────────────────────────────────────── */
+  /* â”€â”€ Tabla â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   #dataTables-adop {
     width: 100%;
     font-size: 0.81rem;
@@ -203,7 +203,7 @@
   #dataTables-adop thead th.sorting_asc,
   #dataTables-adop thead th.sorting_desc { background-image: none !important; padding-right: 8px !important; }
 
-  /* Precio venta padre más ancho */
+  /* Precio venta padre mÃ¡s ancho */
   input.precio-padre-inp {
     width: 90px !important;
     border: 1px solid #cbd5e0;
@@ -255,7 +255,7 @@
     background: #fff;
     box-shadow: 0 0 0 2px rgba(99,102,241,.2);
   }
-  /* checkbox adopción */
+  /* checkbox adopciÃ³n */
   #dataTables-adop input[type="checkbox"] {
     width: 16px;
     height: 16px;
@@ -276,15 +276,15 @@
   }
   #dataTables-adop tfoot td:first-child { text-align: left; padding-left: 14px; }
 
-  /* ── Sección inferior ─────────────────────────────────────── */
-  .ad-footer-form {
+  /* â”€â”€ SecciÃ³n inferior â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  .adop-footer-form {
     margin-top: 22px;
     background: #fff;
     border-radius: 10px;
     box-shadow: 0 1px 6px rgba(15,23,42,.07);
     padding: 22px 24px;
   }
-  .ad-footer-form .form-label-sm {
+  .adop-footer-form .form-label-sm {
     font-size: 0.82rem;
     font-weight: 700;
     color: #1e293b;
@@ -293,10 +293,10 @@
     align-items: center;
     gap: 6px;
   }
-  .ad-footer-form .form-label-sm i { color: #6366f1; font-size: 0.88rem; }
+  .adop-footer-form .form-label-sm i { color: #6366f1; font-size: 0.88rem; }
 
   /* Campo de archivo */
-  .ad-footer-form .ad-file-label {
+  .adop-footer-form .adop-file-label {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -310,14 +310,14 @@
     font-size: 0.83rem;
     font-weight: 500;
   }
-  .ad-footer-form .ad-file-label:hover { border-color: #6366f1; background: #eef2ff; color: #4f46e5; }
-  .ad-footer-form .ad-file-label.has-file { border-color: #16a34a; background: #f0fdf4; color: #15803d; }
-  .ad-footer-form input[type="file"] { display: none; }
-  .ad-file-name { font-size: 0.79rem; color: #6366f1; margin-top: 5px; font-weight: 600; word-break: break-all; }
+  .adop-footer-form .adop-file-label:hover { border-color: #6366f1; background: #eef2ff; color: #4f46e5; }
+  .adop-footer-form .adop-file-label.has-file { border-color: #16a34a; background: #f0fdf4; color: #15803d; }
+  .adop-footer-form input[type="file"] { display: none; }
+  .adop-file-name { font-size: 0.79rem; color: #6366f1; margin-top: 5px; font-weight: 600; word-break: break-all; }
 
-  /* Controles del footer con borde más visible */
-  .ad-footer-form select.form-control,
-  .ad-footer-form textarea.form-control {
+  /* Controles del footer con borde mÃ¡s visible */
+  .adop-footer-form select.form-control,
+  .adop-footer-form textarea.form-control {
     border: 1.5px solid #cbd5e0;
     border-radius: 8px;
     font-size: 0.85rem;
@@ -325,15 +325,15 @@
     background: #f8fafc;
     transition: border-color .15s, box-shadow .15s;
     resize: vertical;       /* textarea redimensionable verticalmente */
-    min-height: 80px;       /* altura mínima para ver observaciones */
+    min-height: 80px;       /* altura mÃ­nima para ver observaciones */
   }
-  .ad-footer-form select.form-control {
+  .adop-footer-form select.form-control {
     min-height: unset;
     padding: 7px 10px;
     cursor: pointer;
   }
-  .ad-footer-form select.form-control:focus,
-  .ad-footer-form textarea.form-control:focus {
+  .adop-footer-form select.form-control:focus,
+  .adop-footer-form textarea.form-control:focus {
     border-color: #6366f1;
     background: #fff;
     box-shadow: 0 0 0 3px rgba(99,102,241,.15);
@@ -341,7 +341,7 @@
   }
 
   /* % Cumplimiento como tarjeta destacada */
-  .ad-cumplimiento-card {
+  .adop-cumplimiento-card {
     background: #f0f4ff;
     border: 1.5px solid #c7d2fe;
     border-radius: 10px;
@@ -349,10 +349,10 @@
     text-align: center;
     margin-top: 2px;
   }
-  .ad-cumplimiento-val   { font-size: 1.6rem; font-weight: 800; color: #4338ca; display: block; }
-  .ad-cumplimiento-label { font-size: 0.76rem; color: #6366f1; font-weight: 600; letter-spacing: .04em; }
+  .adop-cumplimiento-val   { font-size: 1.6rem; font-weight: 800; color: #4338ca; display: block; }
+  .adop-cumplimiento-label { font-size: 0.76rem; color: #6366f1; font-weight: 600; letter-spacing: .04em; }
 
-  .ad-footer-actions {
+  .adop-footer-actions {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
@@ -361,8 +361,8 @@
     border-top: 1px solid #e2e8f0;
   }
 
-  /* ── Filtro de libros (sticky) ───────────────────────────── */
-  .ad-filter-bar {
+  /* â”€â”€ Filtro de libros (sticky) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  .adop-filter-bar {
     position: sticky;
     top: 0;
     z-index: 20;
@@ -378,15 +378,15 @@
     flex-wrap: wrap;
     box-shadow: 0 2px 8px rgba(15,23,42,.07);
   }
-  .ad-filter-left  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .ad-filter-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .ad-filter-bar span {
+  .adop-filter-left  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .adop-filter-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .adop-filter-bar span {
     font-size: 12.5px;
     font-weight: 600;
     color: #64748b;
     margin-right: 4px;
   }
-  .ad-filter-btn {
+  .adop-filter-btn {
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -400,26 +400,26 @@
     cursor: pointer;
     transition: all .15s;
   }
-  .ad-filter-btn:hover { border-color: #6366f1; color: #6366f1; }
-  .ad-filter-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; }
-  .ad-filter-btn .ad-filter-count {
+  .adop-filter-btn:hover { border-color: #6366f1; color: #6366f1; }
+  .adop-filter-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+  .adop-filter-btn .adop-filter-count {
     background: rgba(255,255,255,.25);
     border-radius: 10px;
     padding: 0 6px;
     font-size: 11px;
   }
-  .ad-filter-btn:not(.active) .ad-filter-count { background: #f1f5f9; color: #475569; }
+  .adop-filter-btn:not(.active) .adop-filter-count { background: #f1f5f9; color: #475569; }
 </style>
 
-<div class="ad-wrap">
+<div class="adop-wrap">
 
   <!-- Encabezado -->
-  <div class="ad-header">
+  <div class="adop-header">
     <div>
-      <h5 class="ad-title"><i class="bi bi-bookmark-check-fill"></i> Adopciones de libros</h5>
-      <p class="ad-subtitle">Gestiona las adopciones y el seguimiento de venta real</p>
+      <h5 class="adop-title"><i class="bi bi-bookmark-check-fill"></i> Adopciones de libros</h5>
+      <p class="adop-subtitle">Gestiona las adopciones y el seguimiento de venta real</p>
     </div>
-    <div class="ad-actions">
+    <div class="adop-actions">
       <a class="btn btn-success btn-sm" href="php/adopcion_excel.php?cole=<?= htmlspecialchars($_GET['colegio']) ?>&periodo=<?= htmlspecialchars($_GET['periodo']) ?>">
         <i class="bi bi-file-earmark-excel"></i> Exportar Excel
       </a>
@@ -437,81 +437,81 @@
     $row_adoptados  = $req_adoptados->fetch();
     $total_adoptados = (int)$row_adoptados["total"];
   ?>
-  <div class="ad-cards">
-    <div class="ad-card">
-      <div class="ad-card-icon blue"><i class="bi bi-book"></i></div>
+  <div class="adop-cards">
+    <div class="adop-card">
+      <div class="adop-card-icon blue"><i class="bi bi-book"></i></div>
       <div>
-        <p class="ad-card-label">Total de títulos adoptados</p>
-        <p class="ad-card-val"><?= $total_adoptados ?></p>
+        <p class="adop-card-label">Total de tÃ­tulos adoptados</p>
+        <p class="adop-card-val"><?= $total_adoptados ?></p>
       </div>
     </div>
-    <div class="ad-card">
-      <div class="ad-card-icon green"><i class="bi bi-check2-circle"></i></div>
+    <div class="adop-card">
+      <div class="adop-card-icon green"><i class="bi bi-check2-circle"></i></div>
       <div>
-        <p class="ad-card-label">Venta potencial</p>
-        <p class="ad-card-val" id="ad-card-vp">—</p>
+        <p class="adop-card-label">Venta potencial</p>
+        <p class="adop-card-val" id="adop-card-vp">â€”</p>
       </div>
     </div>
-    <div class="ad-card">
-      <div class="ad-card-icon orange"><i class="bi bi-graph-up"></i></div>
+    <div class="adop-card">
+      <div class="adop-card-icon orange"><i class="bi bi-graph-up"></i></div>
       <div>
-        <p class="ad-card-label">Venta real</p>
-        <p class="ad-card-val" id="ad-card-vr">—</p>
+        <p class="adop-card-label">Venta real</p>
+        <p class="adop-card-val" id="adop-card-vr">â€”</p>
       </div>
     </div>
-    <div class="ad-card" id="ad-card-cum-wrap">
-      <div class="ad-card-icon purple" id="ad-card-cum-icon"><i class="bi bi-percent"></i></div>
+    <div class="adop-card" id="adop-card-cum-wrap">
+      <div class="adop-card-icon purple" id="adop-card-cum-icon"><i class="bi bi-percent"></i></div>
       <div>
-        <p class="ad-card-label">% Cumplimiento</p>
-        <p class="ad-card-val" id="ad-card-cum">—</p>
+        <p class="adop-card-label">% Cumplimiento</p>
+        <p class="adop-card-val" id="adop-card-cum">â€”</p>
       </div>
     </div>
   </div>
 
   <?php if ($gp_periodo["periodo"] >= 2027): ?>
   <!-- Tarjetas de IA (separadas visualmente) -->
-  <div class="ad-ia-section">
-    <div class="ad-ia-header">
+  <div class="adop-ia-section">
+    <div class="adop-ia-header">
       <i class="bi bi-robot"></i>
       <span>Inteligencia Artificial y tokens</span>
     </div>
-    <div class="ad-cards">
-      <div class="ad-card">
-        <div class="ad-card-icon teal"><i class="bi bi-cpu"></i></div>
+    <div class="adop-cards">
+      <div class="adop-card">
+        <div class="adop-card-icon teal"><i class="bi bi-cpu"></i></div>
         <div>
-          <p class="ad-card-label">Costo IA (por interacción)</p>
-          <p class="ad-card-val">$<?= number_format($costo_ia_cop, 2, ",", ".") ?> COP</p>
+          <p class="adop-card-label">Costo IA (por interacciÃ³n)</p>
+          <p class="adop-card-val">$<?= number_format($costo_ia_cop, 2, ",", ".") ?> COP</p>
         </div>
       </div>
-      <div class="ad-card">
-        <div class="ad-card-icon blue"><i class="bi bi-person-video3"></i></div>
+      <div class="adop-card">
+        <div class="adop-card-icon blue"><i class="bi bi-person-video3"></i></div>
         <div>
-          <p class="ad-card-label">Cantidad de profesores</p>
-          <input type="number" min="0" step="1" class="ad-card-val ad-card-input" id="cantidad_profesores_ia_ad"
+          <p class="adop-card-label">Cantidad de profesores</p>
+          <input type="number" min="0" step="1" class="adop-card-val adop-card-input" id="cantidad_profesores_ia_adop"
             value="<?= $cantidad_profesores ?>"
             data-colegio="<?= htmlspecialchars($_GET['colegio']) ?>"
             data-periodo="<?= htmlspecialchars($_GET['periodo']) ?>">
         </div>
       </div>
-      <div class="ad-card">
-        <div class="ad-card-icon amber"><i class="bi bi-chat-dots"></i></div>
+      <div class="adop-card">
+        <div class="adop-card-icon amber"><i class="bi bi-chat-dots"></i></div>
         <div>
-          <p class="ad-card-label">Cantidad de interacciones</p>
-          <p class="ad-card-val"><?= $interacciones ?></p>
+          <p class="adop-card-label">Cantidad de interacciones</p>
+          <p class="adop-card-val"><?= $interacciones ?></p>
         </div>
       </div>
-      <div class="ad-card">
-        <div class="ad-card-icon rose"><i class="bi bi-calendar-week"></i></div>
+      <div class="adop-card">
+        <div class="adop-card-icon rose"><i class="bi bi-calendar-week"></i></div>
         <div>
-          <p class="ad-card-label">Costo semanal</p>
-          <p class="ad-card-val" id="costo_semanal_ia_ad">$<?= number_format($costo_semanal, 2, ",", ".") ?> COP</p>
+          <p class="adop-card-label">Costo semanal</p>
+          <p class="adop-card-val" id="costo_semanal_ia_adop">$<?= number_format($costo_semanal, 2, ",", ".") ?> COP</p>
         </div>
       </div>
-      <div class="ad-card">
-        <div class="ad-card-icon indigo"><i class="bi bi-calendar-range"></i></div>
+      <div class="adop-card">
+        <div class="adop-card-icon indigo"><i class="bi bi-calendar-range"></i></div>
         <div>
-          <p class="ad-card-label">Costo anual</p>
-          <p class="ad-card-val" id="costo_anual_ia_ad">$<?= number_format($costo_anual, 2, ",", ".") ?> COP</p>
+          <p class="adop-card-label">Costo anual</p>
+          <p class="adop-card-val" id="costo_anual_ia_adop">$<?= number_format($costo_anual, 2, ",", ".") ?> COP</p>
         </div>
       </div>
     </div>
@@ -530,11 +530,11 @@
 
       function actualizarCostosAd(cantidad) {
         var costoIaSemanal = costoIaCop * interacciones * cantidad;
-        $('#costo_semanal_ia_ad').text(formatCop(costoIaSemanal + costoAlmSemanal));
-        $('#costo_anual_ia_ad').text(formatCop((costoIaSemanal * 53) + costoAlmAnual));
+        $('#costo_semanal_ia_adop').text(formatCop(costoIaSemanal + costoAlmSemanal));
+        $('#costo_anual_ia_adop').text(formatCop((costoIaSemanal * 53) + costoAlmAnual));
       }
 
-      $('#cantidad_profesores_ia_ad').on('change', function(){
+      $('#cantidad_profesores_ia_adop').on('change', function(){
         var input = $(this);
         var cantidad = parseInt(input.val(), 10);
         if (isNaN(cantidad) || cantidad < 0) cantidad = 0;
@@ -549,13 +549,13 @@
           error: function(){ alert("No se pudo guardar la cantidad de profesores."); }
         });
 
-        // Refleja el cambio en la pestaña de Presupuesto si ya está cargada en la página.
+        // Refleja el cambio en la pestaÃ±a de Presupuesto si ya estÃ¡ cargada en la pÃ¡gina.
         $(document).trigger('ia:cantidadProfesoresActualizada', [cantidad]);
       });
 
-      // Si el valor se editó desde la pestaña de Presupuesto, se refleja aquí sin volver a guardar.
+      // Si el valor se editÃ³ desde la pestaÃ±a de Presupuesto, se refleja aquÃ­ sin volver a guardar.
       $(document).on('ia:cantidadProfesoresActualizada', function(e, cantidad){
-        var input = $('#cantidad_profesores_ia_ad');
+        var input = $('#cantidad_profesores_ia_adop');
         if (!input.length || input.val() == cantidad) return;
         input.val(cantidad);
         actualizarCostosAd(cantidad);
@@ -566,19 +566,19 @@
 
 
   <!-- Filtro de libros + acciones (sticky) -->
-  <div class="ad-filter-bar">
-    <div class="ad-filter-left">
+  <div class="adop-filter-bar">
+    <div class="adop-filter-left">
       <span><i class="bi bi-funnel"></i> Ver:</span>
-      <button class="ad-filter-btn active" data-filter="todos">
+      <button class="adop-filter-btn active" data-filter="todos">
         Todos los libros
       </button>
-      <button class="ad-filter-btn" data-filter="adoptados">
+      <button class="adop-filter-btn" data-filter="adoptados">
         <i class="bi bi-bookmark-check-fill"></i> Solo adoptados
       </button>
     </div>
-    <div class="ad-filter-right">
+    <div class="adop-filter-right">
       <a href="#" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal_adopciones">
-        <i class="bi bi-plus-circle"></i> Añadir libros
+        <i class="bi bi-plus-circle"></i> AÃ±adir libros
       </a>
       <?php if ($show_guardar): ?>
       <button type="submit" form="form_definicion" class="btn btn-success btn-sm miBoton">
@@ -623,10 +623,10 @@
 
         <div class="modal-header">
           <div>
-            <h5 class="modal-title">Añadir libros</h5>
-            <p class="modal-subtitle">Completa la información del libro que quieres añadir a las adopciones</p>
+            <h5 class="modal-title">AÃ±adir libros</h5>
+            <p class="modal-subtitle">Completa la informaciÃ³n del libro que quieres aÃ±adir a las adopciones</p>
           </div>
-          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">Ã—</button>
         </div>
 
         <form action="php/areas_cumplimiento.php" method="POST" class="miFormulario">
@@ -666,7 +666,7 @@
                 </div>
                 <div class="col-sm col-6 g_otrod d-none">
                   <div class="form-group">
-                    <label for="grado_otrod" id="l_grado_otrod">Grado específico <span class="lb-req">*</span></label>
+                    <label for="grado_otrod" id="l_grado_otrod">Grado especÃ­fico <span class="lb-req">*</span></label>
                     <select name="grado_otrod" id="grado_otrod" class="form-control">
                       <option value="">Seleccionar</option>
                       <?php
@@ -724,7 +724,7 @@
                 </div>
                 <div class="col-sm col-6 g_otrod<?= $i ?> d-none">
                   <div class="form-group">
-                    <label id="l_grado_otrod<?= $i ?>">Grado específico <span class="lb-req">*</span></label>
+                    <label id="l_grado_otrod<?= $i ?>">Grado especÃ­fico <span class="lb-req">*</span></label>
                     <select name="grado_otrod" id="grado_otrod<?= $i ?>" class="form-control">
                       <option value="">Seleccionar</option>
                       <?php
@@ -763,7 +763,7 @@
             <?php if ($_SESSION["zona"] == $_GET["cod_zona"] || $_SESSION["tipo"] == 1): ?>
               <?php if ($_GET["f_cierre"] > date("Y-m-d")): ?>
                 <button type="button" class="lb-add-btn" id="agregar_aod">
-                  <i class="bi bi-plus-circle"></i> Añadir otro libro
+                  <i class="bi bi-plus-circle"></i> AÃ±adir otro libro
                 </button>
                 <button type="submit" class="btn btn-primary miBoton">
                   <i class="bi bi-floppy"></i> Guardar libros
@@ -802,11 +802,11 @@
 
 		echo "<form action='php/guardar_definicion.php' class='miFormulario' method='POST' id='form_definicion' name='f2' enctype='multipart/form-data'>";
                               
-            echo "<div class='ad-table-wrap mt-2'>
+            echo "<div class='adop-table-wrap mt-2'>
                 <table id='dataTables-adop'>
                 <thead>
                   <tr>
-                    <th>Título</th>
+                    <th>TÃ­tulo</th>
                     <th>Materia</th>
                     <th>Grado</th>
                     <th>Alumnos</th>
@@ -816,7 +816,7 @@
                     <th>Precio neto</th>
                     <th>Venta potencial</th>
                     <th>Precio venta padre</th>
-                    <th>Adopción <input type='checkbox' id='seleccionar_pre'></th>
+                    <th>AdopciÃ³n <input type='checkbox' id='seleccionar_pre'></th>
                     <th>Unidades venta real</th>
                     <th>Venta real</th>
                   </tr>
@@ -1677,7 +1677,7 @@
                                 <td id='total_vr'></td>
                               </tr>
                               </tfoot>
-                              </table></div><!-- /.ad-table-wrap -->
+                              </table></div><!-- /.adop-table-wrap -->
                               <input type='hidden' name='id_colegio' id='cole' value='".$_GET["colegio"]."'>
                               <input type='hidden' name='codigo'     value='".$_GET["codigo"]."'>
                               <input type='hidden' name='periodo'    value='".$gp_periodo["id"]."'>";
@@ -1696,8 +1696,8 @@
                           $recursos = $req_rec->fetch();
                           $count    = $req_rec->rowCount();
 
-                          // ── Sección inferior estilizada ──────────────────────────
-                          echo '<div class="ad-footer-form">';
+                          // â”€â”€ SecciÃ³n inferior estilizada â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                          echo '<div class="adop-footer-form">';
                           echo '<div class="row g-3 align-items-start">';
 
                           // Canal de venta
@@ -1718,7 +1718,7 @@
                           }
                           echo '</select></div>';
 
-                          // Documento de adopción (solo para tipos 1, 3, 10)
+                          // Documento de adopciÃ³n (solo para tipos 1, 3, 10)
                           if (in_array($_SESSION['tipo'], [1, 3, 10])) {
                               $arch_existente = ($count > 0 && !empty($recursos['archivo'])) ? $recursos['archivo'] : '';
                               $periodo_activo = $_GET["f_cierre"] > date("Y-m-d");
@@ -1727,18 +1727,18 @@
                                   // Periodo activo: upload interactivo
                                   $arch_label_class = $arch_existente ? ' has-file' : '';
                                   $arch_icon_text   = $arch_existente
-                                      ? '<i class="bi bi-check-circle-fill" style="font-size:1.2rem;"></i><span id="ad-file-text">Documento cargado — clic para reemplazar</span>'
-                                      : '<i class="bi bi-cloud-upload" style="font-size:1.2rem;"></i><span id="ad-file-text">Haz clic para seleccionar un archivo</span>';
+                                      ? '<i class="bi bi-check-circle-fill" style="font-size:1.2rem;"></i><span id="adop-file-text">Documento cargado â€” clic para reemplazar</span>'
+                                      : '<i class="bi bi-cloud-upload" style="font-size:1.2rem;"></i><span id="adop-file-text">Haz clic para seleccionar un archivo</span>';
                                   $arch_name_html = $arch_existente
-                                      ? '<p class="ad-file-name" id="ad-file-name">'.htmlspecialchars(basename($arch_existente)).'</p>'
-                                      : '<p class="ad-file-name" id="ad-file-name"></p>';
+                                      ? '<p class="adop-file-name" id="adop-file-name">'.htmlspecialchars(basename($arch_existente)).'</p>'
+                                      : '<p class="adop-file-name" id="adop-file-name"></p>';
                                   $arch_req_badge = $arch_existente ? '' : ' <span style="color:#dc2626">*</span>';
 
                                   echo '<div class="col-sm-4">
                                           <span class="form-label-sm">
-                                            <i class="bi bi-paperclip"></i> Acuerdo de adopción'.$arch_req_badge.'
+                                            <i class="bi bi-paperclip"></i> Acuerdo de adopciÃ³n'.$arch_req_badge.'
                                           </span>
-                                          <label class="ad-file-label'.$arch_label_class.'" id="ad-file-label" for="archivo_adopcion">
+                                          <label class="adop-file-label'.$arch_label_class.'" id="adop-file-label" for="archivo_adopcion">
                                             '.$arch_icon_text.'
                                           </label>
                                           <input type="file" name="archivo_adopcion" id="archivo_adopcion"
@@ -1750,10 +1750,10 @@
                                   // Periodo cerrado: solo lectura
                                   echo '<div class="col-sm-4">
                                           <span class="form-label-sm">
-                                            <i class="bi bi-paperclip"></i> Acuerdo de adopción
+                                            <i class="bi bi-paperclip"></i> Acuerdo de adopciÃ³n
                                           </span>';
                                   if ($arch_existente) {
-                                      echo '<p class="ad-file-name"><i class="bi bi-file-earmark-check" style="color:#16a34a;margin-right:4px;"></i>'.htmlspecialchars(basename($arch_existente)).'</p>';
+                                      echo '<p class="adop-file-name"><i class="bi bi-file-earmark-check" style="color:#16a34a;margin-right:4px;"></i>'.htmlspecialchars(basename($arch_existente)).'</p>';
                                   } else {
                                       echo '<p class="text-muted" style="font-size:.82rem;"><i class="bi bi-dash-circle"></i> Sin documento adjunto</p>';
                                   }
@@ -1771,12 +1771,12 @@
                                     <i class="bi bi-chat-left-text"></i> Observaciones
                                   </span>
                                   <textarea class="form-control" name="observaciones" rows="4"
-                                    placeholder="Escribe las observaciones sobre la adopción...">'.$obs_val.'</textarea>
+                                    placeholder="Escribe las observaciones sobre la adopciÃ³n...">'.$obs_val.'</textarea>
                                 </div>';
 
                           echo '</div>';
 
-                          echo '</div>'; // .ad-footer-form
+                          echo '</div>'; // .adop-footer-form
                           echo '</form>';
                        ?>
 	
@@ -1794,9 +1794,9 @@
         $.fn.dataTable.ext.errMode = 'none';
         $('#dataTables-adop').dataTable({
           "language": {
-            "lengthMenu": "Display _MENU_ registros por página",
+            "lengthMenu": "Display _MENU_ registros por pÃ¡gina",
             "zeroRecords": "Nada encontrado, lo siento",
-            "emptyTable": "No hay información para mostrar",
+            "emptyTable": "No hay informaciÃ³n para mostrar",
             "info": "",
             "infoEmpty": "",
             "infoFiltered": "",
@@ -1805,7 +1805,7 @@
               first:"Primero",
               previous:"Anterior",
                 next:"Siguiente",
-                last:"Último"
+                last:"Ãšltimo"
             }
           },
           "paging": false,
@@ -2039,12 +2039,12 @@
     })
 
     function setCumCard(pct) {
-        var text = isNaN(pct) ? '—' : pct.toFixed(1) + '%';
+        var text = isNaN(pct) ? 'â€”' : pct.toFixed(1) + '%';
         $('#cumplimiento').text(text);
-        $('#ad-card-cum').text(text);
-        var $card = $('#ad-card-cum-wrap');
-        var $icon = $('#ad-card-cum-icon');
-        var $val  = $('#ad-card-cum');
+        $('#adop-card-cum').text(text);
+        var $card = $('#adop-card-cum-wrap');
+        var $icon = $('#adop-card-cum-icon');
+        var $val  = $('#adop-card-cum');
         if (isNaN(pct)) {
             $card.css({'background':'#fff', 'box-shadow':'0 1px 6px rgba(15,23,42,.08)'});
             $icon.css({'background':'#ede9fe', 'color':'#6d28d9'});
@@ -2086,16 +2086,16 @@
 
    	var cumplimiento=(total_uni_vr_d / total_vp_d) * 100;
 
-    // ── Actualizar tarjetas de resumen ────────────────────────
-    $('#ad-card-vp').text($('#total_vp_d').text() || '—');
-    $('#ad-card-vr').text($('#total_vr').text()   || '—');
+    // â”€â”€ Actualizar tarjetas de resumen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    $('#adop-card-vp').text($('#total_vp_d').text() || 'â€”');
+    $('#adop-card-vr').text($('#total_vr').text()   || 'â€”');
     setCumCard(cumplimiento);
 
-    // ── Filtro todos / adoptados ──────────────────────────────
+    // â”€â”€ Filtro todos / adoptados â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     var $filas = $('#dataTables-adop tbody tr');
 
-    $('.ad-filter-btn').on('click', function(){
-      $('.ad-filter-btn').removeClass('active');
+    $('.adop-filter-btn').on('click', function(){
+      $('.adop-filter-btn').removeClass('active');
       $(this).addClass('active');
       var filtro = $(this).data('filter');
       if (filtro === 'adoptados') {
@@ -2105,9 +2105,9 @@
       }
     });
 
-    // ── Toast ────────────────────────────────────────────────────
+    // â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function adToast(msg, tipo) {
-        var $t = $('#ad-toast');
+        var $t = $('#adop-toast');
         var icon = tipo === 'error' ? 'bi bi-x-circle-fill' : 'bi bi-check-circle-fill';
         $t.removeClass('ok error').addClass(tipo);
         $t.find('i').attr('class', icon);
@@ -2116,7 +2116,7 @@
         setTimeout(function(){ $t.removeClass('show'); }, 3500);
     }
 
-    // ── Validar duplicados al guardar libros en adopciones ───────
+    // â”€â”€ Validar duplicados al guardar libros en adopciones â”€â”€â”€â”€â”€â”€â”€
     $('#modal_adopciones form.miFormulario').on('submit', function(e) {
         var ids = [];
         var errMsg = '';
@@ -2142,26 +2142,26 @@
         }
     });
 
-    // ── Campo de archivo: mostrar nombre seleccionado ────────────
+    // â”€â”€ Campo de archivo: mostrar nombre seleccionado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     $('#archivo_adopcion').on('change', function() {
-        var $label = $('#ad-file-label');
-        var $name  = $('#ad-file-name');
+        var $label = $('#adop-file-label');
+        var $name  = $('#adop-file-name');
         if (this.files && this.files.length > 0) {
             var fname = this.files[0].name;
-            $('#ad-file-text').text('Archivo seleccionado');
+            $('#adop-file-text').text('Archivo seleccionado');
             $name.text(fname);
             $label.addClass('has-file');
         } else {
-            $('#ad-file-text').text('Haz clic para seleccionar un archivo');
+            $('#adop-file-text').text('Haz clic para seleccionar un archivo');
             $name.text('');
             $label.removeClass('has-file');
         }
     });
 
-    // ── Validar archivo antes de guardar adopciones ──────────────
+    // â”€â”€ Validar archivo antes de guardar adopciones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     var requiereAcuerdo = <?= ($gp_periodo["periodo"] >= 2027) ? 'true' : 'false'; ?>;
 
-    // ── Validar archivo antes de guardar adopciones ──────────────
+    // â”€â”€ Validar archivo antes de guardar adopciones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     $('#form_definicion').on('submit', function(e) {
 
         if (!requiereAcuerdo) {
@@ -2173,10 +2173,10 @@
 
         if (!adArchivoGuardado && !tieneNuevo) {
             e.preventDefault();
-            adToast('Debes adjuntar el acuerdo de adopción antes de guardar.', 'error');
-            $('#ad-file-label').css({'border-color':'#dc2626','background':'#fef2f2'});
+            adToast('Debes adjuntar el acuerdo de adopciÃ³n antes de guardar.', 'error');
+            $('#adop-file-label').css({'border-color':'#dc2626','background':'#fef2f2'});
             setTimeout(function(){
-                $('#ad-file-label').css({'border-color':'','background':''});
+                $('#adop-file-label').css({'border-color':'','background':''});
             }, 2500);
             return false;
         }
@@ -2184,9 +2184,9 @@
 
 </script>
 
-<div class="pr-toast" id="ad-toast">
+<div class="pr-toast" id="adop-toast">
   <i class="bi bi-check-circle-fill"></i>
   <span class="pr-toast-msg"></span>
 </div>
 
-</div><!-- /.ad-wrap -->
+</div><!-- /.adop-wrap -->
