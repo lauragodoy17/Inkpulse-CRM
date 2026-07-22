@@ -27,10 +27,15 @@ if (isset($_GET['order'][0]['column'])) {
     }
 }
 
-if ($_SESSION['zona']=='5656' || ($_SESSION["tipo"]!=3 && $_SESSION["tipo"]!=6 && $_SESSION["tipo"]!=10) ) {
+// Estos perfiles ven todos los colegios (no solo los de su propia zona), así que por defecto se
+// ocultan los que no tienen cod_zona (sin empresa asignada) salvo que se pida explícitamente el
+// filtro "Sin asignar" más abajo.
+$vista_amplia = ($_SESSION['zona']=='5656' || ($_SESSION["tipo"]!=3 && $_SESSION["tipo"]!=6 && $_SESSION["tipo"]!=10));
+
+if ($vista_amplia) {
 
 
-        $searchSQL = " WHERE (colegio LIKE :search OR dane LIKE :search) AND cod_zona !=0 AND id > 2";
+        $searchSQL = " WHERE (colegio LIKE :search OR dane LIKE :search) AND id > 2";
         $params[':search'] = "%" . $searchValue . "%";
 
 
@@ -52,14 +57,21 @@ if ($_SESSION['zona']=='5656' || ($_SESSION["tipo"]!=3 && $_SESSION["tipo"]!=6 &
 }
 
 // Filtros adicionales del panel de búsqueda
-$zona_filter   = isset($_GET['zona_filter'])   ? intval($_GET['zona_filter'])           : 0;
+$zona_filter   = isset($_GET['zona_filter'])   ? trim($_GET['zona_filter'])              : '';
 $depto_filter  = isset($_GET['depto_filter'])  ? intval($_GET['depto_filter'])           : 0;
 $ciudad_filter = isset($_GET['ciudad_filter']) ? trim(strip_tags($_GET['ciudad_filter'])): '';
 $resp_filter   = isset($_GET['resp_filter'])   ? trim(strip_tags($_GET['resp_filter']))  : '';
 
-if ($zona_filter > 0) {
+if ($zona_filter === 'sin_asignar') {
+    // Colegios sin cod_zona asignado, es decir, sin empresa/zona.
+    $searchSQL .= " AND cod_zona = 0";
+} elseif (intval($zona_filter) > 0) {
     $searchSQL .= " AND cod_zona = :zona_filter";
-    $params[':zona_filter'] = $zona_filter;
+    $params[':zona_filter'] = intval($zona_filter);
+} elseif ($vista_amplia) {
+    // Sin filtro de zona explícito: se mantiene el comportamiento previo de ocultar los
+    // colegios sin cod_zona en la vista general.
+    $searchSQL .= " AND cod_zona != 0";
 }
 if ($depto_filter > 0) {
     $searchSQL .= " AND departamento = :depto_filter";
@@ -110,20 +122,30 @@ foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $colegio) {
 
     if ($_SESSION['tipo'] == 1 || $_SESSION["tipo"]==7 || $_SESSION["tipo"]==10 || $_SESSION["tipo"]==5 || $_SESSION['zona']=='5656') {
 
+        if (intval($colegio['cod_zona']) === 0) {
+            // Colegio sin cod_zona: no tiene empresa/zona/responsable asignado.
+            $colegio['empresa'] = 'Sin asignar';
+            $colegio['zona'] = 'Sin asignar';
+            $colegio['responsable'] = '';
+        } else {
+
         $sql_zona="SELECT zona, CONCAT(nombres,' ',apellidos) as promotor, u.tipo FROM zonas z JOIN usuarios u ON z.codigo=u.cod_zona WHERE z.codigo='".$colegio['cod_zona']."'";
         $req_zona = $bdd->prepare($sql_zona);
         $req_zona->execute();
         $zona = $req_zona->fetch();
 
-                                                  
-        if ($zona['tipo']==3 || $zona['tipo']==1 || $zona['tipo']==10) {
-                                                    
+        if (!$zona) {
+            $colegio['empresa'] = 'Sin asignar';
+            $colegio['zona'] = 'Sin asignar';
+            $colegio['responsable'] = '';
+        } elseif ($zona['tipo']==3 || $zona['tipo']==1 || $zona['tipo']==10) {
+
             list($empresa,$n_zona) = explode("/", $zona["zona"]);
 
             $colegio['empresa']=$empresa;
             $colegio['zona']="$n_zona";
             $colegio['responsable']=$zona['promotor'];
-           
+
         }else{
 
             $sql_sz="SELECT sub_zona FROM sub_zonas WHERE id='".$colegio["sub_zona"]."'";
@@ -134,9 +156,11 @@ foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $colegio) {
             $colegio['empresa']=$zona['zona'];
             $colegio['zona']=$sub_zona['sub_zona'];
             $colegio['responsable']=$colegio['responsable'];
-    
+
         }
-                                     
+
+        }
+
 
     }elseif ($_SESSION['tipo'] == 6) {
         

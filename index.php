@@ -889,7 +889,7 @@ if ($es_admin) {
 				colors: ['#2ecc71', '#e5484d'],
 				legend: { position: 'bottom', fontSize: '12px' },
 				dataLabels: { enabled: true, formatter: function (val) { return val.toFixed(1) + '%'; } },
-				plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Registradas' } } } } },
+				plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Planificadas' } } } } },
 				noData: { text: 'Sin datos para mostrar' },
 			});
 			chartEfectividad.render();

@@ -184,6 +184,7 @@ if ($show_resp_filter) {
             <?php if ($show_zona_filter): ?>
             <select class="ft-select" id="ft-zona">
               <option value="">Todas las zonas</option>
+              <option value="sin_asignar">Sin asignar</option>
               <?php foreach ($zonas_filter_list as $z):
                 $parts = explode("/", $z['zona']);
                 $label = trim(count($parts) > 1 ? $parts[1] : $parts[0]);
