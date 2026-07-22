@@ -9,7 +9,7 @@ $es_admin = $tipo_sesion === 1;
 // Tipo 10 ve el mismo panel que un promotor (Presupuestos, Adopciones y Visitas),
 // también acotado únicamente a su propia información.
 $dash_rol_fijo = ($tipo_sesion === 3 || $tipo_sesion === 10) ? 'promotor' : ($tipo_sesion === 6 ? 'distribuidor' : null);
-// Tipo 4 solo ve la sección de Visitas ejecutadas, acotada a sus propias visitas
+// Tipo 4 solo ve la sección de Visitas planificadas, acotada a sus propias visitas
 // (igual que promotores/distribuidores, el filtro por usuario lo fuerza el backend).
 $solo_visitas_dash = $tipo_sesion === 4;
 $dash_visible = $es_admin || $dash_rol_fijo !== null || $solo_visitas_dash;
@@ -429,17 +429,17 @@ if ($es_admin) {
 					<?php endif; ?>
 					<?php endif; // !$solo_visitas_dash ?>
 
-					<!-- ── Visitas ejecutadas ── -->
+					<!-- ── Visitas planificadas ── -->
 					<div id="dash-visitas-section">
-						<h5 class="dash-section-title"><i class="bi bi-check2-circle"></i> Visitas ejecutadas</h5>
+						<h5 class="dash-section-title"><i class="bi bi-check2-circle"></i> Visitas planificadas</h5>
 
 						<div class="row">
 							<div class="col-xl-6 col-lg-6 col-md-6">
 								<div class="stat-card-modern">
 									<div class="stat-icon-modern sblue"><i class="bi bi-check2-circle"></i></div>
 									<div class="stat-info-modern">
-										<h3 id="dv-ejecutadas">—</h3>
-										<p class="stat-label">Visitas ejecutadas</p>
+										<h3 id="dv-planificadas">—</h3>
+										<p class="stat-label">Visitas planificadas</p>
 										<span class="stat-sub">En el período seleccionado</span>
 									</div>
 								</div>
@@ -457,7 +457,7 @@ if ($es_admin) {
 						</div>
 
 						<div class="row">
-							<div class="col-xl-4 col-lg-4 col-md-6">
+							<div class="col-xl-6 col-lg-6 col-md-6">
 								<div class="chart-card">
 									<div class="chart-card-head">
 										<h5><i class="bi bi-pie-chart mr-2"></i>Efectividad</h5>
@@ -465,22 +465,25 @@ if ($es_admin) {
 									<div id="chart-efectividad-visitas"></div>
 								</div>
 							</div>
-							<div class="col-xl-4 col-lg-4 col-md-6">
-								<div class="chart-card">
-									<div class="chart-card-head">
-										<h5><i class="bi bi-bar-chart mr-2"></i><?= ($dash_rol_fijo === 'promotor' || $solo_visitas_dash) ? 'Visitas ejecutadas' : 'Top promotores por visitas ejecutadas' ?></h5>
-										<span id="dv-ranking-sub">Período seleccionado</span>
-									</div>
-									<div id="chart-ranking-promotores"></div>
-								</div>
-							</div>
-							<div class="col-xl-4 col-lg-4 col-md-6">
+							<div class="col-xl-6 col-lg-6 col-md-6">
 								<div class="chart-card">
 									<div class="chart-card-head">
 										<h5><i class="bi bi-pie-chart mr-2"></i>Objetivos más frecuentes</h5>
-										<span>Visitas ejecutadas</span>
+										<span>Visitas planificadas</span>
 									</div>
 									<div id="chart-objetivos-visitas"></div>
+								</div>
+							</div>
+						</div>
+
+						<div class="row">
+							<div class="col-12">
+								<div class="chart-card">
+									<div class="chart-card-head">
+										<h5><i class="bi bi-bar-chart mr-2"></i><?= ($dash_rol_fijo === 'promotor' || $solo_visitas_dash) ? 'Visitas planificadas' : 'Top promotores por visitas planificadas' ?></h5>
+										<span id="dv-ranking-sub">Período seleccionado</span>
+									</div>
+									<div id="chart-ranking-promotores"></div>
 								</div>
 							</div>
 						</div>
@@ -878,7 +881,7 @@ if ($es_admin) {
 				});
 			}
 
-			// ── Visitas ejecutadas ──
+			// ── Visitas planificadas ──
 			var chartEfectividad = new ApexCharts(document.querySelector("#chart-efectividad-visitas"), {
 				series: [0, 0],
 				chart: { type: 'donut', height: 300 },
@@ -892,7 +895,7 @@ if ($es_admin) {
 			chartEfectividad.render();
 
 			var chartRankingVisitas = new ApexCharts(document.querySelector("#chart-ranking-promotores"), {
-				series: [{ name: 'Visitas ejecutadas', data: [] }],
+				series: [{ name: 'Visitas planificadas', data: [] }],
 				chart: { type: 'bar', height: 320, toolbar: { show: false } },
 				colors: dashBarColors,
 				plotOptions: { bar: { borderRadius: 6, horizontal: true, barHeight: '55%', distributed: true } },
@@ -1089,15 +1092,18 @@ if ($es_admin) {
 					if (!resp.success) return;
 					var s = resp.stats;
 
-					$('#dv-ejecutadas').text(s.ejecutadas.toLocaleString('es-CO'));
+					$('#dv-planificadas').text(s.planificadas.toLocaleString('es-CO'));
 					$('#dv-efectividad').text(s.efectividad_pct + '%');
-					$('#dv-efectividad-sub').text(s.efectivas.toLocaleString('es-CO') + ' de ' + s.total_visitas.toLocaleString('es-CO') + ' ejecutadas');
+					$('#dv-efectividad-sub').text(s.efectivas.toLocaleString('es-CO') + ' de ' + s.planificadas.toLocaleString('es-CO') + ' planificadas');
 					$('#dv-ranking-sub').text('Período ' + resp.periodo);
 
 					chartEfectividad.updateSeries([s.efectivas, s.no_efectivas]);
 
-					chartRankingVisitas.updateOptions({ xaxis: { categories: resp.ranking.labels } });
-					chartRankingVisitas.updateSeries([{ name: 'Visitas ejecutadas', data: resp.ranking.data }]);
+					chartRankingVisitas.updateOptions({
+						chart: { height: Math.max(320, resp.ranking.labels.length * 32) },
+						xaxis: { categories: resp.ranking.labels },
+					});
+					chartRankingVisitas.updateSeries([{ name: 'Visitas planificadas', data: resp.ranking.data }]);
 
 					chartObjetivosVisitas.updateOptions({ labels: resp.objetivos.labels });
 					chartObjetivosVisitas.updateSeries(resp.objetivos.data);

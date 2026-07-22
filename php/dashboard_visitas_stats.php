@@ -48,49 +48,62 @@ $sql_periodo->execute([$periodo]);
 $nombre_periodo = $sql_periodo->fetchColumn();
 
 // ── Tarjetas de estadística ──
-// Solo se muestran visitas EJECUTADAS (plan_trabajo.resultado = 1); no se consultan ni exponen
-// las planificadas/pendientes (registradas pero aún sin ejecutar).
-$stmt = $bdd->prepare("SELECT COUNT(*) FROM plan_trabajo WHERE id_periodo = ? AND resultado = 1" . $userFilterPlan);
+// Se muestran TODAS las visitas planificadas (sin filtrar por plan_trabajo.resultado), y la
+// efectividad se mide sobre ese mismo total: una visita sin resultado registrado (nunca
+// ejecutada) cuenta como "no efectiva" igual que una ejecutada pero sin éxito, en vez de
+// excluirse del cálculo. No se distingue en ningún lado si se ejecutó o no, solo si fue
+// efectiva.
+$stmt = $bdd->prepare("SELECT COUNT(*) FROM plan_trabajo WHERE id_periodo = ?" . $userFilterPlan);
 $stmt->execute([$periodo]);
-$ejecutadas = intval($stmt->fetchColumn());
+$planificadas = intval($stmt->fetchColumn());
 
 // Nota: se filtra por p.id_periodo (plan_trabajo), NO por v.id_periodo (visitas) — ese campo
 // se captura de forma independiente al ejecutar la visita y puede no coincidir con el periodo
 // del plan original (confirmado: ~127 registros con periodos distintos entre ambas tablas).
-// Usar p.id_periodo mantiene esta tarjeta consistente con "ejecutadas" y con cómo
+// Usar p.id_periodo mantiene esta tarjeta consistente con el total de planificadas y con cómo
 // php/visitas_general.php resuelve la visita de un plan (por id_plan_trabajo, no por periodo).
 //
 // También se deduplica a 1 visita por plan (la de id más alto): algunos planes tienen más de
 // un registro en `visitas` (envíos duplicados desde la app), lo que inflaba "Efectividad" por
-// encima del propio conteo de "Visitas ejecutadas" (confirmado: 9 planes duplicados en el
-// periodo 2027, ej. 937/858 en vez de 928/850).
+// encima del propio conteo de planes (confirmado: 9 planes duplicados en el periodo 2027,
+// ej. 937/858 en vez de 928/850).
 $visitaUnica = "(SELECT v1.* FROM visitas v1
     INNER JOIN (SELECT id_plan_trabajo, MAX(id) as max_id FROM visitas GROUP BY id_plan_trabajo) vm
         ON vm.id_plan_trabajo = v1.id_plan_trabajo AND vm.max_id = v1.id)";
 
-$stmt = $bdd->prepare("SELECT COUNT(*) FROM $visitaUnica v JOIN plan_trabajo p ON v.id_plan_trabajo = p.id WHERE p.id_periodo = ? AND p.resultado = 1" . $userFilterVisitas);
-$stmt->execute([$periodo]);
-$total_visitas = intval($stmt->fetchColumn());
-
-$stmt = $bdd->prepare("SELECT COUNT(*) FROM $visitaUnica v JOIN plan_trabajo p ON v.id_plan_trabajo = p.id WHERE p.id_periodo = ? AND p.resultado = 1 AND v.efectiva = 1" . $userFilterVisitas);
+$stmt = $bdd->prepare("SELECT COUNT(*) FROM $visitaUnica v JOIN plan_trabajo p ON v.id_plan_trabajo = p.id WHERE p.id_periodo = ? AND v.efectiva = 1" . $userFilterVisitas);
 $stmt->execute([$periodo]);
 $efectivas = intval($stmt->fetchColumn());
 
-$efectividad_pct = $total_visitas > 0 ? round(($efectivas / $total_visitas) * 100, 1) : 0;
+$efectividad_pct = $planificadas > 0 ? round(($efectivas / $planificadas) * 100, 1) : 0;
 
-// ── Ranking: top promotores por visitas ejecutadas en el periodo ──
+// id_colegio=1 ("Oficina"), =2 ("Trabajo en casa") y =0 ("Otro lugar", campo otro_lugar) son
+// destinos ficticios que usa agenda.php cuando el promotor agenda algo que no es una visita real
+// a un colegio (ver php/crear_plan_trabajo.php); en los tres casos no se pide objetivo. Los
+// colegios reales siempre tienen id > 2 (agenda.php los lista con "WHERE id > 2"), así que se
+// excluyen del ranking por promotor y de los objetivos más frecuentes filtrando por ese umbral.
+$excluirOficinaCasa = "AND p.id_colegio > 2";
+
+// ── Ranking: promotores por visitas planificadas en el periodo (todos, sin límite) ──
 $stmt = $bdd->prepare("SELECT CONCAT(u.nombres, ' ', u.apellidos) as promotor, COUNT(*) as total
     FROM plan_trabajo p JOIN usuarios u ON p.id_promotor = u.id
-    WHERE p.id_periodo = ? AND p.resultado = 1" . $userFilterPlan . "
-    GROUP BY p.id_promotor ORDER BY total DESC LIMIT 8");
+    WHERE p.id_periodo = ? $excluirOficinaCasa" . $userFilterPlan . "
+    GROUP BY p.id_promotor ORDER BY total DESC");
 $stmt->execute([$periodo]);
 $ranking = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// ── Objetivos más frecuentes en las visitas ejecutadas ──
-$stmt = $bdd->prepare("SELECT COALESCE(NULLIF(o.objetivo, ''), 'Sin objetivo') as objetivo, COUNT(*) as total
+// ── Objetivos más frecuentes en las visitas planificadas ──
+// id_objetivo=0 apunta a un registro real de `objetivos` pero con nombre vacío: es el que usa
+// agenda.php cuando el promotor elige "Otro" en el desplegable y escribe el objetivo como texto
+// libre en plan_trabajo.otro_objetivo. Se agrupa junto con el objetivo "Otro" normal (mismo
+// significado para el usuario) en vez de caer en "Sin objetivo".
+$stmt = $bdd->prepare("SELECT
+        CASE WHEN p.id_objetivo = 0 THEN 'Otro' ELSE COALESCE(NULLIF(o.objetivo, ''), 'Sin objetivo') END as objetivo,
+        COUNT(*) as total
     FROM plan_trabajo p LEFT JOIN objetivos o ON p.id_objetivo = o.id
-    WHERE p.id_periodo = ? AND p.resultado = 1" . $userFilterPlan . "
-    GROUP BY p.id_objetivo ORDER BY total DESC LIMIT 8");
+    WHERE p.id_periodo = ? $excluirOficinaCasa" . $userFilterPlan . "
+    GROUP BY CASE WHEN p.id_objetivo = 0 THEN 'Otro' ELSE COALESCE(NULLIF(o.objetivo, ''), 'Sin objetivo') END
+    ORDER BY total DESC LIMIT 8");
 $stmt->execute([$periodo]);
 $objetivos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -98,10 +111,9 @@ echo json_encode([
     'success' => true,
     'periodo' => $nombre_periodo,
     'stats' => [
-        'ejecutadas' => $ejecutadas,
+        'planificadas' => $planificadas,
         'efectivas' => $efectivas,
-        'no_efectivas' => max(0, $total_visitas - $efectivas),
-        'total_visitas' => $total_visitas,
+        'no_efectivas' => max(0, $planificadas - $efectivas),
         'efectividad_pct' => $efectividad_pct,
     ],
     'ranking' => [
