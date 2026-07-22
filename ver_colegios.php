@@ -58,6 +58,8 @@ if ($_SESSION['tipo'] != 3) {
     }
 }
 
+$calendarios_filter_list = $bdd->query("SELECT id, calendario FROM calendarios WHERE act=1 ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+
 $show_zona_filter = ($_SESSION['tipo'] != 3 && ($_SESSION['tipo']==1 || $_SESSION["tipo"]==7 || $_SESSION["tipo"]==10 || $_SESSION["tipo"]==5 || $_SESSION['zona']=='5656'));
 if ($show_zona_filter) {
     $filtro_prueba_zona = $_SESSION['tipo'] != 1 ? "WHERE LOWER(zona) NOT LIKE '%prueba%'" : "";
@@ -180,6 +182,13 @@ if ($show_resp_filter) {
               <?php endforeach; ?>
             </select>
             <?php endif; ?>
+
+            <select class="ft-select" id="ft-calendario">
+              <option value="">Todos los calendarios</option>
+              <?php foreach ($calendarios_filter_list as $cal): ?>
+              <option value="<?= $cal['id'] ?>">Calendario <?= htmlspecialchars($cal['calendario']) ?></option>
+              <?php endforeach; ?>
+            </select>
 
             <?php if ($show_zona_filter): ?>
             <select class="ft-select" id="ft-zona">
@@ -356,6 +365,7 @@ if ($show_resp_filter) {
                 data: function(d) {
                     d.depto_filter  = $('#ft-depto').val();
                     d.ciudad_filter = $('#ft-ciudad').val();
+                    d.calendario_filter = $('#ft-calendario').val();
                     <?php if ($show_zona_filter): ?>
                     d.zona_filter   = $('#ft-zona').val();
                     <?php endif; ?>
@@ -434,7 +444,7 @@ if ($show_resp_filter) {
 
         // Limpiar filtros
         $('#ft-btn-clear').on('click', function () {
-            $('#ft-depto, #ft-zona, #ft-resp').val('');
+            $('#ft-depto, #ft-zona, #ft-resp, #ft-calendario').val('');
             $('#ft-input-search').val('');
             $('#ft-ciudad').html('<option value="">Todas las ciudades</option>');
             table.api().search('').draw();

@@ -61,6 +61,7 @@ $zona_filter   = isset($_GET['zona_filter'])   ? trim($_GET['zona_filter'])     
 $depto_filter  = isset($_GET['depto_filter'])  ? intval($_GET['depto_filter'])           : 0;
 $ciudad_filter = isset($_GET['ciudad_filter']) ? trim(strip_tags($_GET['ciudad_filter'])): '';
 $resp_filter   = isset($_GET['resp_filter'])   ? trim(strip_tags($_GET['resp_filter']))  : '';
+$calendario_filter = isset($_GET['calendario_filter']) ? intval($_GET['calendario_filter']) : 0;
 
 if ($zona_filter === 'sin_asignar') {
     // Colegios sin cod_zona asignado, es decir, sin empresa/zona.
@@ -80,6 +81,10 @@ if ($depto_filter > 0) {
 if (!empty($ciudad_filter)) {
     $searchSQL .= " AND ciudad LIKE :ciudad_filter";
     $params[':ciudad_filter'] = "%" . $ciudad_filter . "%";
+}
+if ($calendario_filter > 0) {
+    $searchSQL .= " AND id_calendario = :calendario_filter";
+    $params[':calendario_filter'] = $calendario_filter;
 }
 // Solo perfiles 1 y 2 pueden filtrar por responsable
 if (!empty($resp_filter) && ($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2)) {
