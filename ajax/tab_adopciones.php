@@ -153,11 +153,15 @@
   .adop-card-icon.amber  { background: #fef3c7; color: #b45309; }
   .adop-card-label { font-size: 0.74rem; color: #64748b; margin: 0 0 2px 0; overflow-wrap: break-word; }
   .adop-card-val   { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0; overflow-wrap: break-word; }
-  .adop-card-input {
-    border: 1px solid transparent; border-radius: 6px; width: 80px; padding: 1px 4px;
-    background: transparent; font-family: inherit;
+  .adop-input-wrap { position: relative; display: inline-flex; align-items: center; }
+  .adop-input-wrap .bi-pencil-fill {
+    position: absolute; right: 8px; font-size: .68rem; color: #818cf8; pointer-events: none;
   }
-  .adop-card-input:hover   { border-color: #cbd5e1; }
+  .adop-card-input {
+    border: 1px solid #c7d2fe; border-radius: 6px; width: 92px; padding: 2px 24px 2px 6px;
+    background: #eef2ff; font-family: inherit; cursor: text;
+  }
+  .adop-card-input:hover   { border-color: #a5b4fc; background: #e0e7ff; }
   .adop-card-input:focus   { outline: none; border-color: #4f46e5; background: #fff; box-shadow: 0 0 0 2px rgba(79,70,229,.15); }
   .adop-card-pct   { font-size: 0.75rem; color: #64748b; }
 
@@ -487,10 +491,14 @@
         <div class="adop-card-icon blue"><i class="bi bi-person-video3"></i></div>
         <div>
           <p class="adop-card-label">Cantidad de profesores</p>
-          <input type="number" min="0" step="1" class="adop-card-val adop-card-input" id="cantidad_profesores_ia_adop"
-            value="<?= $cantidad_profesores ?>"
-            data-colegio="<?= htmlspecialchars($_GET['colegio']) ?>"
-            data-periodo="<?= htmlspecialchars($_GET['periodo']) ?>">
+          <div class="adop-input-wrap">
+            <input type="number" min="0" step="1" class="adop-card-val adop-card-input" id="cantidad_profesores_ia_adop"
+              value="<?= $cantidad_profesores ?>"
+              title="Editable: haz clic para cambiar la cantidad de profesores"
+              data-colegio="<?= htmlspecialchars($_GET['colegio']) ?>"
+              data-periodo="<?= htmlspecialchars($_GET['periodo']) ?>">
+            <i class="bi bi-pencil-fill"></i>
+          </div>
         </div>
       </div>
       <div class="adop-card">
