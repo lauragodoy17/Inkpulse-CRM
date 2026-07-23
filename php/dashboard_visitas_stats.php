@@ -47,10 +47,16 @@ $sql_periodo = $bdd->prepare("SELECT periodo FROM periodos WHERE id = ?");
 $sql_periodo->execute([$periodo]);
 $nombre_periodo = $sql_periodo->fetchColumn();
 
+// id_colegio=1 ("Oficina") y =2 ("Trabajo en casa") son destinos ficticios que usa
+// agenda.php cuando el promotor agenda algo que no es una visita real a un colegio (ver
+// php/crear_plan_trabajo.php); se excluyen del conteo de visitas. id_colegio=0 ("Otro
+// lugar") sí se cuenta como visita.
+$excluirOficinaCasa = "AND p.id_colegio != 1 AND p.id_colegio != 2";
+
 // ── Tarjetas de estadística ──
 // Solo se muestran visitas EJECUTADAS (plan_trabajo.resultado = 1); no se consultan ni exponen
 // las planificadas/pendientes (registradas pero aún sin ejecutar).
-$stmt = $bdd->prepare("SELECT COUNT(*) FROM plan_trabajo WHERE id_periodo = ? AND resultado = 1" . $userFilterPlan);
+$stmt = $bdd->prepare("SELECT COUNT(*) FROM plan_trabajo p WHERE p.id_periodo = ? AND p.resultado = 1 $excluirOficinaCasa" . $userFilterPlan);
 $stmt->execute([$periodo]);
 $ejecutadas = intval($stmt->fetchColumn());
 
@@ -68,11 +74,11 @@ $visitaUnica = "(SELECT v1.* FROM visitas v1
     INNER JOIN (SELECT id_plan_trabajo, MAX(id) as max_id FROM visitas GROUP BY id_plan_trabajo) vm
         ON vm.id_plan_trabajo = v1.id_plan_trabajo AND vm.max_id = v1.id)";
 
-$stmt = $bdd->prepare("SELECT COUNT(*) FROM $visitaUnica v JOIN plan_trabajo p ON v.id_plan_trabajo = p.id WHERE p.id_periodo = ? AND p.resultado = 1" . $userFilterVisitas);
+$stmt = $bdd->prepare("SELECT COUNT(*) FROM $visitaUnica v JOIN plan_trabajo p ON v.id_plan_trabajo = p.id WHERE p.id_periodo = ? AND p.resultado = 1 $excluirOficinaCasa" . $userFilterVisitas);
 $stmt->execute([$periodo]);
 $total_visitas = intval($stmt->fetchColumn());
 
-$stmt = $bdd->prepare("SELECT COUNT(*) FROM $visitaUnica v JOIN plan_trabajo p ON v.id_plan_trabajo = p.id WHERE p.id_periodo = ? AND p.resultado = 1 AND v.efectiva = 1" . $userFilterVisitas);
+$stmt = $bdd->prepare("SELECT COUNT(*) FROM $visitaUnica v JOIN plan_trabajo p ON v.id_plan_trabajo = p.id WHERE p.id_periodo = ? AND p.resultado = 1 $excluirOficinaCasa AND v.efectiva = 1" . $userFilterVisitas);
 $stmt->execute([$periodo]);
 $efectivas = intval($stmt->fetchColumn());
 
@@ -81,15 +87,17 @@ $efectividad_pct = $total_visitas > 0 ? round(($efectivas / $total_visitas) * 10
 // ── Ranking: promotores por visitas ejecutadas en el periodo (todos, sin límite) ──
 $stmt = $bdd->prepare("SELECT CONCAT(u.nombres, ' ', u.apellidos) as promotor, COUNT(*) as total
     FROM plan_trabajo p JOIN usuarios u ON p.id_promotor = u.id
-    WHERE p.id_periodo = ? AND p.resultado = 1" . $userFilterPlan . "
+    WHERE p.id_periodo = ? AND p.resultado = 1 $excluirOficinaCasa" . $userFilterPlan . "
     GROUP BY p.id_promotor ORDER BY total DESC");
 $stmt->execute([$periodo]);
 $ranking = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // ── Objetivos más frecuentes en las visitas ejecutadas ──
-$stmt = $bdd->prepare("SELECT COALESCE(NULLIF(o.objetivo, ''), 'Sin objetivo') as objetivo, COUNT(*) as total
-    FROM plan_trabajo p LEFT JOIN objetivos o ON p.id_objetivo = o.id
-    WHERE p.id_periodo = ? AND p.resultado = 1" . $userFilterPlan . "
+// "Sin objetivo" (id_objetivo sin fila en objetivos, o con nombre vacío) se excluye: no
+// aporta nada a esta gráfica, que solo debe mostrar objetivos reales.
+$stmt = $bdd->prepare("SELECT o.objetivo as objetivo, COUNT(*) as total
+    FROM plan_trabajo p JOIN objetivos o ON p.id_objetivo = o.id
+    WHERE p.id_periodo = ? AND p.resultado = 1 $excluirOficinaCasa AND o.objetivo <> ''" . $userFilterPlan . "
     GROUP BY p.id_objetivo ORDER BY total DESC LIMIT 8");
 $stmt->execute([$periodo]);
 $objetivos = $stmt->fetchAll(PDO::FETCH_ASSOC);
