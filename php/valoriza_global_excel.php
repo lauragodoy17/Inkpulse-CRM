@@ -101,13 +101,26 @@ $fecha=date("Y-m-d");
 $calendario_periodo_g = intval($gp_periodo["id_calendario"]);
 
 // "Dueño de zona" del colegio: el criterio real de negocio para "de quién es" un colegio
-// es la zona (colegios.cod_zona -> usuarios.cod_zona), NO quién cargó la línea de
-// presupuesto (presupuestos.id_usuario) — ver la explicación completa en
-// php/dashboard_presupuestos_stats.php. Los admins (tipo=1) nunca cuentan como dueños de
-// zona; Hector Morales (id=69, tipo=10) sí, por la misma excepción de negocio que ya
-// aplican los demás endpoints del dashboard. Verificado que ningún usuario activo tipo 3/6
-// comparte cod_zona con otro, así que este LEFT JOIN nunca duplica filas.
-$ownerJoin_g = "LEFT JOIN usuarios owner ON owner.cod_zona = c.cod_zona AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
+// es la zona, NO quién cargó la línea de presupuesto (presupuestos.id_usuario) — ver la
+// explicación completa en php/dashboard_presupuestos_stats.php. Se resuelve por
+// presupuestos.cod_zona (la zona vigente EN ESE PERIODO), no por colegios.cod_zona (que es
+// el valor ACTUAL/vivo y cambia con el tiempo — usarlo para un periodo pasado atribuye el
+// colegio al dueño de HOY, no al de entonces; caso real: Mariana Castañeda cargó
+// presupuesto en "Liceo De Cervantes Bilingue" en 2026 con su propio cod_zona=5656, pero
+// la zona ACTUAL del colegio ya es de Jairo Rico). Cuando un mismo colegio+periodo tiene
+// más de un cod_zona distinto entre sus líneas (dato ambiguo, ~5 casos reales), se descarta
+// esa resolución (HAVING COUNT(DISTINCT cod_zona) = 1) y se cae a colegios.cod_zona como
+// respaldo, en vez de adivinar cuál aplica. Los admins (tipo=1) nunca cuentan como dueños
+// de zona; Hector Morales (id=69, tipo=10) sí, por la misma excepción de negocio que ya
+// aplican los demás endpoints del dashboard.
+$ownerJoin_g = "LEFT JOIN (
+        SELECT id_colegio, id_periodo, MIN(cod_zona) as cod_zona
+        FROM presupuestos
+        WHERE cod_zona <> ''
+        GROUP BY id_colegio, id_periodo
+        HAVING COUNT(DISTINCT cod_zona) = 1
+    ) pz ON pz.id_colegio = c.id AND pz.id_periodo = p.id_periodo
+    LEFT JOIN usuarios owner ON owner.cod_zona = COALESCE(pz.cod_zona, c.cod_zona) AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("H2", "Periodo $gp_periodo[periodo]");
 
@@ -157,7 +170,7 @@ $objSpreadsheet->getActiveSheet()->getStyle($mostrar_ia_g ? 'A6:Q6' : 'A6:O6')->
 // recurso.
 $selectColegio = "SELECT c.id, c.dane, p.sub_zona, p.conse, p.year, c.responsable, c.departamento,c.ciudad, c.colegio, c.direccion, c.barrio,c.telefono,
     COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), NULLIF(UPPER(p.responsable), ''), 'Sin asesor asignado') as promotor, owner.tipo as tipouser,
-    COALESCE(z.zona, z_p.zona) as zona
+    COALESCE(z_p.zona, z.zona) as zona
     FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio LEFT JOIN zonas z ON z.codigo = c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo = p.cod_zona $ownerJoin_g";
 
 if ($_SESSION['tipo']==1 || $_SESSION['tipo']==2 || $_SESSION['tipo']==7) {
@@ -211,9 +224,12 @@ $colegios = $req->fetchAll();
 $cole_ids_g = array_values(array_unique(array_column($colegios, 'id')));
 $ph_g = !empty($cole_ids_g) ? implode(',', array_fill(0, count($cole_ids_g), '?')) : '0';
 
+// Mismo criterio de negocio que php/valoriza_excel.php ("valorización libro a libro"):
+// excluye probabilidad "Perdida" (id=3) y las líneas sin ninguna tasa de compra asignada
+// (ni propia ni de distribuidor), que no representan una venta proyectable.
 $pres_map_g = [];
 if (!empty($cole_ids_g)) {
-    $req_pres = $bdd->prepare("SELECT p.id_colegio, p.id_usuario, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id_grado FROM presupuestos p JOIN libros l ON p.id_libro=l.id WHERE p.id_colegio IN ($ph_g) AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo=?");
+    $req_pres = $bdd->prepare("SELECT p.id_colegio, p.id_usuario, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id_grado FROM presupuestos p JOIN libros l ON p.id_libro=l.id WHERE p.id_colegio IN ($ph_g) AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo=? AND p.probabilidad != 3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00)");
     $req_pres->execute(array_merge($cole_ids_g, [$_POST['periodo']]));
     foreach ($req_pres->fetchAll(PDO::FETCH_ASSOC) as $row)
         $pres_map_g[$row['id_colegio']][$row['id_usuario']][] = $row;

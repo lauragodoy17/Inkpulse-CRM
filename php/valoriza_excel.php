@@ -140,30 +140,58 @@ $objSpreadsheet->getActiveSheet()->getStyle('A6:X6')->applyFromArray([
     ]
 ]);
 
+// "Dueño de zona" del colegio: mismo criterio que php/valoriza_global_excel.php — de quién
+// es un colegio se decide por zona (resuelta por presupuestos.cod_zona del propio periodo,
+// con colegios.cod_zona actual como respaldo cuando la línea no trae zona o hay
+// ambigüedad), no por quién cargó la línea (presupuestos.id_usuario). Antes este reporte
+// filtraba solo por p.id_usuario al elegir un asesor específico, lo que (a) se perdía
+// colegios que son de la zona del asesor pero cuya línea puntual cargó otra persona, y (b)
+// mostraba en 0 a un asesor que no cargó nada él mismo en un periodo aunque colegios de su
+// zona sí tuvieran presupuesto cargado por alguien más — dando un total distinto al reporte
+// global para el mismo asesor/periodo.
+$ownerJoin_v = "LEFT JOIN (
+        SELECT id_colegio, id_periodo, MIN(cod_zona) as cod_zona
+        FROM presupuestos
+        WHERE cod_zona <> ''
+        GROUP BY id_colegio, id_periodo
+        HAVING COUNT(DISTINCT cod_zona) = 1
+    ) pz ON pz.id_colegio = c.id AND pz.id_periodo = p.id_periodo
+    LEFT JOIN usuarios owner ON owner.cod_zona = COALESCE(pz.cod_zona, c.cod_zona) AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
+
 if ($_SESSION['tipo']==1 || $_SESSION['tipo']==2 || $_SESSION['tipo']==7) {
-    
+
     if ($_POST['promotor']!=0) {
+
+    // Un asesor/distribuidor real (tipo 3/6) o Hector Morales (id=69) se filtra por la
+    // zona del colegio (owner.id); cualquier otro tipo (admins sin territorio) usa el
+    // criterio viejo (quién cargó la línea), porque no tiene zona/territorio asignado.
+    // Mismo criterio que php/valoriza_global_excel.php.
+    $promotor_id_v = intval($_POST['promotor']);
+    $tipo_promotor_v = intval($bdd->query("SELECT tipo FROM usuarios WHERE id=$promotor_id_v")->fetchColumn());
+    $scopeFilter_v = (in_array($tipo_promotor_v, [3, 6], true) || $promotor_id_v === 69)
+        ? " AND owner.id=$promotor_id_v"
+        : " AND p.id_usuario=$promotor_id_v";
 
     // z_p/cod_zona: mismo respaldo que php/descuento_adopciones_excel.php y
     // php/valoriza_global_excel.php — si el colegio no tiene una zona propia resoluble
     // (c.cod_zona), se usa la que trae la línea de presupuesto.
-    $sql ="SELECT COALESCE(z.zona, z_p.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_POST['promotor']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+    $sql ="SELECT COALESCE(z_p.zona, z.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), NULLIF(UPPER(p.responsable), ''), 'Sin asesor asignado') as promotor, owner.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona $ownerJoin_v WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'" . $scopeFilter_v . " AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY owner.tipo, p.id_usuario, p.id_colegio, l.libro";
 
 
 
     }else{
-        $sql ="SELECT COALESCE(z.zona, z_p.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+        $sql ="SELECT COALESCE(z_p.zona, z.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), NULLIF(UPPER(p.responsable), ''), 'Sin asesor asignado') as promotor, owner.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona $ownerJoin_v WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY owner.tipo, p.id_usuario, p.id_colegio, l.libro";
 
     }
 
 }elseif($_SESSION['tipo']==3) {
-
-    $sql ="SELECT COALESCE(z.zona, z_p.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_SESSION['id']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
+    // La sesión tipo=3 siempre es un asesor real, así que se filtra por su propia zona
+    // (owner.id), igual que php/valoriza_global_excel.php.
+    $sql ="SELECT COALESCE(z_p.zona, z.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), NULLIF(UPPER(p.responsable), ''), 'Sin asesor asignado') as promotor, owner.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona $ownerJoin_v WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND owner.id='".$_SESSION['id']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY owner.tipo, p.id_usuario, p.id_colegio, l.libro";
 
 }elseif($_SESSION['tipo']==10) {
 
-    $sql ="SELECT COALESCE(z.zona, z_p.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, CONCAT(u.nombres, ' ',u.apellidos) as promotor, u.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN usuarios u ON u.id=p.id_usuario JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."'  AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."')  AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) AND c.id_calendario=$calendario_periodo_v GROUP BY p.id ORDER BY u.tipo, p.id_usuario, p.id_colegio, l.libro";
-
+    $sql ="SELECT COALESCE(z_p.zona, z.zona) as zona,c.id, c.colegio, c.departamento, c.ciudad, c.dane, c.sub_zona, c.responsable, COALESCE(UPPER(CONCAT(owner.nombres, ' ', owner.apellidos)), NULLIF(UPPER(p.responsable), ''), 'Sin asesor asignado') as promotor, owner.tipo as tipouser, l.id as idlibro, l.libro, l.id_grado,l.id_materia, l.etiqueta, p.precio, p.tasa_compra, p.descuento,p.tasa_compra_d,p.descuento_d, p.pre_definido, p.definido, p.cod_area, p.uni_vr, p.probabilidad, e.editorial FROM colegios c JOIN presupuestos p ON c.id=p.id_colegio JOIN libros l ON p.id_libro=l.id JOIN editoriales e ON l.editorial=e.id LEFT JOIN zonas z ON z.codigo=c.cod_zona LEFT JOIN zonas z_p ON z_p.codigo=p.cod_zona $ownerJoin_v WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo='".$_POST['periodo']."' AND p.id_usuario='".$_SESSION['id']."'   AND p.probabilidad !=3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00) GROUP BY p.id ORDER BY owner.tipo, p.id_usuario, p.id_colegio, l.libro";
 }
 
 
