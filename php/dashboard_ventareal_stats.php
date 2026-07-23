@@ -19,10 +19,22 @@ if ($periodo <= 0) {
 }
 
 // "Dueño de zona" del colegio: mismo criterio que dashboard_presupuestos_stats.php /
-// dashboard_adopciones_stats.php — colegios.cod_zona -> usuarios.cod_zona, no quién cargó
-// la línea de presupuesto. Los admins (tipo=1) nunca cuentan como dueños de zona; Hector
-// Morales (id=69, tipo=10) sí, por la excepción de negocio ya existente.
-$ownerJoin = "LEFT JOIN usuarios owner ON owner.cod_zona = c.cod_zona AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
+// dashboard_adopciones_stats.php. Se resuelve por presupuestos.cod_zona (la zona vigente
+// EN ESE PERIODO), no por colegios.cod_zona (que es el valor ACTUAL/vivo y cambia con el
+// tiempo — usarlo para un periodo pasado atribuye el colegio al dueño de HOY, no al de
+// entonces). Cuando un mismo colegio+periodo tiene más de un cod_zona distinto entre sus
+// líneas de presupuesto (dato ambiguo, ~5 casos reales), se descarta esa resolución
+// (HAVING COUNT(DISTINCT cod_zona) = 1) y se cae a colegios.cod_zona como respaldo, en vez
+// de adivinar cuál de los dos aplica. Los admins (tipo=1) nunca cuentan como dueños de
+// zona; Hector Morales (id=69, tipo=10) sí, por la excepción de negocio ya existente.
+$ownerJoin = "LEFT JOIN (
+        SELECT id_colegio, id_periodo, MIN(cod_zona) as cod_zona
+        FROM presupuestos
+        WHERE cod_zona <> ''
+        GROUP BY id_colegio, id_periodo
+        HAVING COUNT(DISTINCT cod_zona) = 1
+    ) pz ON pz.id_colegio = c.id AND pz.id_periodo = p.id_periodo
+    LEFT JOIN usuarios owner ON owner.cod_zona = COALESCE(pz.cod_zona, c.cod_zona) AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
 
 // El rol "promotor" (etiqueta "Eureka" en el filtro) agrupa tipo=3 y además a
 // Hector Morales (id=69, tipo=10) por pedido del negocio; se excluye de "otros"

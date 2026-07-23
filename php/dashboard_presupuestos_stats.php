@@ -19,17 +19,30 @@ if ($periodo <= 0) {
 }
 
 // "Dueño de zona" del colegio: el criterio real de negocio para "de quién es" un colegio
-// es la zona (colegios.cod_zona -> usuarios.cod_zona), NO quién cargó la línea de
-// presupuesto (presupuestos.id_usuario) — un colegio puede tener líneas cargadas por un
-// asesor o distribuidor que no es el dueño de su zona (p.ej. cobertura puntual, o un
-// distribuidor vendiendo títulos específicos), y eso no debe cambiar de quién es el
-// colegio. Los admins (tipo=1) nunca cuentan como dueños de zona aunque la compartan con
-// un asesor real (caso zona "EUREKA/GERENCIA": Mariana Castañeda tipo=3 + Giovanni
-// Barbosa tipo=1 comparten cod_zona=5656; solo Mariana es dueña). Hector Morales (id=69,
-// tipo=10) es dueño de zona igual que un asesor por la misma excepción de negocio que ya
-// aplican $rolCondiciones más abajo. Verificado que ningún usuario activo tipo 3/6
-// comparte cod_zona con otro, así que este LEFT JOIN nunca duplica filas.
-$ownerJoin = "LEFT JOIN usuarios owner ON owner.cod_zona = c.cod_zona AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
+// es la zona, NO quién cargó la línea de presupuesto (presupuestos.id_usuario) — un colegio
+// puede tener líneas cargadas por un asesor o distribuidor que no es el dueño de su zona
+// (p.ej. cobertura puntual, o un distribuidor vendiendo títulos específicos), y eso no debe
+// cambiar de quién es el colegio. Se resuelve por presupuestos.cod_zona (la zona vigente EN
+// ESE PERIODO), no por colegios.cod_zona (que es el valor ACTUAL/vivo y cambia con el
+// tiempo — usarlo para un periodo pasado atribuye el colegio al dueño de HOY, no al de
+// entonces; caso real: Mariana Castañeda cargó presupuesto en "Liceo De Cervantes
+// Bilingue" en 2026 con su propio cod_zona=5656, pero la zona ACTUAL del colegio ya es de
+// Jairo Rico). Cuando un mismo colegio+periodo tiene más de un cod_zona distinto entre sus
+// líneas (dato ambiguo, ~5 casos reales), se descarta esa resolución (HAVING
+// COUNT(DISTINCT cod_zona) = 1) y se cae a colegios.cod_zona como respaldo, en vez de
+// adivinar cuál aplica. Los admins (tipo=1) nunca cuentan como dueños de zona aunque la
+// compartan con un asesor real (caso zona "EUREKA/GERENCIA": Mariana Castañeda tipo=3 +
+// Giovanni Barbosa tipo=1 comparten cod_zona=5656; solo Mariana es dueña). Hector Morales
+// (id=69, tipo=10) es dueño de zona igual que un asesor por la misma excepción de negocio
+// que ya aplican $rolCondiciones más abajo.
+$ownerJoin = "LEFT JOIN (
+        SELECT id_colegio, id_periodo, MIN(cod_zona) as cod_zona
+        FROM presupuestos
+        WHERE cod_zona <> ''
+        GROUP BY id_colegio, id_periodo
+        HAVING COUNT(DISTINCT cod_zona) = 1
+    ) pz ON pz.id_colegio = c.id AND pz.id_periodo = p.id_periodo
+    LEFT JOIN usuarios owner ON owner.cod_zona = COALESCE(pz.cod_zona, c.cod_zona) AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
 
 // Mismos criterios que usa php/valoriza_excel.php ("valorización libro a libro") para que
 // presupuesto/adopciones cuenten igual en dashboard y reporte: excluye probabilidad
@@ -101,20 +114,24 @@ $gradoJoin = "LEFT JOIN (
         ON gp.id_colegio = p.id_colegio AND gp.id_grado = COALESCE(ao.id_grado_otro, l.id_grado) AND gp.id_periodo = p.id_periodo";
 
 // Se exige pre_definido = 1 (mismo criterio que usa php/valoriza_global_excel.php para
-// "Valor Presupuestado"), sin excluir probabilidad "Perdida" ni exigir tasa_compra asignada,
-// a pedido del negocio, en vez de pre_aprob = 1 que usan ajax/tab_presup.php y
+// "Valor Presupuestado"), en vez de pre_aprob = 1 que usan ajax/tab_presup.php y
 // php/presupuesto_excel.php.
 // Se exige el JOIN a colegios en todas las consultas (no solo en el ranking) porque hay
 // presupuestos "huérfanos" que referencian id_colegio de colegios ya eliminados; sin este
 // join el dashboard los seguía sumando aunque no pertenezcan a ningún colegio visible en el
 // sistema, mientras que php/valoriza_global_excel.php los excluye automáticamente al partir
 // su consulta principal de la tabla colegios.
+// Excluye probabilidad "Perdida" y líneas sin tasa asignada ($condicionesNegocio), igual que
+// los reportes de valorización, para que la tarjeta "Venta potencial", el ranking y los
+// conteos den el mismo total que "Valor Presupuestado" en esos reportes. El donut "por
+// probabilidad" más abajo es la única excepción deliberada: su propósito es mostrar el
+// desglose POR probabilidad (incluida "Perdida"), así que no aplica este filtro.
 $baseFrom = "FROM presupuestos p
     JOIN colegios c ON p.id_colegio = c.id
     JOIN libros l ON p.id_libro = l.id
     $gradoJoin
     $ownerJoin
-    WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $userFilter;
+    WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $userFilter;
 
 // ── Tarjetas de estadística ──
 $stmt = $bdd->prepare("SELECT SUM($ventaPotencialExpr) as venta_potencial, COUNT(*) as total $baseFrom");
@@ -123,17 +140,21 @@ $resumen = $stmt->fetch(PDO::FETCH_ASSOC);
 $venta_potencial = round(floatval($resumen['venta_potencial']), 0);
 $total_valorizables = intval($resumen['total']);
 
-$stmt = $bdd->prepare("SELECT COUNT(*) FROM presupuestos p JOIN colegios c ON p.id_colegio = c.id $ownerJoin WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $userFilter);
+$stmt = $bdd->prepare("SELECT COUNT(*) FROM presupuestos p JOIN colegios c ON p.id_colegio = c.id $ownerJoin WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $userFilter);
 $stmt->execute([$periodo]);
 $total_items = intval($stmt->fetchColumn());
 
-$stmt = $bdd->prepare("SELECT COUNT(*) FROM presupuestos p JOIN colegios c ON p.id_colegio = c.id $ownerJoin WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $userFilter . " AND p.definido = 1");
+$stmt = $bdd->prepare("SELECT COUNT(*) FROM presupuestos p JOIN colegios c ON p.id_colegio = c.id $ownerJoin WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $userFilter . " AND p.definido = 1");
 $stmt->execute([$periodo]);
 $definidos = intval($stmt->fetchColumn());
 
 $pct_definidos = $total_items > 0 ? round(($definidos / $total_items) * 100, 1) : 0;
 
 // ── Donut: venta potencial por probabilidad ──
+// Aplica el mismo filtro de negocio ($condicionesNegocio) que el resto del dashboard, para
+// que la suma de las porciones coincida con la tarjeta "Venta potencial" y con "Valor
+// Presupuestado" de los reportes. Antes incluía "Perdida" y líneas sin tasa asignada, así
+// que el total de este donut no cuadraba con el resto del dashboard.
 $stmt = $bdd->prepare("SELECT COALESCE(pr.probabilidad, 'Sin definir') as etiqueta, SUM($ventaPotencialExpr) as total
     FROM presupuestos p
     JOIN colegios c ON p.id_colegio = c.id
@@ -141,7 +162,7 @@ $stmt = $bdd->prepare("SELECT COALESCE(pr.probabilidad, 'Sin definir') as etique
     $gradoJoin
     $ownerJoin
     LEFT JOIN probabilidades pr ON p.probabilidad = pr.id
-    WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $userFilter . "
+    WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $userFilter . "
     GROUP BY p.probabilidad HAVING total > 0 ORDER BY total DESC");
 $stmt->execute([$periodo]);
 $probabilidad = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -153,7 +174,7 @@ $stmt = $bdd->prepare("SELECT UPPER(c.colegio) as colegio, c.codigo as codigo, S
     JOIN libros l ON p.id_libro = l.id
     $gradoJoin
     $ownerJoin
-    WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $userFilter . "
+    WHERE p.id_periodo = ? AND p.pre_definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $userFilter . "
     GROUP BY p.id_colegio, c.codigo HAVING total > 0 ORDER BY total DESC LIMIT 8");
 $stmt->execute([$periodo]);
 $ranking = $stmt->fetchAll(PDO::FETCH_ASSOC);
