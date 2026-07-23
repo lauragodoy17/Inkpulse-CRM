@@ -438,7 +438,7 @@ if ($es_admin) {
 								<div class="stat-card-modern">
 									<div class="stat-icon-modern sblue"><i class="bi bi-check2-circle"></i></div>
 									<div class="stat-info-modern">
-										<h3 id="dv-planificadas">—</h3>
+										<h3 id="dv-ejecutadas">—</h3>
 										<p class="stat-label">Visitas planificadas</p>
 										<span class="stat-sub">En el período seleccionado</span>
 									</div>
@@ -469,7 +469,7 @@ if ($es_admin) {
 								<div class="chart-card">
 									<div class="chart-card-head">
 										<h5><i class="bi bi-pie-chart mr-2"></i>Objetivos más frecuentes</h5>
-										<span>Visitas planificadas</span>
+										<span>Visitas ejecutadas</span>
 									</div>
 									<div id="chart-objetivos-visitas"></div>
 								</div>
@@ -480,7 +480,7 @@ if ($es_admin) {
 							<div class="col-12">
 								<div class="chart-card">
 									<div class="chart-card-head">
-										<h5><i class="bi bi-bar-chart mr-2"></i><?= ($dash_rol_fijo === 'promotor' || $solo_visitas_dash) ? 'Visitas planificadas' : 'Top promotores por visitas planificadas' ?></h5>
+										<h5><i class="bi bi-bar-chart mr-2"></i><?= ($dash_rol_fijo === 'promotor' || $solo_visitas_dash) ? 'Visitas ejecutadas' : 'Top promotores por visitas planificadas' ?></h5>
 										<span id="dv-ranking-sub">Período seleccionado</span>
 									</div>
 									<div id="chart-ranking-promotores"></div>
@@ -881,7 +881,7 @@ if ($es_admin) {
 				});
 			}
 
-			// ── Visitas planificadas ──
+			// ── Visitas ejecutadas ──
 			var chartEfectividad = new ApexCharts(document.querySelector("#chart-efectividad-visitas"), {
 				series: [0, 0],
 				chart: { type: 'donut', height: 300 },
@@ -895,7 +895,7 @@ if ($es_admin) {
 			chartEfectividad.render();
 
 			var chartRankingVisitas = new ApexCharts(document.querySelector("#chart-ranking-promotores"), {
-				series: [{ name: 'Visitas planificadas', data: [] }],
+				series: [{ name: 'Visitas ejecutadas', data: [] }],
 				chart: { type: 'bar', height: 320, toolbar: { show: false } },
 				colors: dashBarColors,
 				plotOptions: { bar: { borderRadius: 6, horizontal: true, barHeight: '55%', distributed: true } },
@@ -1092,9 +1092,9 @@ if ($es_admin) {
 					if (!resp.success) return;
 					var s = resp.stats;
 
-					$('#dv-planificadas').text(s.planificadas.toLocaleString('es-CO'));
+					$('#dv-ejecutadas').text(s.ejecutadas.toLocaleString('es-CO'));
 					$('#dv-efectividad').text(s.efectividad_pct + '%');
-					$('#dv-efectividad-sub').text(s.efectivas.toLocaleString('es-CO') + ' de ' + s.planificadas.toLocaleString('es-CO') + ' planificadas');
+					$('#dv-efectividad-sub').text(s.efectivas.toLocaleString('es-CO') + ' de ' + s.total_visitas.toLocaleString('es-CO') + ' planificadas');
 					$('#dv-ranking-sub').text('Período ' + resp.periodo);
 
 					chartEfectividad.updateSeries([s.efectivas, s.no_efectivas]);
@@ -1103,7 +1103,7 @@ if ($es_admin) {
 						chart: { height: Math.max(320, resp.ranking.labels.length * 32) },
 						xaxis: { categories: resp.ranking.labels },
 					});
-					chartRankingVisitas.updateSeries([{ name: 'Visitas planificadas', data: resp.ranking.data }]);
+					chartRankingVisitas.updateSeries([{ name: 'Visitas ejecutadas', data: resp.ranking.data }]);
 
 					chartObjetivosVisitas.updateOptions({ labels: resp.objetivos.labels });
 					chartObjetivosVisitas.updateSeries(resp.objetivos.data);

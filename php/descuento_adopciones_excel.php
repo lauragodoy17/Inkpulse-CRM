@@ -33,8 +33,20 @@ if ($periodo <= 0) {
 }
 
 // Mismo criterio de "dueño de zona" que php/dashboard_adopciones_stats.php: el
-// encargado de un colegio es quien tiene su cod_zona (no quién cargó la línea).
-$ownerJoin = "LEFT JOIN usuarios owner ON owner.cod_zona = c.cod_zona AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
+// encargado de un colegio es quien tiene su zona (no quién cargó la línea). Se resuelve
+// por presupuestos.cod_zona (la zona vigente EN ESE PERIODO), no por colegios.cod_zona
+// (valor ACTUAL/vivo que cambia con el tiempo — usarlo para un periodo pasado atribuye el
+// colegio al dueño de HOY, no al de entonces). Si el colegio+periodo tiene más de un
+// cod_zona distinto entre sus líneas (dato ambiguo, ~5 casos reales), se descarta esa
+// resolución y se cae a colegios.cod_zona como respaldo.
+$ownerJoin = "LEFT JOIN (
+        SELECT id_colegio, id_periodo, MIN(cod_zona) as cod_zona
+        FROM presupuestos
+        WHERE cod_zona <> ''
+        GROUP BY id_colegio, id_periodo
+        HAVING COUNT(DISTINCT cod_zona) = 1
+    ) pz ON pz.id_colegio = c.id AND pz.id_periodo = p.id_periodo
+    LEFT JOIN usuarios owner ON owner.cod_zona = COALESCE(pz.cod_zona, c.cod_zona) AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
 
 $rolCondiciones = ['promotor' => '(owner.tipo = 3 OR owner.id = 69)', 'distribuidor' => 'owner.tipo = 6', 'otros' => 'p.id_usuario IN (SELECT id FROM usuarios WHERE tipo IN (1,4,10) AND id <> 69)'];
 if ($tipo_sesion === 1) {
