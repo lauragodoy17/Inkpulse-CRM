@@ -85,7 +85,12 @@ $stmt = $bdd->prepare("SELECT COUNT(*) FROM $visitaUnica v JOIN plan_trabajo p O
 $stmt->execute([$periodo]);
 $efectivas = intval($stmt->fetchColumn());
 
-$efectividad_pct = $total_visitas > 0 ? round(($efectivas / $total_visitas) * 100, 1) : 0;
+// La efectividad se calcula sobre TODAS las visitas planificadas del periodo ($planificadas),
+// no solo sobre las que ya se ejecutaron ($total_visitas): las planificadas que aún no se han
+// ejecutado cuentan como "no efectivas" hasta que se ejecuten. Antes se calculaba sobre
+// $total_visitas, lo que hacía que el % pareciera "no cuadrar" contra la tarjeta de
+// planificadas (ej. 65% de 157 en vez de 44% de 232, para un promotor con planes pendientes).
+$efectividad_pct = $planificadas > 0 ? round(($efectivas / $planificadas) * 100, 1) : 0;
 
 // ── Ranking: promotores por visitas planificadas en el periodo (todos, sin límite) ──
 // Cuenta todos los planes del periodo (cualquier resultado), igual que la tarjeta
@@ -113,7 +118,7 @@ echo json_encode([
     'stats' => [
         'planificadas' => $planificadas,
         'efectivas' => $efectivas,
-        'no_efectivas' => max(0, $total_visitas - $efectivas),
+        'no_efectivas' => max(0, $planificadas - $efectivas),
         'total_visitas' => $total_visitas,
         'efectividad_pct' => $efectividad_pct,
     ],

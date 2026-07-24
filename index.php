@@ -885,12 +885,12 @@ if ($es_admin) {
 			}
 
 			// ── Visitas ejecutadas ──
-			// El total del centro de la dona no debe recalcularse sumando la propia serie
-			// (efectivas + no_efectivas, que sale de la tabla `visitas` deduplicada): eso puede
-			// diferir de la tarjeta "Visitas planificadas" (que cuenta todo plan_trabajo del
-			// periodo, sin pasar por `visitas`). Se muestra directamente s.planificadas, la
-			// misma consulta que ya usa esa tarjeta.
-			var dvEjecutadasParaDona = 0;
+			// La efectividad se calcula sobre TODAS las visitas planificadas del periodo
+			// (php/dashboard_visitas_stats.php: efectivas / planificadas), no solo sobre las ya
+			// ejecutadas — las pendientes cuentan como "no efectivas" hasta que se ejecuten. Por
+			// eso no_efectivas = planificadas - efectivas, y la suma de ambas series ya coincide
+			// con "Visitas planificadas": el total del centro puede volver a ser el default de
+			// ApexCharts (suma de la serie) sin necesidad de un formatter a mano.
 			var chartEfectividad = new ApexCharts(document.querySelector("#chart-efectividad-visitas"), {
 				series: [0, 0],
 				chart: { type: 'donut', height: 300 },
@@ -898,7 +898,7 @@ if ($es_admin) {
 				colors: ['#2ecc71', '#e5484d'],
 				legend: { position: 'bottom', fontSize: '12px' },
 				dataLabels: { enabled: true, formatter: function (val) { return val.toFixed(1) + '%'; } },
-				plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Planificadas', formatter: function () { return dvEjecutadasParaDona.toLocaleString('es-CO'); } } } } } },
+				plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Planificadas' } } } } },
 				noData: { text: 'Sin datos para mostrar' },
 			});
 			chartEfectividad.render();
@@ -1103,10 +1103,9 @@ if ($es_admin) {
 
 					$('#dv-ejecutadas').text(s.planificadas.toLocaleString('es-CO'));
 					$('#dv-efectividad').text(s.efectividad_pct + '%');
-					$('#dv-efectividad-sub').text(s.efectivas.toLocaleString('es-CO') + ' de ' + s.total_visitas.toLocaleString('es-CO') + ' planificadas');
+					$('#dv-efectividad-sub').text(s.efectivas.toLocaleString('es-CO') + ' de ' + s.planificadas.toLocaleString('es-CO') + ' planificadas');
 					$('#dv-ranking-sub').text('Período ' + resp.periodo);
 
-					dvEjecutadasParaDona = s.planificadas;
 					chartEfectividad.updateSeries([s.efectivas, s.no_efectivas]);
 
 					chartRankingVisitas.updateOptions({
