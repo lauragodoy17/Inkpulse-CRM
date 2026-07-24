@@ -340,7 +340,7 @@ if ($es_admin) {
 					</div>
 
 					<div class="row">
-						<div class="col-xl-6">
+						<div class="col-xl-6" id="card-descuento-adop">
 							<div class="chart-card">
 								<div class="chart-card-head">
 									<h5><i class="bi bi-bar-chart mr-2"></i>Colegios con más descuento</h5>
@@ -352,6 +352,24 @@ if ($es_admin) {
 									</div>
 								</div>
 								<div id="chart-descuento-adop"></div>
+							</div>
+						</div>
+						<div class="col-xl-6" id="card-descuento-adop-eureka" style="display:none;">
+							<div class="chart-card">
+								<div class="chart-card-head">
+									<h5><i class="bi bi-bar-chart mr-2"></i>Colegios con más descuento · Eureka</h5>
+									<span>Período seleccionado</span>
+								</div>
+								<div id="chart-descuento-adop-eureka"></div>
+							</div>
+						</div>
+						<div class="col-xl-6" id="card-descuento-adop-distribuidores" style="display:none;">
+							<div class="chart-card">
+								<div class="chart-card-head">
+									<h5><i class="bi bi-bar-chart mr-2"></i>Colegios con más descuento · Distribuidores</h5>
+									<span>Período seleccionado</span>
+								</div>
+								<div id="chart-descuento-adop-distribuidores"></div>
 							</div>
 						</div>
 						<div class="col-xl-6">
@@ -860,6 +878,8 @@ if ($es_admin) {
 			var rankingPresupCodigos = [];
 			var rankingAdopCodigos = [];
 			var rankingDescuentoCodigos = [];
+			var rankingDescuentoCodigosEureka = [];
+			var rankingDescuentoCodigosDistribuidores = [];
 			var rankingVentaRealCodigos = [];
 
 			function irAColegio(codigo, tab) {
@@ -994,6 +1014,33 @@ if ($es_admin) {
 			});
 			chartDescuentoAdop.render();
 			bindColegioLabelClicks('#chart-descuento-adop', function () { return rankingDescuentoCodigos; }, 'adopciones', 'apexcharts-xaxis-texts-g');
+
+			// Cuando el filtro de rol está en "Todos", "Colegios con más descuento" se separa en
+			// dos gráficas independientes (Eureka / Distribuidores), cada una en su propia
+			// tarjeta junto a la original; al filtrar por un rol específico se vuelve a mostrar
+			// la tarjeta única de siempre.
+			function nuevoChartDescuentoSplit(selector) {
+				return new ApexCharts(document.querySelector(selector), {
+					series: [{ name: 'Descuento promedio', data: [] }],
+					chart: { type: 'bar', height: 320, toolbar: { show: false } },
+					colors: dashBarColors,
+					plotOptions: { bar: { borderRadius: 6, horizontal: false, columnWidth: '55%', distributed: true } },
+					legend: { show: false },
+					dataLabels: { enabled: true, formatter: fmtPct },
+					xaxis: { categories: [], labels: { style: { cssClass: 'dash-cole-link', fontSize: '10px' }, rotate: -45, trim: true, hideOverlappingLabels: false } },
+					yaxis: { labels: { formatter: fmtPct } },
+					grid: { strokeDashArray: 4 },
+					tooltip: { y: { formatter: fmtPct } },
+					noData: { text: 'Sin datos para mostrar' },
+				});
+			}
+			var chartDescuentoAdopEureka = nuevoChartDescuentoSplit('#chart-descuento-adop-eureka');
+			chartDescuentoAdopEureka.render();
+			bindColegioLabelClicks('#chart-descuento-adop-eureka', function () { return rankingDescuentoCodigosEureka; }, 'adopciones', 'apexcharts-xaxis-texts-g');
+
+			var chartDescuentoAdopDistribuidores = nuevoChartDescuentoSplit('#chart-descuento-adop-distribuidores');
+			chartDescuentoAdopDistribuidores.render();
+			bindColegioLabelClicks('#chart-descuento-adop-distribuidores', function () { return rankingDescuentoCodigosDistribuidores; }, 'adopciones', 'apexcharts-xaxis-texts-g');
 
 			var chartRankingAdop = new ApexCharts(document.querySelector("#chart-ranking-adop"), {
 				series: [{ name: 'Venta potencial', data: [] }],
@@ -1167,9 +1214,25 @@ if ($es_admin) {
 						$('#da-materia-top-sub').text('Mayor venta potencial');
 					}
 
-					rankingDescuentoCodigos = resp.descuentos.codigos || [];
-					chartDescuentoAdop.updateOptions({ xaxis: { categories: resp.descuentos.labels } });
-					chartDescuentoAdop.updateSeries([{ name: 'Descuento promedio', data: resp.descuentos.data }]);
+					if (resp.descuentos_split) {
+						$('#card-descuento-adop').hide();
+						$('#card-descuento-adop-eureka, #card-descuento-adop-distribuidores').show();
+
+						rankingDescuentoCodigosEureka = resp.descuentos_eureka.codigos || [];
+						chartDescuentoAdopEureka.updateOptions({ xaxis: { categories: resp.descuentos_eureka.labels } });
+						chartDescuentoAdopEureka.updateSeries([{ name: 'Descuento promedio', data: resp.descuentos_eureka.data }]);
+
+						rankingDescuentoCodigosDistribuidores = resp.descuentos_distribuidores.codigos || [];
+						chartDescuentoAdopDistribuidores.updateOptions({ xaxis: { categories: resp.descuentos_distribuidores.labels } });
+						chartDescuentoAdopDistribuidores.updateSeries([{ name: 'Descuento promedio', data: resp.descuentos_distribuidores.data }]);
+					} else {
+						$('#card-descuento-adop-eureka, #card-descuento-adop-distribuidores').hide();
+						$('#card-descuento-adop').show();
+
+						rankingDescuentoCodigos = resp.descuentos.codigos || [];
+						chartDescuentoAdop.updateOptions({ xaxis: { categories: resp.descuentos.labels } });
+						chartDescuentoAdop.updateSeries([{ name: 'Descuento promedio', data: resp.descuentos.data }]);
+					}
 					$('#btn-exportar-descuento').attr('href', 'php/descuento_adopciones_excel.php?' + $.param(filtros()));
 
 					rankingAdopCodigos = resp.ranking.codigos || [];

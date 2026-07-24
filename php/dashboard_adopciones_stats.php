@@ -157,13 +157,31 @@ $ranking = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // Usa el mismo descuento que aplica venta_potencial: el del distribuidor (_d) cuando
 // tiene tasa_compra_d asignada, si no el descuento base del presupuesto.
 $descuentoExpr = "(CASE WHEN p.tasa_compra_d = 0 THEN p.descuento ELSE p.descuento_d END * 100)";
-$stmt = $bdd->prepare("SELECT UPPER(c.colegio) as colegio, c.codigo as codigo, AVG($descuentoExpr) as total
-    FROM presupuestos p JOIN colegios c ON p.id_colegio = c.id
-    $ownerJoin
-    WHERE p.id_periodo = ? AND p.definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $userFilter . "
-    GROUP BY p.id_colegio, c.codigo HAVING total > 0 ORDER BY total DESC LIMIT 8");
-$stmt->execute([$periodo]);
-$descuentos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+function descuentosRanking($bdd, $descuentoExpr, $ownerJoin, $periodo, $calendario_periodo, $condicionesNegocio, $filtro)
+{
+    $stmt = $bdd->prepare("SELECT UPPER(c.colegio) as colegio, c.codigo as codigo, AVG($descuentoExpr) as total
+        FROM presupuestos p JOIN colegios c ON p.id_colegio = c.id
+        $ownerJoin
+        WHERE p.id_periodo = ? AND p.definido = 1 AND c.id_calendario = $calendario_periodo" . $condicionesNegocio . $filtro . "
+        GROUP BY p.id_colegio, c.codigo HAVING total > 0 ORDER BY total DESC LIMIT 8");
+    $stmt->execute([$periodo]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Con el filtro de rol en "Todos" ($userFilter vacío), "Colegios con más descuento" mezclaba
+// colegios de Eureka y de distribuidores en un mismo ranking; ahora se separa en dos rankings
+// (uno por cada grupo) para que no se pierda de vista a qué grupo pertenece cada colegio. Con
+// un rol o asesor específico ya filtrado, se mantiene el ranking único de siempre.
+$descuentosSplit = ($userFilter === "");
+if ($descuentosSplit) {
+    $descuentos = [];
+    $descuentos_eureka = descuentosRanking($bdd, $descuentoExpr, $ownerJoin, $periodo, $calendario_periodo, $condicionesNegocio, " AND " . $rolCondiciones['promotor']);
+    $descuentos_distribuidores = descuentosRanking($bdd, $descuentoExpr, $ownerJoin, $periodo, $calendario_periodo, $condicionesNegocio, " AND " . $rolCondiciones['distribuidor']);
+} else {
+    $descuentos = descuentosRanking($bdd, $descuentoExpr, $ownerJoin, $periodo, $calendario_periodo, $condicionesNegocio, $userFilter);
+    $descuentos_eureka = [];
+    $descuentos_distribuidores = [];
+}
 
 // ── Barras: venta potencial por editorial, sobre los títulos ya adoptados (solo tipo 1) ──
 $editoriales = [];
@@ -197,10 +215,21 @@ echo json_encode([
         'data' => array_map('floatval', array_column($ranking, 'total')),
         'codigos' => array_column($ranking, 'codigo'),
     ],
+    'descuentos_split' => $descuentosSplit,
     'descuentos' => [
         'labels' => array_column($descuentos, 'colegio'),
         'data' => array_map('floatval', array_column($descuentos, 'total')),
         'codigos' => array_column($descuentos, 'codigo'),
+    ],
+    'descuentos_eureka' => [
+        'labels' => array_column($descuentos_eureka, 'colegio'),
+        'data' => array_map('floatval', array_column($descuentos_eureka, 'total')),
+        'codigos' => array_column($descuentos_eureka, 'codigo'),
+    ],
+    'descuentos_distribuidores' => [
+        'labels' => array_column($descuentos_distribuidores, 'colegio'),
+        'data' => array_map('floatval', array_column($descuentos_distribuidores, 'total')),
+        'codigos' => array_column($descuentos_distribuidores, 'codigo'),
     ],
     'editoriales' => [
         'labels' => array_column($editoriales, 'editorial'),
