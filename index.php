@@ -13,6 +13,9 @@ $dash_rol_fijo = ($tipo_sesion === 3 || $tipo_sesion === 10) ? 'promotor' : ($ti
 // (igual que promotores/distribuidores, el filtro por usuario lo fuerza el backend).
 $solo_visitas_dash = $tipo_sesion === 4;
 $dash_visible = $es_admin || $dash_rol_fijo !== null || $solo_visitas_dash;
+// El ranking de promotores cuenta todos los planes del periodo (cualquier resultado) sin
+// importar el rol que lo consulte, así que la etiqueta es siempre "Visitas planificadas".
+$dv_ranking_label = 'Visitas planificadas';
 
 if ($dash_visible) {
     $periodos_dash = $bdd->query("SELECT id, periodo FROM periodos ORDER BY id DESC")->fetchAll();
@@ -480,7 +483,7 @@ if ($es_admin) {
 							<div class="col-12">
 								<div class="chart-card">
 									<div class="chart-card-head">
-										<h5><i class="bi bi-bar-chart mr-2"></i><?= ($dash_rol_fijo === 'promotor' || $solo_visitas_dash) ? 'Visitas ejecutadas' : 'Top promotores por visitas planificadas' ?></h5>
+										<h5><i class="bi bi-bar-chart mr-2"></i><?= ($dash_rol_fijo === 'promotor' || $solo_visitas_dash) ? $dv_ranking_label : 'Top promotores por visitas planificadas' ?></h5>
 										<span id="dv-ranking-sub">Período seleccionado</span>
 									</div>
 									<div id="chart-ranking-promotores"></div>
@@ -884,9 +887,9 @@ if ($es_admin) {
 			// ── Visitas ejecutadas ──
 			// El total del centro de la dona no debe recalcularse sumando la propia serie
 			// (efectivas + no_efectivas, que sale de la tabla `visitas` deduplicada): eso puede
-			// diferir de la tarjeta "Visitas planificadas" (que cuenta plan_trabajo.resultado=1,
-			// sin pasar por `visitas`). Se muestra directamente s.ejecutadas, la misma consulta
-			// que ya usa esa tarjeta.
+			// diferir de la tarjeta "Visitas planificadas" (que cuenta todo plan_trabajo del
+			// periodo, sin pasar por `visitas`). Se muestra directamente s.planificadas, la
+			// misma consulta que ya usa esa tarjeta.
 			var dvEjecutadasParaDona = 0;
 			var chartEfectividad = new ApexCharts(document.querySelector("#chart-efectividad-visitas"), {
 				series: [0, 0],
@@ -901,7 +904,7 @@ if ($es_admin) {
 			chartEfectividad.render();
 
 			var chartRankingVisitas = new ApexCharts(document.querySelector("#chart-ranking-promotores"), {
-				series: [{ name: 'Visitas ejecutadas', data: [] }],
+				series: [{ name: <?= json_encode($dv_ranking_label) ?>, data: [] }],
 				chart: { type: 'bar', height: 320, toolbar: { show: false } },
 				colors: dashBarColors,
 				plotOptions: { bar: { borderRadius: 6, horizontal: true, barHeight: '55%', distributed: true } },
@@ -1098,19 +1101,19 @@ if ($es_admin) {
 					if (!resp.success) return;
 					var s = resp.stats;
 
-					$('#dv-ejecutadas').text(s.ejecutadas.toLocaleString('es-CO'));
+					$('#dv-ejecutadas').text(s.planificadas.toLocaleString('es-CO'));
 					$('#dv-efectividad').text(s.efectividad_pct + '%');
 					$('#dv-efectividad-sub').text(s.efectivas.toLocaleString('es-CO') + ' de ' + s.total_visitas.toLocaleString('es-CO') + ' planificadas');
 					$('#dv-ranking-sub').text('Período ' + resp.periodo);
 
-					dvEjecutadasParaDona = s.ejecutadas;
+					dvEjecutadasParaDona = s.planificadas;
 					chartEfectividad.updateSeries([s.efectivas, s.no_efectivas]);
 
 					chartRankingVisitas.updateOptions({
 						chart: { height: Math.max(320, resp.ranking.labels.length * 32) },
 						xaxis: { categories: resp.ranking.labels },
 					});
-					chartRankingVisitas.updateSeries([{ name: 'Visitas ejecutadas', data: resp.ranking.data }]);
+					chartRankingVisitas.updateSeries([{ name: <?= json_encode($dv_ranking_label) ?>, data: resp.ranking.data }]);
 
 					chartObjetivosVisitas.updateOptions({ labels: resp.objetivos.labels });
 					chartObjetivosVisitas.updateSeries(resp.objetivos.data);

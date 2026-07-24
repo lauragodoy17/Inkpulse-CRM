@@ -54,11 +54,14 @@ $nombre_periodo = $sql_periodo->fetchColumn();
 $excluirOficinaCasa = "AND p.id_colegio != 1 AND p.id_colegio != 2";
 
 // ── Tarjetas de estadística ──
-// Solo se muestran visitas EJECUTADAS (plan_trabajo.resultado = 1); no se consultan ni exponen
-// las planificadas/pendientes (registradas pero aún sin ejecutar).
-$stmt = $bdd->prepare("SELECT COUNT(*) FROM plan_trabajo p WHERE p.id_periodo = ? AND p.resultado = 1 $excluirOficinaCasa" . $userFilterPlan);
+// "Visitas planificadas" cuenta TODOS los registros de plan_trabajo del periodo (cualquier
+// resultado, incluyendo los aún pendientes/sin ejecutar) — no solo los ejecutados. Antes se
+// filtraba por resultado = 1, lo que hacía que la tarjeta mostrara "planificadas" pero en
+// realidad solo contara ejecutadas (confirmado con un promotor con 23 planes en el periodo,
+// de los cuales solo 1-2 ejecutados; la tarjeta debía mostrar ~17-23, no 1-2).
+$stmt = $bdd->prepare("SELECT COUNT(*) FROM plan_trabajo p WHERE p.id_periodo = ? $excluirOficinaCasa" . $userFilterPlan);
 $stmt->execute([$periodo]);
-$ejecutadas = intval($stmt->fetchColumn());
+$planificadas = intval($stmt->fetchColumn());
 
 // Nota: se filtra por p.id_periodo (plan_trabajo), NO por v.id_periodo (visitas) — ese campo
 // se captura de forma independiente al ejecutar la visita y puede no coincidir con el periodo
@@ -84,10 +87,12 @@ $efectivas = intval($stmt->fetchColumn());
 
 $efectividad_pct = $total_visitas > 0 ? round(($efectivas / $total_visitas) * 100, 1) : 0;
 
-// ── Ranking: promotores por visitas ejecutadas en el periodo (todos, sin límite) ──
+// ── Ranking: promotores por visitas planificadas en el periodo (todos, sin límite) ──
+// Cuenta todos los planes del periodo (cualquier resultado), igual que la tarjeta
+// "Visitas planificadas": mismo criterio para todos los roles, promotor incluido.
 $stmt = $bdd->prepare("SELECT CONCAT(u.nombres, ' ', u.apellidos) as promotor, COUNT(*) as total
     FROM plan_trabajo p JOIN usuarios u ON p.id_promotor = u.id
-    WHERE p.id_periodo = ? AND p.resultado = 1 $excluirOficinaCasa" . $userFilterPlan . "
+    WHERE p.id_periodo = ? $excluirOficinaCasa" . $userFilterPlan . "
     GROUP BY p.id_promotor ORDER BY total DESC");
 $stmt->execute([$periodo]);
 $ranking = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -106,7 +111,7 @@ echo json_encode([
     'success' => true,
     'periodo' => $nombre_periodo,
     'stats' => [
-        'ejecutadas' => $ejecutadas,
+        'planificadas' => $planificadas,
         'efectivas' => $efectivas,
         'no_efectivas' => max(0, $total_visitas - $efectivas),
         'total_visitas' => $total_visitas,
