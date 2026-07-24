@@ -1726,30 +1726,36 @@
                           }
                           echo '</select></div>';
 
-                          // Documento de adopción (solo para tipos 1, 3, 10)
+                          // Documento(s) de adopción (máx. 3, solo para tipos 1, 3, 10)
                           if (in_array($_SESSION['tipo'], [1, 3, 10])) {
-                              $arch_existente = ($count > 0 && !empty($recursos['archivo'])) ? $recursos['archivo'] : '';
+                              $archivos_existentes = [];
+                              if ($count > 0) {
+                                  foreach (['archivo', 'archivo2', 'archivo3'] as $campo_arch) {
+                                      if (!empty($recursos[$campo_arch])) $archivos_existentes[] = $recursos[$campo_arch];
+                                  }
+                              }
+                              $arch_existente = count($archivos_existentes) > 0;
                               $periodo_activo = $_GET["f_cierre"] > date("Y-m-d");
 
                               if ($periodo_activo) {
                                   // Periodo activo: upload interactivo
                                   $arch_label_class = $arch_existente ? ' has-file' : '';
                                   $arch_icon_text   = $arch_existente
-                                      ? '<i class="bi bi-check-circle-fill" style="font-size:1.2rem;"></i><span id="adop-file-text">Documento cargado — clic para reemplazar</span>'
-                                      : '<i class="bi bi-cloud-upload" style="font-size:1.2rem;"></i><span id="adop-file-text">Haz clic para seleccionar un archivo</span>';
-                                  $arch_name_html = $arch_existente
-                                      ? '<p class="adop-file-name" id="adop-file-name">'.htmlspecialchars(basename($arch_existente)).'</p>'
-                                      : '<p class="adop-file-name" id="adop-file-name"></p>';
+                                      ? '<i class="bi bi-check-circle-fill" style="font-size:1.2rem;"></i><span id="adop-file-text">Documentos cargados — clic para reemplazar</span>'
+                                      : '<i class="bi bi-cloud-upload" style="font-size:1.2rem;"></i><span id="adop-file-text">Haz clic para seleccionar hasta 3 archivos</span>';
+                                  $arch_name_html = '<p class="adop-file-name" id="adop-file-name">'
+                                      . implode('<br>', array_map(function ($a) { return htmlspecialchars(basename($a)); }, $archivos_existentes))
+                                      . '</p>';
                                   $arch_req_badge = $arch_existente ? '' : ' <span style="color:#dc2626">*</span>';
 
                                   echo '<div class="col-sm-4">
                                           <span class="form-label-sm">
-                                            <i class="bi bi-paperclip"></i> Acuerdo de adopción'.$arch_req_badge.'
+                                            <i class="bi bi-paperclip"></i> Acuerdo de adopción'.$arch_req_badge.' <span class="text-muted" style="font-weight:400;">(máx. 3 archivos)</span>
                                           </span>
                                           <label class="adop-file-label'.$arch_label_class.'" id="adop-file-label" for="archivo_adopcion">
                                             '.$arch_icon_text.'
                                           </label>
-                                          <input type="file" name="archivo_adopcion" id="archivo_adopcion"
+                                          <input type="file" name="archivo_adopcion[]" id="archivo_adopcion" multiple
                                             accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
                                           '.$arch_name_html.'
                                         </div>';
@@ -1760,8 +1766,10 @@
                                           <span class="form-label-sm">
                                             <i class="bi bi-paperclip"></i> Acuerdo de adopción
                                           </span>';
-                                  if ($arch_existente) {
-                                      echo '<p class="adop-file-name"><i class="bi bi-file-earmark-check" style="color:#16a34a;margin-right:4px;"></i>'.htmlspecialchars(basename($arch_existente)).'</p>';
+                                  if ($archivos_existentes) {
+                                      foreach ($archivos_existentes as $a) {
+                                          echo '<p class="adop-file-name"><i class="bi bi-file-earmark-check" style="color:#16a34a;margin-right:4px;"></i>'.htmlspecialchars(basename($a)).'</p>';
+                                      }
                                   } else {
                                       echo '<p class="text-muted" style="font-size:.82rem;"><i class="bi bi-dash-circle"></i> Sin documento adjunto</p>';
                                   }
@@ -2150,17 +2158,22 @@
         }
     });
 
-    // ── Campo de archivo: mostrar nombre seleccionado ────────────
+    // ── Campo de archivo: mostrar nombres seleccionados (máx. 3) ─
     $('#archivo_adopcion').on('change', function() {
         var $label = $('#adop-file-label');
         var $name  = $('#adop-file-name');
+        if (this.files && this.files.length > 3) {
+            adToast('Máximo 3 archivos para el acuerdo de adopción.', 'error');
+            $(this).val('');
+            return;
+        }
         if (this.files && this.files.length > 0) {
-            var fname = this.files[0].name;
-            $('#adop-file-text').text('Archivo seleccionado');
-            $name.text(fname);
+            var nombres = Array.prototype.map.call(this.files, function(f) { return f.name; });
+            $('#adop-file-text').text(this.files.length + (this.files.length > 1 ? ' archivos seleccionados' : ' archivo seleccionado'));
+            $name.html(nombres.map(function(n) { return $('<div>').text(n).html(); }).join('<br>'));
             $label.addClass('has-file');
         } else {
-            $('#adop-file-text').text('Haz clic para seleccionar un archivo');
+            $('#adop-file-text').text('Haz clic para seleccionar hasta 3 archivos');
             $name.text('');
             $label.removeClass('has-file');
         }

@@ -147,19 +147,27 @@
 				
 	}
 
-	// Manejo del archivo de adopción (solo para tipos 1, 3, 10)
-	$archivo_path = '';
-	if (in_array($_SESSION['tipo'], [1, 3, 10]) && isset($_FILES['archivo_adopcion']) && $_FILES['archivo_adopcion']['error'] === UPLOAD_ERR_OK) {
+	// Manejo de los archivos del acuerdo de adopción (máx. 3, solo para tipos 1, 3, 10).
+	// El input es múltiple (archivo_adopcion[]); si llegan archivos nuevos reemplazan por
+	// completo el set anterior (igual que el archivo único reemplazaba al suyo), en vez de
+	// acumularse sobre los ya guardados.
+	$archivos_subidos = ['', '', ''];
+	if (in_array($_SESSION['tipo'], [1, 3, 10]) && isset($_FILES['archivo_adopcion']) && is_array($_FILES['archivo_adopcion']['name'])) {
 		$uploads_dir = dirname(__DIR__) . '/uploads/adopciones/';
 		if (!is_dir($uploads_dir)) {
 			mkdir($uploads_dir, 0755, true);
 		}
-		$ext      = strtolower(pathinfo($_FILES['archivo_adopcion']['name'], PATHINFO_EXTENSION));
-		$filename = 'adop_' . intval($_POST['id_colegio']) . '_' . intval($_POST['periodo']) . '_' . time() . '.' . $ext;
-		if (move_uploaded_file($_FILES['archivo_adopcion']['tmp_name'], $uploads_dir . $filename)) {
-			$archivo_path = 'uploads/adopciones/' . $filename;
+		$total_subidos = min(count($_FILES['archivo_adopcion']['name']), 3);
+		for ($i = 0; $i < $total_subidos; $i++) {
+			if ($_FILES['archivo_adopcion']['error'][$i] !== UPLOAD_ERR_OK) continue;
+			$ext      = strtolower(pathinfo($_FILES['archivo_adopcion']['name'][$i], PATHINFO_EXTENSION));
+			$filename = 'adop_' . intval($_POST['id_colegio']) . '_' . intval($_POST['periodo']) . '_' . time() . '_' . $i . '.' . $ext;
+			if (move_uploaded_file($_FILES['archivo_adopcion']['tmp_name'][$i], $uploads_dir . $filename)) {
+				$archivos_subidos[$i] = 'uploads/adopciones/' . $filename;
+			}
 		}
 	}
+	$hay_archivos_nuevos = ($archivos_subidos[0] !== '' || $archivos_subidos[1] !== '' || $archivos_subidos[2] !== '');
 
 	$sql_rec = "SELECT id FROM recursos WHERE id_periodo='".$_POST["periodo"]."' AND id_colegio='".$_POST["id_colegio"]."'";
 
@@ -167,14 +175,25 @@
 	$req_rec->execute();
 	$num = $req_rec->rowCount();
 
+	// El formulario de Adopciones ya no tiene campos recurso/valor_recurso/reintegro/
+	// valor_reintegro/descripcion/venta_real (se quitaron de la UI), pero la tabla recursos
+	// sigue teniendo esas columnas NOT NULL; se completan con un valor por defecto para no
+	// depender de que $_POST los traiga.
+	$recurso           = $_POST['recurso'] ?? '';
+	$valor_recurso     = $_POST['valor_recurso'] ?? 0;
+	$reintegro         = $_POST['reintegro'] ?? '';
+	$valor_reintegro   = $_POST['valor_reintegro'] ?? 0;
+	$descripcion_canal = $_POST['descripcion'] ?? '';
+	$venta_real        = $_POST['venta_real'] ?? 0;
+
 	if ($num < 1 ) {
 
-		$sql_e = "INSERT INTO recursos(id_periodo,id_colegio,recurso,valor_recurso, reintegro, valor_reintegro,id_canal,descripcion_canal,venta_real,fecha,observaciones,archivo) VALUES ('".$_POST["periodo"]."', '".$_POST["id_colegio"]."', '".$_POST["recurso"]."','".$_POST["valor_recurso"]."', '".$_POST["reintegro"]."','".$_POST["valor_reintegro"]."','".$_POST["canal"]."','".$_POST["descripcion"]."','".$_POST["venta_real"]."','".date("Y-m-d")."','".$_POST["observaciones"]."','".$archivo_path."')";
+		$sql_e = "INSERT INTO recursos(id_periodo,id_colegio,recurso,valor_recurso, reintegro, valor_reintegro,id_canal,descripcion_canal,venta_real,fecha,observaciones,archivo,archivo2,archivo3) VALUES ('".$_POST["periodo"]."', '".$_POST["id_colegio"]."', '".$recurso."','".$valor_recurso."', '".$reintegro."','".$valor_reintegro."','".$_POST["canal"]."','".$descripcion_canal."','".$venta_real."','".date("Y-m-d")."','".$_POST["observaciones"]."','".$archivos_subidos[0]."','".$archivos_subidos[1]."','".$archivos_subidos[2]."')";
 
 	}else {
 
-		$arch_set = $archivo_path !== '' ? ", archivo='".$archivo_path."'" : '';
-		$sql_e = "UPDATE recursos SET recurso='".$_POST["recurso"]."', valor_recurso='".$_POST["valor_recurso"]."', reintegro='".$_POST["reintegro"]."', valor_reintegro='".$_POST["valor_reintegro"]."', id_canal='".$_POST["canal"]."', descripcion_canal='".$_POST["descripcion"]."',venta_real='".$_POST["venta_real"]."' , fecha='".date("Y-m-d")."', observaciones='".$_POST["observaciones"]."'".$arch_set." WHERE id_colegio='".$_POST["id_colegio"]."' AND id_periodo='".$_POST["periodo"]."'";
+		$arch_set = $hay_archivos_nuevos ? ", archivo='".$archivos_subidos[0]."', archivo2='".$archivos_subidos[1]."', archivo3='".$archivos_subidos[2]."'" : '';
+		$sql_e = "UPDATE recursos SET recurso='".$recurso."', valor_recurso='".$valor_recurso."', reintegro='".$reintegro."', valor_reintegro='".$valor_reintegro."', id_canal='".$_POST["canal"]."', descripcion_canal='".$descripcion_canal."',venta_real='".$venta_real."' , fecha='".date("Y-m-d")."', observaciones='".$_POST["observaciones"]."'".$arch_set." WHERE id_colegio='".$_POST["id_colegio"]."' AND id_periodo='".$_POST["periodo"]."'";
 	}
 
 	
@@ -213,9 +232,9 @@
 
 	foreach($_POST["presup_profes"] as $presup_p) {
 
-
-
-		foreach($_POST["profes".$presup_p.""] as $profe) {
+		// No todos los libros tienen profesores seleccionados; sin isset() acceder a una
+		// clave "profesXXXX" inexistente lanza un warning y rompe el foreach (null).
+		foreach(($_POST["profes".$presup_p.""] ?? []) as $profe) {
 
 
 
