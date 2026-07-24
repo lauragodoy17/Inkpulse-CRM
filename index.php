@@ -882,6 +882,12 @@ if ($es_admin) {
 			}
 
 			// ── Visitas ejecutadas ──
+			// El total del centro de la dona no debe recalcularse sumando la propia serie
+			// (efectivas + no_efectivas, que sale de la tabla `visitas` deduplicada): eso puede
+			// diferir de la tarjeta "Visitas planificadas" (que cuenta plan_trabajo.resultado=1,
+			// sin pasar por `visitas`). Se muestra directamente s.ejecutadas, la misma consulta
+			// que ya usa esa tarjeta.
+			var dvEjecutadasParaDona = 0;
 			var chartEfectividad = new ApexCharts(document.querySelector("#chart-efectividad-visitas"), {
 				series: [0, 0],
 				chart: { type: 'donut', height: 300 },
@@ -889,7 +895,7 @@ if ($es_admin) {
 				colors: ['#2ecc71', '#e5484d'],
 				legend: { position: 'bottom', fontSize: '12px' },
 				dataLabels: { enabled: true, formatter: function (val) { return val.toFixed(1) + '%'; } },
-				plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Planificadas' } } } } },
+				plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Planificadas', formatter: function () { return dvEjecutadasParaDona.toLocaleString('es-CO'); } } } } } },
 				noData: { text: 'Sin datos para mostrar' },
 			});
 			chartEfectividad.render();
@@ -1097,6 +1103,7 @@ if ($es_admin) {
 					$('#dv-efectividad-sub').text(s.efectivas.toLocaleString('es-CO') + ' de ' + s.total_visitas.toLocaleString('es-CO') + ' planificadas');
 					$('#dv-ranking-sub').text('Período ' + resp.periodo);
 
+					dvEjecutadasParaDona = s.ejecutadas;
 					chartEfectividad.updateSeries([s.efectivas, s.no_efectivas]);
 
 					chartRankingVisitas.updateOptions({
