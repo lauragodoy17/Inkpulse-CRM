@@ -2,6 +2,12 @@
 	require_once("../php/aut.php");
 	include("../conexion/bdd.php");
 
+	if ($_SESSION['tipo'] != 1) {
+		http_response_code(403);
+		echo json_encode(["ok" => false]);
+		exit;
+	}
+
 	$id_colegio = intval($_POST['colegio'] ?? 0);
 	$id_periodo = intval($_POST['periodo'] ?? 0);
 	$cantidad   = intval($_POST['cantidad'] ?? -1);

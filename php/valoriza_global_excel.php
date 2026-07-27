@@ -124,7 +124,7 @@ $ownerJoin_g = "LEFT JOIN (
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("H2", "Periodo $gp_periodo[periodo]");
 
-$mostrar_ia_g = ($gp_periodo["periodo"] >= 2027);
+$mostrar_ia_g = ($gp_periodo["periodo"] >= 2027) && $_SESSION['tipo'] == 1;
 
 $objSpreadsheet->getActiveSheet()->getStyle('C4')->applyFromArray($estilo_negrita);
 $objSpreadsheet->getActiveSheet()->getStyle('D4')->applyFromArray($estilo_negrita);

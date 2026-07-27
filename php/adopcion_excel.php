@@ -129,7 +129,7 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
 	$req_periodo_ia = $bdd->prepare("SELECT periodo FROM periodos WHERE id=?");
 	$req_periodo_ia->execute([$_GET['periodo']]);
-	$mostrar_ia = ($req_periodo_ia->fetch()['periodo'] ?? 0) >= 2027;
+	$mostrar_ia = ($req_periodo_ia->fetch()['periodo'] ?? 0) >= 2027 && $_SESSION['tipo'] == 1;
 
 	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia, mt.costo_almacenamiento
 	                  FROM ia_modelos m

@@ -472,7 +472,7 @@
     </div>
   </div>
 
-  <?php if ($gp_periodo["periodo"] >= 2027): ?>
+  <?php if ($gp_periodo["periodo"] >= 2027 && $_SESSION['tipo'] == 1): ?>
   <!-- Tarjetas de IA (separadas visualmente) -->
   <div class="adop-ia-section">
     <div class="adop-ia-header">
