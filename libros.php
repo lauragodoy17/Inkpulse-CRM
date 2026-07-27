@@ -12,8 +12,8 @@ $puede_gestionar = ($_SESSION["tipo"] == 1 || $_SESSION["id"] == 21);
 // libro: no puede crear, eliminar, ni cambiar isbn/título/materia/grado/precio/presupuesto.
 $puede_crear_eliminar = ($_SESSION["tipo"] == 1);
 $es_solo_ubicacion = ($_SESSION["id"] == 21 && $_SESSION["tipo"] != 1);
-// Asociar libros a una serie es exclusivo del usuario id=1.
-$puede_asociar = ($_SESSION["id"] == 1);
+// Asociar libros a una serie es exclusivo de los usuarios id=1, 93 y 94.
+$puede_asociar = in_array($_SESSION["id"], [1, 93, 94]);
 
 $total_libros = $bdd->query("SELECT COUNT(*) FROM libros l JOIN materias m ON l.id_materia = m.id JOIN grados g ON l.id_grado = g.id")->fetchColumn();
 $total_activos = $bdd->query("SELECT COUNT(*) FROM libros l JOIN materias m ON l.id_materia = m.id JOIN grados g ON l.id_grado = g.id WHERE l.presupuesto=1")->fetchColumn();

@@ -13,8 +13,8 @@ $puede_gestionar = true;
 // Carlos Puentes (id=21) puede ver y abrir "Editar" (limitado a la ubicación en bodega
 // desde libros.php), pero nunca eliminar libros.
 $puede_eliminar = ($_SESSION["tipo"] == 1);
-// Asociar libros a una serie es exclusivo del usuario id=1.
-$puede_asociar = ($_SESSION["id"] == 1);
+// Asociar libros a una serie es exclusivo de los usuarios id=1, 93 y 94.
+$puede_asociar = in_array($_SESSION["id"], [1, 93, 94]);
 
 $start = intval($_GET['start']);
 $length = intval($_GET['length']);

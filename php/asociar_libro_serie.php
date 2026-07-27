@@ -3,8 +3,8 @@ require_once("aut.php");
 require_once("../conexion/bdd.php");
 header('Content-Type: application/json');
 
-// Asociar libros a una serie es exclusivo del usuario id=1.
-if (($_SESSION["id"] ?? null) != 1 || !isset($_POST["id_libro"])) {
+// Asociar libros a una serie es exclusivo de los usuarios id=1, 93 y 94.
+if (!in_array($_SESSION["id"] ?? null, [1, 93, 94]) || !isset($_POST["id_libro"])) {
     echo json_encode(['success' => false, 'message' => 'No autorizado.']);
     exit;
 }

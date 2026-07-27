@@ -553,7 +553,7 @@ $periodos_active     = $current_page === 'periodos.php';
 							</li>
 						<?php } ?>
 
-						<?php if ($_SESSION["id"] == 1 || $_SESSION["id"] == 21) {?>
+						<?php if (in_array($_SESSION["id"], [1, 93, 94]) || $_SESSION["id"] == 21) {?>
 						<li><div class="sidebar-small-cap admin-sec">Administrativo</div></li>
 						<li>
 							<a href="libros.php" class="dropdown-toggle no-arrow <?= $libros_active ? 'active' : '' ?>">
@@ -561,7 +561,7 @@ $periodos_active     = $current_page === 'periodos.php';
 								><span class="mtext">Libros</span>
 							</a>
 						</li>
-						<?php if ($_SESSION["id"] == 1) {?>
+						<?php if (in_array($_SESSION["id"], [1, 93, 94])) {?>
 						<li>
 							<a href="usuarios.php" class="dropdown-toggle no-arrow <?= $usuarios_active ? 'active' : '' ?>">
 								<span class="micon bi bi-people"></span
