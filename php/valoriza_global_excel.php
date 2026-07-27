@@ -319,6 +319,14 @@ if ($mostrar_ia_g) {
         $req_profes_g->execute($cole_ids_g);
         foreach ($req_profes_g->fetchAll(PDO::FETCH_ASSOC) as $row)
             $profes_map_g[$row['id_colegio']] = (int)$row['total'];
+
+        // Si ya se guardó una cantidad manual para algún colegio+periodo, esa reemplaza
+        // el conteo automático de trabajadores_colegios.
+        try { $bdd->exec("CREATE TABLE IF NOT EXISTS ia_profesores_colegio (id INT AUTO_INCREMENT PRIMARY KEY, id_colegio INT NOT NULL, id_periodo INT NOT NULL, cantidad_profesores INT NOT NULL, UNIQUE KEY uniq_colegio_periodo (id_colegio, id_periodo))"); } catch (Exception $e) {}
+        $req_profes_manual_g = $bdd->prepare("SELECT id_colegio, cantidad_profesores FROM ia_profesores_colegio WHERE id_colegio IN ($ph_g) AND id_periodo=?");
+        $req_profes_manual_g->execute(array_merge($cole_ids_g, [$_POST['periodo']]));
+        foreach ($req_profes_manual_g->fetchAll(PDO::FETCH_ASSOC) as $row)
+            $profes_map_g[$row['id_colegio']] = (int)$row['cantidad_profesores'];
     }
 }
 // ── Fin pre-fetch ─────────────────────────────────────────────────

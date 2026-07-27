@@ -150,6 +150,16 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 	$req_cant_profes->execute([$_GET['cole']]);
 	$cantidad_profesores = $req_cant_profes->fetch()['total'];
 
+	// Si ya se guardó una cantidad manual para este colegio+periodo, esa reemplaza
+	// el conteo automático de trabajadores_colegios.
+	try { $bdd->exec("CREATE TABLE IF NOT EXISTS ia_profesores_colegio (id INT AUTO_INCREMENT PRIMARY KEY, id_colegio INT NOT NULL, id_periodo INT NOT NULL, cantidad_profesores INT NOT NULL, UNIQUE KEY uniq_colegio_periodo (id_colegio, id_periodo))"); } catch (Exception $e) {}
+	$req_profes_manual = $bdd->prepare("SELECT cantidad_profesores FROM ia_profesores_colegio WHERE id_colegio=? AND id_periodo=?");
+	$req_profes_manual->execute([$_GET['cole'], $_GET['periodo']]);
+	$profes_manual = $req_profes_manual->fetch();
+	if ($profes_manual) {
+		$cantidad_profesores = (int)$profes_manual['cantidad_profesores'];
+	}
+
 	$req_interacciones = $bdd->prepare("SELECT interacciones FROM ia_presupuestos WHERE id_modelo_tokens=? AND id_periodo=? ORDER BY id DESC LIMIT 1");
 	$req_interacciones->execute([$modelo_activo['id_modelo_tokens'] ?? 0, $_GET['periodo']]);
 	$interacciones = $req_interacciones->fetch()['interacciones'] ?? 0;
