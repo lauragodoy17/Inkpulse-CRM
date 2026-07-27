@@ -92,12 +92,14 @@ $efectivas = intval($stmt->fetchColumn());
 // planificadas (ej. 65% de 157 en vez de 44% de 232, para un promotor con planes pendientes).
 $efectividad_pct = $planificadas > 0 ? round(($efectivas / $planificadas) * 100, 1) : 0;
 
-// ── Ranking: promotores por visitas planificadas en el periodo (todos, sin límite) ──
-// Cuenta todos los planes del periodo (cualquier resultado), igual que la tarjeta
-// "Visitas planificadas": mismo criterio para todos los roles, promotor incluido.
+// ── Ranking: promotores por visitas efectivas en el periodo (todos, sin límite) ──
+// Solo cuenta visitas ejecutadas y marcadas como efectivas (mismo criterio que la
+// tarjeta "Efectividad"), no todos los planes del periodo.
 $stmt = $bdd->prepare("SELECT CONCAT(u.nombres, ' ', u.apellidos) as promotor, COUNT(*) as total
-    FROM plan_trabajo p JOIN usuarios u ON p.id_promotor = u.id
-    WHERE p.id_periodo = ? $excluirOficinaCasa" . $userFilterPlan . "
+    FROM $visitaUnica v
+    JOIN plan_trabajo p ON v.id_plan_trabajo = p.id
+    JOIN usuarios u ON p.id_promotor = u.id
+    WHERE p.id_periodo = ? AND p.resultado = 1 $excluirOficinaCasa AND v.efectiva = 1" . $userFilterVisitas . "
     GROUP BY p.id_promotor ORDER BY total DESC");
 $stmt->execute([$periodo]);
 $ranking = $stmt->fetchAll(PDO::FETCH_ASSOC);

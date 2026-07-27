@@ -13,9 +13,9 @@ $dash_rol_fijo = ($tipo_sesion === 3 || $tipo_sesion === 10) ? 'promotor' : ($ti
 // (igual que promotores/distribuidores, el filtro por usuario lo fuerza el backend).
 $solo_visitas_dash = $tipo_sesion === 4;
 $dash_visible = $es_admin || $dash_rol_fijo !== null || $solo_visitas_dash;
-// El ranking de promotores cuenta todos los planes del periodo (cualquier resultado) sin
-// importar el rol que lo consulte, así que la etiqueta es siempre "Visitas planificadas".
-$dv_ranking_label = 'Visitas planificadas';
+// El ranking de promotores cuenta solo las visitas efectivas del periodo, sin
+// importar el rol que lo consulte, así que la etiqueta es siempre "Visitas efectivas".
+$dv_ranking_label = 'Visitas efectivas';
 
 if ($dash_visible) {
     $periodos_dash = $bdd->query("SELECT id, periodo FROM periodos ORDER BY id DESC")->fetchAll();
@@ -501,7 +501,7 @@ if ($es_admin) {
 							<div class="col-12">
 								<div class="chart-card">
 									<div class="chart-card-head">
-										<h5><i class="bi bi-bar-chart mr-2"></i><?= ($dash_rol_fijo === 'promotor' || $solo_visitas_dash) ? $dv_ranking_label : 'Top promotores por visitas planificadas' ?></h5>
+										<h5><i class="bi bi-bar-chart mr-2"></i><?= ($dash_rol_fijo === 'promotor' || $solo_visitas_dash) ? $dv_ranking_label : 'Top promotores por visitas efectivas' ?></h5>
 										<span id="dv-ranking-sub">Período seleccionado</span>
 									</div>
 									<div id="chart-ranking-promotores"></div>
