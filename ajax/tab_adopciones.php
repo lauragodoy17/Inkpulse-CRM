@@ -1744,7 +1744,9 @@
                                       ? '<i class="bi bi-check-circle-fill" style="font-size:1.2rem;"></i><span id="adop-file-text">Documentos cargados — clic para reemplazar</span>'
                                       : '<i class="bi bi-cloud-upload" style="font-size:1.2rem;"></i><span id="adop-file-text">Haz clic para seleccionar hasta 3 archivos</span>';
                                   $arch_name_html = '<p class="adop-file-name" id="adop-file-name">'
-                                      . implode('<br>', array_map(function ($a) { return htmlspecialchars(basename($a)); }, $archivos_existentes))
+                                      . implode('<br>', array_map(function ($a) {
+                                          return '<a href="'.htmlspecialchars($a).'" target="_blank" rel="noopener">'.htmlspecialchars(basename($a)).'</a>';
+                                      }, $archivos_existentes))
                                       . '</p>';
                                   $arch_req_badge = $arch_existente ? '' : ' <span style="color:#dc2626">*</span>';
 
@@ -1768,7 +1770,7 @@
                                           </span>';
                                   if ($archivos_existentes) {
                                       foreach ($archivos_existentes as $a) {
-                                          echo '<p class="adop-file-name"><i class="bi bi-file-earmark-check" style="color:#16a34a;margin-right:4px;"></i>'.htmlspecialchars(basename($a)).'</p>';
+                                          echo '<p class="adop-file-name"><i class="bi bi-file-earmark-check" style="color:#16a34a;margin-right:4px;"></i><a href="'.htmlspecialchars($a).'" target="_blank" rel="noopener">'.htmlspecialchars(basename($a)).'</a></p>';
                                       }
                                   } else {
                                       echo '<p class="text-muted" style="font-size:.82rem;"><i class="bi bi-dash-circle"></i> Sin documento adjunto</p>';
