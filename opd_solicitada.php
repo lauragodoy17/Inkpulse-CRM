@@ -61,6 +61,13 @@ $ent1 = $ent2 = $ent3 = [];
       a[href]:after { content: none !important; }
       body { font-size: 9px; }
       .mc-cards { box-shadow: none; }
+      .opd-table-wrap {
+        max-height: none !important;
+        overflow: visible !important;
+      }
+      #opd-mat-table { min-width: 0 !important; }
+      #opd-mat-table thead { display: table-header-group; }
+      #opd-mat-table tr { page-break-inside: avoid; }
     }
     input[type=number] { -moz-appearance: textfield; }
     input[type=number]::-webkit-inner-spin-button,
