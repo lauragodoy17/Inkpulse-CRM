@@ -177,25 +177,32 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
     .sop-textarea { resize: vertical; min-height: 96px; }
     .sop-input[type="file"] { padding: 8px 12px; cursor: pointer; }
 
-    /* -- Select2 para Cliente --------------------------------- */
-    #cliente + .select2-container { width: 100% !important; }
-    #cliente + .select2-container .select2-selection--single {
+    /* -- Select2 para Cliente y Tipo de documento -------------- */
+    #cliente + .select2-container,
+    #tipo_doc + .select2-container { width: 100% !important; }
+    #cliente + .select2-container .select2-selection--single,
+    #tipo_doc + .select2-container .select2-selection--single {
       height: 42px; border: 1.5px solid #d1d5db; border-radius: 8px;
       background: #f9fafb; display: flex; align-items: center;
       padding: 0 14px; font-size: .875rem; color: #1e293b;
       transition: border-color .15s, box-shadow .15s;
     }
-    #cliente + .select2-container .select2-selection--single .select2-selection__rendered {
+    #cliente + .select2-container .select2-selection--single .select2-selection__rendered,
+    #tipo_doc + .select2-container .select2-selection--single .select2-selection__rendered {
       padding: 0; line-height: normal; color: #1e293b; font-size: .875rem;
     }
-    #cliente + .select2-container .select2-selection--single .select2-selection__placeholder {
+    #cliente + .select2-container .select2-selection--single .select2-selection__placeholder,
+    #tipo_doc + .select2-container .select2-selection--single .select2-selection__placeholder {
       color: #9ca3af;
     }
-    #cliente + .select2-container .select2-selection--single .select2-selection__arrow {
+    #cliente + .select2-container .select2-selection--single .select2-selection__arrow,
+    #tipo_doc + .select2-container .select2-selection--single .select2-selection__arrow {
       height: 40px; right: 10px;
     }
     #cliente + .select2-container--open .select2-selection--single,
-    #cliente + .select2-container--focus .select2-selection--single {
+    #cliente + .select2-container--focus .select2-selection--single,
+    #tipo_doc + .select2-container--open .select2-selection--single,
+    #tipo_doc + .select2-container--focus .select2-selection--single {
       border-color: #4361ee; background: #fff;
       box-shadow: 0 0 0 3px rgba(67,97,238,.12);
     }
@@ -540,6 +547,17 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
   $(document).ready(function () {
     $('#cliente').select2({
       placeholder: 'Seleccionar cliente',
+      allowClear: true,
+      minimumResultsForSearch: 0,
+      width: '100%',
+      language: {
+        noResults: function () { return 'Sin resultados'; },
+        searching:  function () { return 'Buscando...'; }
+      }
+    });
+
+    $('#tipo_doc').select2({
+      placeholder: 'Seleccionar',
       allowClear: true,
       minimumResultsForSearch: 0,
       width: '100%',
