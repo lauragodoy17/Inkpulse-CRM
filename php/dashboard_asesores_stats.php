@@ -202,6 +202,17 @@ foreach ($ventaRealPorAsesor as $id_usuario => $row) {
     $porAsesor[$id_usuario]['venta_real'] = $row['total'];
 }
 
+// Segunda vista (misma data, otro orden): el ranking por defecto prioriza el total
+// combinado (efectivamente presupuesto primero, por ser la magnitud más grande de
+// las tres); esta copia se ordena priorizando adopciones para responder "quién ha
+// adoptado más", con el total combinado solo como desempate.
+$porAsesorPorAdopciones = $porAsesor;
+usort($porAsesorPorAdopciones, function ($a, $b) {
+    return [$b['adopciones'], $b['presupuesto'] + $b['adopciones'] + $b['venta_real']]
+        <=> [$a['adopciones'], $a['presupuesto'] + $a['adopciones'] + $a['venta_real']];
+});
+$porAsesorPorAdopciones = array_slice($porAsesorPorAdopciones, 0, 8);
+
 usort($porAsesor, function ($a, $b) {
     return ($b['presupuesto'] + $b['adopciones'] + $b['venta_real']) <=> ($a['presupuesto'] + $a['adopciones'] + $a['venta_real']);
 });
@@ -215,5 +226,11 @@ echo json_encode([
         'presupuesto' => array_column($porAsesor, 'presupuesto'),
         'adopciones' => array_column($porAsesor, 'adopciones'),
         'venta_real' => array_column($porAsesor, 'venta_real'),
+    ],
+    'asesores_por_adopciones' => [
+        'labels' => array_column($porAsesorPorAdopciones, 'asesor'),
+        'presupuesto' => array_column($porAsesorPorAdopciones, 'presupuesto'),
+        'adopciones' => array_column($porAsesorPorAdopciones, 'adopciones'),
+        'venta_real' => array_column($porAsesorPorAdopciones, 'venta_real'),
     ],
 ]);

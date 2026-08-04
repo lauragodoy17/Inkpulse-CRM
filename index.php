@@ -212,6 +212,20 @@ if ($es_admin) {
 						</div>
 					</div>
 
+					<div class="row">
+						<div class="col-12">
+							<div class="chart-card">
+								<div class="chart-card-head">
+									<h5><i class="bi bi-bar-chart mr-2"></i>Adopciones, presupuesto y venta real por asesor (Ordenado por adopciones)</h5>
+									<div class="chart-card-head-actions">
+										<span id="da-asesores-adop-sub">Período seleccionado</span>
+									</div>
+								</div>
+								<div id="chart-asesores-adopciones"></div>
+							</div>
+						</div>
+					</div>
+
 					<!-- Descarga silenciosa (sin navegar ni abrir pestaña): el form apunta a un iframe
 					     oculto, así el navegador solo procesa la descarga del Excel. -->
 					<iframe name="valoriza-global-frame" style="display:none;"></iframe>
@@ -1124,6 +1138,21 @@ if ($es_admin) {
 				noData: { text: 'Sin datos para mostrar' },
 			});
 			chartAsesores.render();
+
+			var chartAsesoresAdopciones = new ApexCharts(document.querySelector("#chart-asesores-adopciones"), {
+				series: [{ name: 'Presupuesto', data: [] }, { name: 'Adopciones', data: [] }, { name: 'Venta real', data: [] }],
+				chart: { type: 'bar', height: 340, toolbar: { show: false } },
+				colors: [dashBarColors[0], dashBarColors[1], dashBarColors[3]],
+				plotOptions: { bar: { borderRadius: 6, horizontal: false, columnWidth: '60%' } },
+				legend: { show: true, position: 'top', fontSize: '12px' },
+				dataLabels: { enabled: false },
+				xaxis: { categories: [], labels: { style: { fontSize: '10px' }, rotate: -45, trim: true, hideOverlappingLabels: false } },
+				yaxis: { labels: { formatter: fmtCOPShort } },
+				grid: { strokeDashArray: 4 },
+				tooltip: { shared: true, y: { formatter: fmtCOP } },
+				noData: { text: 'Sin datos para mostrar' },
+			});
+			chartAsesoresAdopciones.render();
 			<?php endif; ?>
 
 			function mostrarCargando() {
@@ -1281,6 +1310,14 @@ if ($es_admin) {
 						{ name: 'Presupuesto', data: resp.asesores.presupuesto },
 						{ name: 'Adopciones', data: resp.asesores.adopciones },
 						{ name: 'Venta real', data: resp.asesores.venta_real },
+					]);
+
+					$('#da-asesores-adop-sub').text('Período ' + resp.periodo);
+					chartAsesoresAdopciones.updateOptions({ xaxis: { categories: resp.asesores_por_adopciones.labels } });
+					chartAsesoresAdopciones.updateSeries([
+						{ name: 'Presupuesto', data: resp.asesores_por_adopciones.presupuesto },
+						{ name: 'Adopciones', data: resp.asesores_por_adopciones.adopciones },
+						{ name: 'Venta real', data: resp.asesores_por_adopciones.venta_real },
 					]);
 				});
 			}
