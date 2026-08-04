@@ -1,11 +1,11 @@
 <?php
 /**
  * /php/comparar_terceros.php
- * Trae, página por página, los terceros de World Office con id mayor al último
- * id_wo que ya existe en la tabla local `clientes` (piso dinámico, ya no un valor
- * fijo). De esos, descarta los que ya existen localmente por identificación y
- * devuelve el resto para que clientes_op.php los liste con checkbox y permita
- * cruzarlos selectivamente. Solo lectura: no crea ni modifica nada.
+ * Trae los terceros de World Office con id mayor al "piso efectivo" (ver
+ * includes/wo_clientes_sync.php) y, de esos, descarta los que ya existen
+ * localmente por identificación/documento. Devuelve el resto para que
+ * clientes_op.php los liste con checkbox y permita cruzarlos selectivamente.
+ * Solo lectura: no crea ni modifica nada.
  */
 require_once("aut.php");
 
@@ -15,22 +15,23 @@ if (($_SESSION["tipo"] ?? null) != 1) {
     exit;
 }
 
-require_once("../includes/api_wo_terceros.php");
+require_once("../includes/wo_clientes_sync.php");
 require_once("../conexion/bdd.php");
 header('Content-Type: application/json');
 
 $pagina    = isset($_GET['pagina']) ? max(0, (int)$_GET['pagina']) : 0;
 $porPagina = isset($_GET['porPagina']) ? max(1, min(200, (int)$_GET['porPagina'])) : 100;
+// El piso efectivo se calcula una sola vez, al arrancar una búsqueda (pagina=0),
+// y el frontend lo reenvía en las páginas siguientes de la misma búsqueda para
+// no recalcularlo en cada request.
+$piso = ($pagina === 0 || !isset($_GET['piso']))
+    ? calcular_piso_efectivo($bdd)
+    : max(ID_MINIMO_WO, (int)$_GET['piso']);
 
 $inicio = microtime(true);
 
-// Piso dinámico: el id de World Office más alto que ya tenemos en clientes.id_wo.
-// listar_terceros() ordena por id DESC, así que las páginas van de mayor a menor
-// id: en cuanto una página trae algún id <= piso, ya no hay más terceros nuevos
-// en páginas siguientes (ver 'limiteAlcanzado' en la respuesta).
-$piso = (int)($bdd->query("SELECT MAX(id_wo) FROM clientes")->fetchColumn() ?: 0);
-
-$resultado = listar_terceros([], $pagina, $porPagina);
+$filtroMayorQue = crear_filtro_api('id', $piso, 2, 3); // id > piso, del lado de World Office
+$resultado = listar_terceros([$filtroMayorQue], $pagina, $porPagina);
 $status = $resultado['status'] ?? 'error';
 if (!in_array($status, ['OK', 'ACCEPTED'], true)) {
     echo json_encode(['success' => false, 'message' => 'La API de World Office respondió con error', 'detalle' => $resultado]);
@@ -38,17 +39,7 @@ if (!in_array($status, ['OK', 'ACCEPTED'], true)) {
 }
 
 $pag = $resultado['data'] ?? [];
-$filasPagina = $pag['content'] ?? [];
-
-$limiteAlcanzado = false;
-$filas = [];
-foreach ($filasPagina as $f) {
-    if ((int)($f['id'] ?? 0) <= $piso) {
-        $limiteAlcanzado = true;
-        continue; // por debajo del piso: no se cuenta como revisado
-    }
-    $filas[] = $f;
-}
+$filas = $pag['content'] ?? [];
 
 // Un solo query local para toda la página (evita N consultas): compara por
 // identificación/documento, con trim en ambos lados por si hay espacios sueltos.
@@ -68,7 +59,7 @@ if ($identificaciones) {
 
 // Por cada tercero que NO está en la tabla local, se pide el detalle completo
 // (GET /terceros/consultar/{id}) para mostrarlo con ciudad/departamento/país y
-// nombres separados en la tabla comparativa del panel.
+// nombres separados en la tabla del panel.
 $nuevos = [];
 foreach ($filas as $f) {
     $identificacion = trim((string)($f['identificacion'] ?? ''));
@@ -98,7 +89,6 @@ echo json_encode([
     'totalPaginas' => $pag['totalPages'] ?? null,
     'totalElementos' => $pag['totalElements'] ?? null,
     'revisadosEnPagina' => count($filas),
-    'limiteAlcanzado' => $limiteAlcanzado,
     'nuevos' => $nuevos,
     'ms' => round((microtime(true) - $inicio) * 1000),
 ]);

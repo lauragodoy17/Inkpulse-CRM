@@ -16,7 +16,7 @@ if (($_SESSION["tipo"] ?? null) != 1) {
     exit;
 }
 
-require_once("../includes/api_wo_terceros.php");
+require_once("../includes/wo_clientes_sync.php");
 require_once("../conexion/bdd.php");
 
 $body = json_decode(file_get_contents('php://input'), true);
@@ -69,8 +69,14 @@ foreach ($ids as $id) {
     $insertados[] = ['id' => $id, 'identificacion' => $identificacion, 'cliente' => $nombreCompleto];
 }
 
+// El piso puede haber avanzado con este cruce (o no, si quedaron huecos por
+// debajo de algún id recién insertado) — se recalcula para que el frontend
+// pueda refrescar la tarjeta sin tener que volver a lanzar una búsqueda.
+$piso = calcular_piso_efectivo($bdd);
+
 echo json_encode([
     'success' => true,
+    'piso' => $piso,
     'insertados' => $insertados,
     'omitidos' => $omitidos,
     'errores' => $errores,

@@ -125,7 +125,7 @@
           <div class="cp-estado" id="cp-estado"></div>
 
           <div class="cp-resumen">
-            <div class="cp-tarjeta"><div class="num" id="cp-piso">—</div><div class="lbl">Último id de WO ya en clientes</div></div>
+            <div class="cp-tarjeta"><div class="num" id="cp-piso">—</div><div class="lbl">No se buscan ids de WO menores o iguales a</div></div>
             <div class="cp-tarjeta"><div class="num" id="cp-revisados">0</div><div class="lbl">Revisados</div></div>
             <div class="cp-tarjeta nuevo"><div class="num" id="cp-nuevos">0</div><div class="lbl">Nuevos encontrados</div></div>
           </div>
@@ -241,7 +241,9 @@
 
   function siguientePagina() {
     if (!corriendo) return;
-    fetch('php/comparar_terceros.php?pagina=' + pagina + '&porPagina=' + POR_PAGINA)
+    var url = 'php/comparar_terceros.php?pagina=' + pagina + '&porPagina=' + POR_PAGINA;
+    if (pagina > 0 && piso != null) url += '&piso=' + piso;
+    fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data.success) {
@@ -257,7 +259,7 @@
         actualizarResumen();
 
         pagina++;
-        if (corriendo && !data.limiteAlcanzado && totalPaginas != null && pagina < totalPaginas) {
+        if (corriendo && totalPaginas != null && pagina < totalPaginas) {
           siguientePagina();
         } else {
           detener();
@@ -349,6 +351,7 @@
         });
 
         nuevos -= data.insertados.length;
+        if (data.piso != null) piso = data.piso;
         actualizarResumen();
 
         var msg = data.insertados.length + ' cliente(s) agregado(s) a la tabla clientes.';

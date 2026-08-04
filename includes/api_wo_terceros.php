@@ -8,17 +8,22 @@
  * - GET /terceros/consultar/{id} — detalle por id (a diferencia de lo probado antes
  *   por nombre en /terceros/{id}, getTerceroById, etc., que daban 404, este sí existe:
  *   confirmado en la documentación propia de World Office para esta cuenta).
+ * - Filtro "mayor que" en listarTerceros: crear_filtro_api('id', $valor, 2, 3) filtra
+ *   del lado de WO por id > $valor (confirmado por prueba directa contra producción:
+ *   con 10,919 terceros totales, filtrar id>11767 devolvió exactamente los 4 con id
+ *   mayor). tipoDato=2/tipoFiltro=0 es "=", tipoFiltro=2 es "<". No documentado en
+ *   ningún lado, encontrado por fuerza bruta probando combinaciones tipoDato/tipoFiltro.
  */
 
 require_once("api_wo_cliente.php");
 
-function listar_terceros($filtros = [], $pagina = 0, $registrosPorPagina = 20) {
+function listar_terceros($filtros = [], $pagina = 0, $registrosPorPagina = 20, $orden = 'DESC') {
     $endpoint = '/terceros/listarTerceros';
     $cuerpo = [
         "columnaOrdenar" => "id",
         "pagina" => (int)$pagina,
         "registrosPorPagina" => (int)$registrosPorPagina,
-        "orden" => "DESC",
+        "orden" => $orden,
         "canal" => 0,
         "registroInicial" => 0,
         "filtros" => array_values($filtros)
