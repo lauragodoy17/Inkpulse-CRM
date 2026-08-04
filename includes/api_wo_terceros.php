@@ -1,10 +1,13 @@
 <?php
 /**
  * /includes/api_wo_terceros.php
- * Listado de terceros (clientes/proveedores) en World Office.
- * Endpoint descubierto por prueba directa para esta cuenta (no está en el
- * catálogo público de developer.worldoffice.cloud): POST /terceros/listarTerceros.
- * No requiere filtros obligatorios (a diferencia de listarDocumentoSalidaAlmacen).
+ * Listado y consulta individual de terceros (clientes/proveedores) en World Office.
+ * - POST /terceros/listarTerceros — descubierto por prueba directa para esta cuenta
+ *   (no está en el catálogo público de developer.worldoffice.cloud). No requiere
+ *   filtros obligatorios (a diferencia de listarDocumentoSalidaAlmacen).
+ * - GET /terceros/consultar/{id} — detalle por id (a diferencia de lo probado antes
+ *   por nombre en /terceros/{id}, getTerceroById, etc., que daban 404, este sí existe:
+ *   confirmado en la documentación propia de World Office para esta cuenta).
  */
 
 require_once("api_wo_cliente.php");
@@ -21,4 +24,9 @@ function listar_terceros($filtros = [], $pagina = 0, $registrosPorPagina = 20) {
         "filtros" => array_values($filtros)
     ];
     return hacer_peticion_api($endpoint, 'POST', $cuerpo);
+}
+
+function consultar_tercero($id) {
+    $endpoint = '/terceros/consultar/' . (int)$id;
+    return hacer_peticion_api($endpoint, 'GET');
 }

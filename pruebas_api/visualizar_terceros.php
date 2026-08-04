@@ -2,9 +2,12 @@
 /**
  * /pruebas_api/visualizar_terceros.php
  * Apartado de solo lectura para ver los terceros (clientes/proveedores)
- * registrados en World Office. Endpoint POST /terceros/listarTerceros,
- * descubierto por prueba directa (no está en el catálogo público de
- * developer.worldoffice.cloud). No requiere filtros obligatorios.
+ * registrados en World Office. Usa dos endpoints:
+ *   - POST /terceros/listarTerceros — listado paginado, descubierto por prueba
+ *     directa (no está en el catálogo público de developer.worldoffice.cloud).
+ *     No requiere filtros obligatorios.
+ *   - GET  /terceros/consultar/{id} — detalle por id, confirmado en la
+ *     documentación propia de World Office para esta cuenta.
  * No se prueba/implementa nada de crear, editar ni eliminar terceros.
  */
 
@@ -23,6 +26,7 @@ $nombre        = isset($_GET['nombre']) ? trim($_GET['nombre']) : '';
 $identificacion = isset($_GET['identificacion']) ? trim($_GET['identificacion']) : '';
 $pagina        = isset($_GET['pagina']) ? max(0, (int)$_GET['pagina']) : 0;
 $porPagina     = isset($_GET['porPagina']) ? max(1, min(50, (int)$_GET['porPagina'])) : 15;
+$verDetalle    = isset($_GET['ver']) && $_GET['ver'] !== '' ? $_GET['ver'] : null;
 
 $filtros = [];
 if ($nombre !== '') {
@@ -42,6 +46,14 @@ $pag = $resultado['data'] ?? null;
 $filas = $pag['content'] ?? [];
 $totalElementos = $pag['totalElements'] ?? null;
 $totalPaginas = $pag['totalPages'] ?? null;
+
+$detalle = null;
+$ms_detalle = null;
+if ($verDetalle !== null) {
+    $inicio2 = microtime(true);
+    $detalle = consultar_tercero($verDetalle);
+    $ms_detalle = round((microtime(true) - $inicio2) * 1000);
+}
 
 function h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 ?>
@@ -74,6 +86,16 @@ function h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
     nav.tabs { margin-bottom:16px; }
     nav.tabs a { color:#6b7280; text-decoration:none; font-size:.85rem; margin-right:16px; }
     nav.tabs a.activo { color:#111827; font-weight:700; border-bottom:2px solid #111827; padding-bottom:4px; }
+    form.buscar { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; display:flex; gap:10px; align-items:end; margin-bottom:14px; }
+    form.buscar label { font-size:.75rem; color:#6b7280; display:block; margin-bottom:3px; }
+    form.buscar input { border:1px solid #d1d5db; border-radius:6px; padding:6px 8px; font-size:.85rem; width:140px; }
+    form.buscar button { background:#2563eb; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:.85rem; cursor:pointer; }
+    .ver { color:#2563eb; text-decoration:none; font-size:.8rem; }
+    .panel-detalle { margin-top:20px; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:16px; }
+    .panel-detalle h2 { margin-top:0; font-size:1.05rem; }
+    .grid { display:grid; grid-template-columns:repeat(2, minmax(220px,1fr)); gap:8px 24px; font-size:.85rem; }
+    .grid div b { display:block; color:#6b7280; font-size:.72rem; font-weight:600; text-transform:uppercase; }
+    details.crudo summary { cursor:pointer; margin-top:12px; color:#6b7280; font-size:.8rem; }
 </style>
 </head>
 <body>
@@ -86,7 +108,16 @@ function h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 </nav>
 
 <h1>Terceros — World Office (Eureka)</h1>
-<p class="subt">Solo lectura: <code>POST /terceros/listarTerceros</code>. No se crean, editan ni eliminan terceros aquí.</p>
+<p class="subt">Solo lectura: <code>POST /terceros/listarTerceros</code> + <code>GET /terceros/consultar/{id}</code>. No se crean, editan ni eliminan terceros aquí.</p>
+
+<form class="buscar" method="get">
+    <div>
+        <label>Buscar tercero por ID</label>
+        <input type="text" name="ver" value="<?= h($verDetalle ?? '') ?>" placeholder="ej: 123">
+    </div>
+    <button type="submit">Ver detalle</button>
+    <span class="nota">Usa <code>consultar/{id}</code> directo, sin pasar por el listado.</span>
+</form>
 
 <form class="filtros" method="get">
     <div>
@@ -121,6 +152,7 @@ function h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
             <th>Ciudad</th>
             <th>Tipo(s)</th>
             <th>Activo</th>
+            <th></th>
         </tr>
         <?php foreach ($filas as $f): ?>
             <tr>
@@ -130,10 +162,11 @@ function h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
                 <td><?= h($f['ubicacionCiudad'] ?? '') ?></td>
                 <td><?= h($f['terceroTipos'] ?? '') ?></td>
                 <td><?= !empty($f['senActivo']) ? '<span class="badge si">Sí</span>' : '<span class="badge no">No</span>' ?></td>
+                <td><a class="ver" href="?<?= http_build_query(array_merge($_GET, ['ver' => $f['id']])) ?>#detalle">Ver detalle</a></td>
             </tr>
         <?php endforeach; ?>
         <?php if (!$filas): ?>
-            <tr><td colspan="6" style="text-align:center;color:#9ca3af;">Sin resultados.</td></tr>
+            <tr><td colspan="7" style="text-align:center;color:#9ca3af;">Sin resultados.</td></tr>
         <?php endif; ?>
     </table>
 
@@ -145,8 +178,42 @@ function h($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
 <?php endif; ?>
 
+<?php if ($detalle !== null): ?>
+    <div class="panel-detalle" id="detalle">
+        <h2>Detalle del tercero <?= h($verDetalle) ?> (<?= $ms_detalle ?> ms)</h2>
+        <?php if (($detalle['status'] ?? '') === 'error' || isset($detalle['errorCode'])): ?>
+            <div class="aviso">
+                La API respondió con error.
+                <pre><?= h(json_encode($detalle, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+            </div>
+        <?php else:
+            $d = $detalle['data'] ?? $detalle;
+        ?>
+            <div class="grid">
+                <div><b>ID</b><?= h($d['id'] ?? '') ?></div>
+                <div><b>Código</b><?= h($d['codigo'] ?? '') ?></div>
+                <div><b>Tipo de identificación</b><?= h($d['terceroTipoIdentificacion']['nombre'] ?? '') ?></div>
+                <div><b>Identificación</b><?= h($d['identificacion'] ?? '') ?><?= isset($d['digitoVerificacion']) ? '-' . h($d['digitoVerificacion']) : '' ?></div>
+                <div><b>Nombre completo</b><?= h($d['nombreCompleto'] ?? '') ?></div>
+                <div><b>Nombres / apellidos</b><?= h(trim(($d['primerNombre'] ?? '') . ' ' . ($d['segundoNombre'] ?? '') . ' ' . ($d['primerApellido'] ?? '') . ' ' . ($d['segundoApellido'] ?? ''))) ?></div>
+                <div><b>Ciudad</b><?= h($d['ciudad']['nombre'] ?? '') ?></div>
+                <div><b>Departamento</b><?= h($d['ciudad']['ubicacionDepartamento']['nombre'] ?? '') ?></div>
+                <div><b>País</b><?= h($d['ciudad']['ubicacionDepartamento']['ubicacionPais']['nombre'] ?? '') ?></div>
+                <div><b>Tipo(s) de tercero</b><?= h(implode(', ', array_column($d['terceroTipos'] ?? [], 'nombre'))) ?></div>
+                <div><b>Activo</b><?= !empty($d['senActivo']) ? '<span class="badge si">Sí</span>' : '<span class="badge no">No</span>' ?></div>
+                <div><b>Aplica ICA ventas</b><?= !empty($d['aplicaICAVentas']) ? '<span class="badge si">Sí</span>' : '<span class="badge no">No</span>' ?></div>
+            </div>
+        <?php endif; ?>
+
+        <details class="crudo">
+            <summary>Ver JSON crudo de la respuesta</summary>
+            <pre><?= h(json_encode($detalle, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+        </details>
+    </div>
+<?php endif; ?>
+
 <p class="exclusion">
-    No se prueba aquí ni existe confirmado para esta cuenta: crear, editar o eliminar terceros, ni un endpoint de detalle por ID (no se encontró ninguno funcional). El listado ya trae identificación, nombre, ciudad, tipo(s) de tercero y estado activo.
+    No se prueba aquí ni existe confirmado para esta cuenta: crear, editar o eliminar terceros. El listado trae identificación, nombre, ciudad, tipo(s) de tercero y estado activo; el detalle por ID (<code>consultar/{id}</code>) agrega ubicación completa (ciudad/departamento/país), nombres/apellidos por separado, código y las banderas de ICA.
 </p>
 
 </body>
