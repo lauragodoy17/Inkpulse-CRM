@@ -16,6 +16,7 @@ $ops_active          = in_array($current_page, ['solicitar_op.php','lista_op.php
 $opds_active         = in_array($current_page, ['solicitar_orden_pd.php','ver_opds.php','reporte_opd.php']);
 $reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_devoluciones.php']);
 $libros_active       = $current_page === 'libros.php';
+$libros_bodega_active = $current_page === 'libros_bodega.php';
 $usuarios_active     = $current_page === 'usuarios.php';
 $zonas_active        = $current_page === 'zonas.php';
 $ubicaciones_active  = in_array($current_page, ['ubicaciones.php','ubicacion_detalle.php']);
@@ -559,6 +560,12 @@ $periodos_active     = $current_page === 'periodos.php';
 							<a href="libros.php" class="dropdown-toggle no-arrow <?= $libros_active ? 'active' : '' ?>">
 								<span class="micon bi bi-book"></span
 								><span class="mtext">Libros</span>
+							</a>
+						</li>
+						<li>
+							<a href="libros_bodega.php" class="dropdown-toggle no-arrow <?= $libros_bodega_active ? 'active' : '' ?>">
+								<span class="micon bi bi-boxes"></span
+								><span class="mtext">Clasificar por bodega</span>
 							</a>
 						</li>
 						<?php if (in_array($_SESSION["id"], [1, 93, 94])) {?>
