@@ -194,6 +194,67 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
       padding: 9px 22px; border-radius: 8px; border: none; color: #fff; font-size: .875rem; font-weight: 600; cursor: pointer;
       background: linear-gradient(135deg,#7c3aed,#4f46e5); box-shadow: 0 4px 12px rgba(79,70,229,.3);
     }
+
+    /* Sección "Buscar libros nuevos en World Office" */
+    .ln-details { margin-bottom: 20px; }
+    .ln-summary { cursor: pointer; list-style: none; }
+    .ln-summary::-webkit-details-marker { display: none; }
+    .ln-summary h5 { display: inline; }
+    .ln-body { padding: 20px; }
+    .ln-aviso { font-size: .82rem; color: #64748b; margin: 0 0 16px; }
+    .ln-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 22px; border-radius: 8px; font-size: .875rem; font-weight: 700;
+      background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff; border: none; cursor: pointer;
+    }
+    .ln-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .ln-btn-stop { background: #fff; color: #dc2626; border: 1.5px solid #fecaca; }
+    .ln-progreso-wrap { margin-top: 16px; background: #f1f5f9; border-radius: 8px; height: 8px; overflow: hidden; }
+    .ln-progreso { height: 100%; background: linear-gradient(135deg,#7c3aed,#4f46e5); width: 0%; transition: width .2s; }
+    .ln-progreso-txt { font-size: .78rem; color: #64748b; margin-top: 6px; }
+    .ln-estado { font-size: .82rem; color: #dc2626; margin-top: 8px; display: none; }
+    .ln-estado.visible { display: block; }
+    .ln-buscador { position: relative; max-width: 340px; margin-top: 16px; }
+    .ln-buscador input {
+      width: 100%; padding: 9px 12px 9px 34px; border: 1px solid #e2e8f0;
+      border-radius: 8px; font-size: .85rem; box-sizing: border-box;
+    }
+    .ln-buscador i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: .85rem; }
+    .ln-tabla-wrap { max-height: 420px; overflow-y: auto; border: 1px solid #f1f5f9; border-radius: 10px; margin-top: 18px; }
+    table.ln-tabla { width: 100%; border-collapse: collapse; }
+    table.ln-tabla th, table.ln-tabla td { text-align: left; padding: 9px 12px; font-size: .82rem; border-bottom: 1px solid #f1f5f9; }
+    table.ln-tabla th { background: #0f172a; color: #fff; font-weight: 600; position: sticky; top: 0; }
+    table.ln-tabla tr:hover td { background: #f9fafb; }
+    .ln-vacio { text-align: center; color: #9ca3af; padding: 20px; font-size: .85rem; }
+
+    .ln-form-excel { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .ln-form-excel input[type=file] { font-size: .82rem; }
+    .ln-excel-resumen { margin-top: 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: .85rem; color: #374151; }
+    .ln-fila-error td { background: #fef2f2; }
+    .ln-fila-aplicada td { opacity: .45; text-decoration: line-through; }
+    .ln-fila-aplicada select, .ln-fila-aplicada input { pointer-events: none; }
+    .ln-badge-estado { display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: .74rem; font-weight: 700; white-space: nowrap; background: #f1f5f9; color: #64748b; }
+    .ln-badge-estado.ok { background: #dcfce7; color: #166534; }
+    .ln-badge-estado.error { background: #fee2e2; color: #991b1b; }
+    .ln-badge-nuevo { display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: .72rem; font-weight: 700; background: #ede9fe; color: #6d28d9; }
+
+    /* Toolbar de la tabla "Buscar libros nuevos" (buscador + acción masiva) */
+    .ln-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 16px; }
+    .ln-toolbar .ln-buscador { margin-top: 0; }
+    .ln-fila-agregada td { opacity: .4; }
+    .ln-fila-agregada .ln-check-fila { cursor: not-allowed; }
+
+    /* Campos editables inline en la tabla de "Actualizar precios y materia" */
+    .ln-input-mini, .ln-select-mini {
+      width: 100%; min-width: 90px; padding: 5px 8px; border: 1.5px solid #d1d5db; border-radius: 6px;
+      font-size: .8rem; color: #1e293b; background: #f9fafb; outline: none; font-family: inherit;
+    }
+    .ln-input-mini:focus, .ln-select-mini:focus { border-color: #7c3aed; background: #fff; }
+    .ln-btn-quitar-crear {
+      border: none; background: none; color: #94a3b8; font-size: 1rem; line-height: 1; cursor: pointer;
+      padding: 0 2px; vertical-align: middle; margin-left: 4px;
+    }
+    .ln-btn-quitar-crear:hover { color: #dc2626; }
   </style>
 </head>
 <body>
@@ -248,6 +309,123 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
           </div>
         </div>
       </div>
+
+      <?php if ($puede_crear_eliminar): ?>
+      <!-- Libros nuevos en World Office (no están todavía en el catálogo local) -->
+      <details class="modern-card ln-details">
+        <summary class="card-head ln-summary"><h5><i class="bi bi-search mr-2"></i> Buscar libros nuevos en World Office</h5></summary>
+        <div class="ln-body">
+
+          <button type="button" class="ln-btn" id="ln-btn-iniciar"><i class="bi bi-arrow-repeat"></i> Buscar libros nuevos</button>
+          <button type="button" class="ln-btn ln-btn-stop" id="ln-btn-detener" style="display:none;"><i class="bi bi-stop-circle"></i> Detener</button>
+
+          <div class="ln-progreso-wrap"><div class="ln-progreso" id="ln-progreso"></div></div>
+          <p class="ln-progreso-txt" id="ln-progreso-txt">Sin iniciar.</p>
+          <div class="ln-estado" id="ln-estado"></div>
+
+          <div class="ln-toolbar">
+            <div class="ln-buscador">
+              <i class="bi bi-search"></i>
+              <input type="text" id="ln-buscar" placeholder="Buscar por ISBN o título...">
+            </div>
+            <button type="button" class="ln-btn" id="ln-btn-agregar-seleccionados" disabled>
+              <i class="bi bi-arrow-down-circle"></i> Agregar seleccionados (<span id="ln-count-seleccionados">0</span>)
+            </button>
+          </div>
+
+          <div class="ln-tabla-wrap">
+            <table class="ln-tabla">
+              <thead>
+                <tr>
+                  <th style="width:32px;"><input type="checkbox" id="ln-check-all"></th>
+                  <th>ISBN</th>
+                  <th>Título (WO)</th>
+                  <th>Editorial (WO)</th>
+                </tr>
+              </thead>
+              <tbody id="ln-tbody"></tbody>
+            </table>
+          </div>
+          <p class="ln-vacio" id="ln-vacio">Dale a "Buscar libros nuevos" para ver resultados aquí.</p>
+        </div>
+      </details>
+
+      <!-- Actualizar precios y materia desde Excel -->
+      <details class="modern-card ln-details" id="ln-details-excel">
+        <summary class="card-head ln-summary"><h5><i class="bi bi-file-earmark-spreadsheet mr-2"></i> Actualizar precios y materia desde Excel</h5></summary>
+        <div class="ln-body">
+          <form id="ln-form-excel" class="ln-form-excel">
+            <input type="file" id="ln-excel-archivo" name="archivo" accept=".xlsx,.xls,.csv" required>
+            <button type="submit" class="ln-btn" id="ln-btn-previsualizar"><i class="bi bi-eye"></i> Previsualizar</button>
+          </form>
+
+          <div class="ln-estado" id="ln-excel-estado"></div>
+
+          <div id="ln-excel-resumen" class="ln-excel-resumen" style="display:none;">
+            <span id="ln-excel-resumen-txt"></span>
+            <button type="button" class="ln-btn" id="ln-btn-aplicar" style="display:none;"><i class="bi bi-check2-circle"></i> Aplicar cambios</button>
+          </div>
+
+          <div class="ln-tabla-wrap" id="ln-excel-tabla-wrap" style="display:none;">
+            <table class="ln-tabla">
+              <thead>
+                <tr>
+                  <th>Fila</th>
+                  <th>ISBN</th>
+                  <th>Libro</th>
+                  <th>Materia</th>
+                  <th>Grado</th>
+                  <th>Precio</th>
+                  <th>Presupuesto</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="ln-excel-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <!-- Actualizar precios CRM -->
+      <details class="modern-card ln-details" id="ln-details-crm">
+        <summary class="card-head ln-summary"><h5><i class="bi bi-currency-dollar mr-2"></i> Actualizar precios CRM</h5></summary>
+        <div class="ln-body">
+
+          <form id="ln-form-crm" class="ln-form-excel">
+            <input type="file" id="ln-crm-archivo" name="archivo" accept=".xlsx,.xls,.csv" required>
+            <button type="submit" class="ln-btn" id="ln-btn-crm-previsualizar"><i class="bi bi-eye"></i> Previsualizar</button>
+          </form>
+
+          <div class="ln-estado" id="ln-crm-estado"></div>
+
+          <div id="ln-crm-resumen" class="ln-excel-resumen" style="display:none;">
+            <span id="ln-crm-resumen-txt"></span>
+            <button type="button" class="ln-btn" id="ln-btn-crm-aplicar" style="display:none;"><i class="bi bi-check2-circle"></i> Aplicar cambios (<span id="ln-crm-count-seleccionados">0</span>)</button>
+          </div>
+
+          <div class="ln-buscador" id="ln-crm-buscador-wrap" style="display:none;">
+            <i class="bi bi-search"></i>
+            <input type="text" id="ln-crm-buscar" placeholder="Buscar por ISBN o título...">
+          </div>
+
+          <div class="ln-tabla-wrap" id="ln-crm-tabla-wrap" style="display:none;">
+            <table class="ln-tabla">
+              <thead>
+                <tr>
+                  <th style="width:32px;"><input type="checkbox" id="ln-crm-check-all"></th>
+                  <th>Fila</th>
+                  <th>ISBN</th>
+                  <th>Libro</th>
+                  <th>Precio actual → nuevo</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="ln-crm-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+      <?php endif; ?>
 
       <!-- Barra de filtros -->
       <div class="filter-toolbar">
@@ -344,6 +522,8 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
                     <option value="0">No</option>
                   </select>
                 </div>
+
+                <input type="hidden" name="id_wo" id="crear_id_wo" value="">
 
               </div>
               <div class="ml-footer">
@@ -508,6 +688,8 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
   var LUGARES_BODEGA = <?= json_encode($lugares_bodega) ?>;
   var UBICACIONES_BODEGA = <?= json_encode($ubicaciones_bodega) ?>;
   var SOLO_UBICACION = <?= json_encode($es_solo_ubicacion) ?>;
+  var MATERIAS = <?= json_encode($materias) ?>;
+  var GRADOS = <?= json_encode($grados) ?>;
 
 $(document).ready(function () {
   $.fn.dataTable.ext.errMode = 'none';
@@ -579,7 +761,7 @@ $(document).ready(function () {
     poblarSlot($editarLugar.val(), $(this).val());
   });
 
-  var table = $('#libros-table').DataTable({
+  var table = window.libroTable = $('#libros-table').DataTable({
     processing: true,
     serverSide: true,
     responsive: { details: false },
@@ -753,6 +935,717 @@ $(document).ready(function () {
     }, 'json');
   });
 });
+</script>
+<script>
+(function () {
+  var btnIniciar = document.getElementById('ln-btn-iniciar');
+  if (!btnIniciar) return; // sección no renderizada (usuario sin permiso de crear/eliminar)
+
+  var POR_PAGINA = 50;
+  var corriendo = false;
+  var pagina = 0;
+  var totalPaginas = null;
+  var idCorrida = 0; // se incrementa cada vez que se inicia una búsqueda, para poder
+                      // descartar respuestas de una corrida anterior que llegan tarde
+                      // (ej. si se detiene y se vuelve a iniciar antes de que responda)
+
+  var btnDetener = document.getElementById('ln-btn-detener');
+  var progreso = document.getElementById('ln-progreso');
+  var progresoTxt = document.getElementById('ln-progreso-txt');
+  var estado = document.getElementById('ln-estado');
+  var tbody = document.getElementById('ln-tbody');
+  var vacio = document.getElementById('ln-vacio');
+  var buscar = document.getElementById('ln-buscar');
+  buscar.addEventListener('input', aplicarBusquedaLn);
+
+  function h(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function agregarFilas(lista) {
+    vacio.style.display = 'none';
+    lista.forEach(function (n) {
+      var tr = document.createElement('tr');
+      tr.dataset.buscar = (n.isbn + ' ' + n.descripcion).toLowerCase();
+      tr.innerHTML =
+        '<td><input type="checkbox" class="ln-check-fila" data-isbn="' + h(n.isbn) + '" data-titulo="' + h(n.descripcion) + '" data-idwo="' + h(n.id) + '"></td>' +
+        '<td>' + h(n.isbn) + '</td>' +
+        '<td>' + h(n.descripcion) + '</td>' +
+        '<td>' + h(n.editorial) + '</td>';
+      tbody.appendChild(tr);
+    });
+    aplicarBusquedaLn();
+  }
+
+  function aplicarBusquedaLn() {
+    var texto = buscar.value.trim().toLowerCase();
+    Array.prototype.forEach.call(tbody.querySelectorAll('tr'), function (tr) {
+      tr.style.display = (!texto || tr.dataset.buscar.indexOf(texto) !== -1) ? '' : 'none';
+    });
+  }
+
+  // ── Selección de filas para llevarlas a "Actualizar precios y materia" ──
+  var checkAll = document.getElementById('ln-check-all');
+  var btnAgregarSeleccionados = document.getElementById('ln-btn-agregar-seleccionados');
+  var spanCountSeleccionados = document.getElementById('ln-count-seleccionados');
+
+  function actualizarContadorSeleccionados() {
+    var n = tbody.querySelectorAll('.ln-check-fila:checked').length;
+    spanCountSeleccionados.textContent = n;
+    btnAgregarSeleccionados.disabled = n === 0;
+  }
+
+  tbody.addEventListener('change', function (e) {
+    if (e.target.classList.contains('ln-check-fila')) actualizarContadorSeleccionados();
+  });
+
+  checkAll.addEventListener('change', function () {
+    Array.prototype.forEach.call(tbody.querySelectorAll('.ln-check-fila:not(:disabled)'), function (chk) {
+      var tr = chk.closest('tr');
+      if (tr.style.display !== 'none') chk.checked = checkAll.checked;
+    });
+    actualizarContadorSeleccionados();
+  });
+
+  btnAgregarSeleccionados.addEventListener('click', function () {
+    var checks = tbody.querySelectorAll('.ln-check-fila:checked');
+    if (!checks.length) return;
+    var agregados = 0;
+    Array.prototype.forEach.call(checks, function (chk) {
+      var tr = chk.closest('tr');
+      window.agregarOActualizarCreacion({
+        isbn: chk.dataset.isbn,
+        libro: chk.dataset.titulo,
+        idWo: chk.dataset.idwo,
+      });
+      tr.classList.add('ln-fila-agregada');
+      chk.disabled = true;
+      chk.checked = false;
+      agregados++;
+    });
+    checkAll.checked = false;
+    actualizarContadorSeleccionados();
+    window.renderTablaExcel();
+
+    var detallesExcel = document.getElementById('ln-details-excel');
+    if (detallesExcel) detallesExcel.open = true;
+
+    if (window.inkToast) inkToast(agregados + ' libro(s) agregado(s) a "Actualizar precios y materia".', 'ok');
+  });
+
+  function mostrarError(msg) {
+    estado.textContent = msg;
+    estado.className = 'ln-estado visible';
+  }
+
+  function siguientePagina(miCorrida) {
+    if (!corriendo || miCorrida !== idCorrida) return;
+    fetch('php/comparar_libros.php?pagina=' + pagina + '&porPagina=' + POR_PAGINA)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (miCorrida !== idCorrida) return; // esta corrida ya no es la vigente: se ignora la respuesta
+
+        if (!data.success) {
+          mostrarError('Error consultando World Office: ' + (data.message || 'desconocido'));
+          detener();
+          return;
+        }
+        totalPaginas = data.totalPaginas;
+        agregarFilas(data.nuevos);
+
+        var pct = totalPaginas ? Math.min(100, Math.round(((pagina + 1) / totalPaginas) * 100)) : 0;
+        progreso.style.width = pct + '%';
+        progresoTxt.textContent = 'Página ' + (pagina + 1) + ' de ' + (totalPaginas ?? '?') + ' — ' + tbody.children.length + ' libro(s) nuevo(s) encontrados hasta ahora';
+
+        pagina++;
+        if (corriendo && miCorrida === idCorrida && totalPaginas != null && pagina < totalPaginas) {
+          siguientePagina(miCorrida);
+        } else {
+          detener();
+          progreso.style.width = '100%';
+          if (tbody.children.length === 0) {
+            vacio.style.display = '';
+            vacio.textContent = 'No se encontraron libros nuevos: todo el inventario de World Office ya está en el catálogo.';
+          }
+          progresoTxt.textContent = 'Búsqueda completa — ' + tbody.children.length + ' libro(s) nuevo(s) encontrados.';
+        }
+      })
+      .catch(function (err) {
+        if (miCorrida !== idCorrida) return;
+        mostrarError('Error de red: ' + err.message);
+        detener();
+      });
+  }
+
+  function iniciar() {
+    idCorrida++;
+    var miCorrida = idCorrida;
+    corriendo = true;
+    pagina = 0; totalPaginas = null;
+    tbody.innerHTML = '';
+    vacio.style.display = 'none';
+    estado.className = 'ln-estado';
+    buscar.value = '';
+    btnIniciar.disabled = true;
+    btnDetener.style.display = '';
+    checkAll.checked = false;
+    actualizarContadorSeleccionados();
+    siguientePagina(miCorrida);
+  }
+
+  function detener() {
+    corriendo = false;
+    btnIniciar.disabled = false;
+    btnDetener.style.display = 'none';
+  }
+
+  btnIniciar.addEventListener('click', function (e) {
+    e.preventDefault();
+    iniciar();
+  });
+  btnDetener.addEventListener('click', function (e) {
+    e.preventDefault();
+    detener();
+  });
+
+  // ── Actualizar precios y materia desde Excel (+ creación de libros nuevos) ──
+  var formExcel = document.getElementById('ln-form-excel');
+  var btnPrevisualizar = document.getElementById('ln-btn-previsualizar');
+  var btnAplicar = document.getElementById('ln-btn-aplicar');
+  var excelEstado = document.getElementById('ln-excel-estado');
+  var excelResumen = document.getElementById('ln-excel-resumen');
+  var excelResumenTxt = document.getElementById('ln-excel-resumen-txt');
+  var excelTablaWrap = document.getElementById('ln-excel-tabla-wrap');
+  var excelTbody = document.getElementById('ln-excel-tbody');
+
+  // filasValidas: filas del último Excel previsualizado que actualizan un libro
+  // que ya existe (tienen idLibro). filasErrorYActualizar: todas las filas del
+  // último Excel que NO son "faltante en catálogo" (actualizaciones + errores
+  // puros), se repintan enteras en cada previsualización. filasCrear: mapa por
+  // ISBN de libros que todavía no existen — persiste entre previsualizaciones,
+  // se alimenta tanto del Excel (filas con ISBN no encontrado) como de
+  // "Agregar seleccionados" en la tabla de World Office de arriba.
+  var filasValidas = [];
+  var filasErrorYActualizar = [];
+  var filasCrear = {};
+
+  function fmtMoneda(v) {
+    return v == null ? '—' : Number(v).toLocaleString('es-CO');
+  }
+
+  function fmtPresupuesto(v) {
+    return v === 1 ? 'Sí' : (v === 0 ? 'No' : '—');
+  }
+
+  function mostrarErrorExcel(msg) {
+    excelEstado.textContent = msg;
+    excelEstado.className = 'ln-estado visible';
+  }
+
+  function opcionesMateria(seleccionadoId) {
+    var out = '<option value="">Seleccione</option>';
+    MATERIAS.forEach(function (m) {
+      out += '<option value="' + m.id + '"' + (String(seleccionadoId) === String(m.id) ? ' selected' : '') + '>' + h(m.materia) + '</option>';
+    });
+    return out;
+  }
+
+  function opcionesGrado(seleccionadoId) {
+    var out = '<option value="">Seleccione</option>';
+    GRADOS.forEach(function (g) {
+      out += '<option value="' + g.id + '"' + (String(seleccionadoId) === String(g.id) ? ' selected' : '') + '>' + h(g.grado) + '</option>';
+    });
+    return out;
+  }
+
+  function creacionCompleta(f) {
+    return !!(f.libro && f.idMateria && f.idGrado && f.precio !== '' && f.presupuesto !== '');
+  }
+
+  // Agrega un libro nuevo (por ISBN) a filasCrear, o completa los campos
+  // vacíos de uno que ya estaba (sin pisar lo que el usuario ya haya editado).
+  window.agregarOActualizarCreacion = function (datos) {
+    var isbn = datos.isbn;
+    if (!isbn) return;
+    var existente = filasCrear[isbn];
+    if (existente) {
+      if (!existente.libro && datos.libro) existente.libro = datos.libro;
+      if (!existente.idMateria && datos.idMateria) existente.idMateria = datos.idMateria;
+      if ((existente.precio === '' || existente.precio == null) && datos.precio != null && datos.precio !== '') existente.precio = datos.precio;
+      if ((existente.presupuesto === '' || existente.presupuesto == null) && datos.presupuesto) existente.presupuesto = datos.presupuesto;
+      if (!existente.idWo && datos.idWo) existente.idWo = datos.idWo;
+    } else {
+      filasCrear[isbn] = {
+        isbn: isbn,
+        libro: datos.libro || '',
+        idMateria: datos.idMateria || '',
+        idGrado: '',
+        precio: (datos.precio != null && datos.precio !== '') ? datos.precio : '',
+        presupuesto: datos.presupuesto || '',
+        idWo: datos.idWo || '',
+      };
+    }
+  };
+
+  // f.materiaSeleccionada arranca en la materia actual del libro (si existe)
+  // y queda editable, porque el Excel de World Office (Código/Descripción/
+  // Estado/Precio 1) no trae materia.
+  function renderFilaActualizarOError(f) {
+    var tr = document.createElement('tr');
+    var esActualizable = f.ok && f.idLibro;
+    tr.className = f.ok ? '' : 'ln-fila-error';
+    tr.dataset.fila = f.fila;
+    var estadoHtml = f.ok
+      ? '<span class="ln-badge-estado ok">OK</span>'
+      : '<span class="ln-badge-estado error">' + h(f.errores.join('; ')) + '</span>';
+
+    var materiaHtml = esActualizable
+      ? '<select class="ln-actualizar-input ln-select-mini" data-campo="materiaSeleccionada">' + opcionesMateria(f.materiaSeleccionada) + '</select>'
+      : h(f.materiaActualNombre || '—');
+
+    tr.innerHTML =
+      '<td>' + h(f.fila) + '</td>' +
+      '<td>' + h(f.isbn) + '</td>' +
+      '<td>' + h(f.libroActual || f.libroNuevo || '—') + '</td>' +
+      '<td>' + materiaHtml + '</td>' +
+      '<td>—</td>' +
+      '<td>' + fmtMoneda(f.precioActual) + ' → ' + fmtMoneda(f.precioNuevo) + '</td>' +
+      '<td>' + fmtPresupuesto(f.presupuestoActual) + ' → ' + fmtPresupuesto(f.presupuestoNuevo) + '</td>' +
+      '<td>' + estadoHtml + '</td>';
+    excelTbody.appendChild(tr);
+  }
+
+  function renderFilaCrear(f) {
+    var tr = document.createElement('tr');
+    tr.className = 'ln-fila-crear';
+    tr.dataset.isbn = f.isbn;
+    var completa = creacionCompleta(f);
+    tr.innerHTML =
+      '<td><span class="ln-badge-nuevo">Nuevo</span></td>' +
+      '<td>' + h(f.isbn) + '</td>' +
+      '<td><input type="text" class="ln-crear-input ln-input-mini" data-campo="libro" value="' + h(f.libro) + '" placeholder="Título"></td>' +
+      '<td><select class="ln-crear-input ln-select-mini" data-campo="idMateria">' + opcionesMateria(f.idMateria) + '</select></td>' +
+      '<td><select class="ln-crear-input ln-select-mini" data-campo="idGrado">' + opcionesGrado(f.idGrado) + '</select></td>' +
+      '<td><input type="number" step="any" class="ln-crear-input ln-input-mini" data-campo="precio" value="' + h(f.precio) + '" placeholder="Precio"></td>' +
+      '<td><select class="ln-crear-input ln-select-mini" data-campo="presupuesto">' +
+        '<option value=""' + (f.presupuesto === '' ? ' selected' : '') + '>Seleccione</option>' +
+        '<option value="1"' + (f.presupuesto === '1' ? ' selected' : '') + '>Sí</option>' +
+        '<option value="0"' + (f.presupuesto === '0' ? ' selected' : '') + '>No</option>' +
+      '</select></td>' +
+      '<td>' +
+        '<span class="ln-badge-estado ' + (completa ? 'ok' : 'error') + '">' + (completa ? 'Listo para crear' : 'Falta completar') + '</span>' +
+        '<button type="button" class="ln-btn-quitar-crear" title="Quitar">&times;</button>' +
+      '</td>';
+    excelTbody.appendChild(tr);
+  }
+
+  window.renderTablaExcel = function () {
+    excelTbody.innerHTML = '';
+    filasErrorYActualizar.forEach(renderFilaActualizarOError);
+    Object.keys(filasCrear).forEach(function (isbn) { renderFilaCrear(filasCrear[isbn]); });
+    actualizarResumenYBoton();
+  };
+
+  function actualizacionesListas() {
+    return filasValidas.filter(function (f) { return f.materiaSeleccionada; }).length;
+  }
+
+  function actualizarResumenYBoton() {
+    var nCreaciones = Object.keys(filasCrear).length;
+    var nCreacionesListas = Object.keys(filasCrear).filter(function (isbn) { return creacionCompleta(filasCrear[isbn]); }).length;
+    var nActualizacionesListas = actualizacionesListas();
+
+    var partes = [];
+    if (filasErrorYActualizar.length) partes.push(nActualizacionesListas + ' actualización(es) lista(s)');
+    if (nCreaciones) partes.push(nCreacionesListas + ' de ' + nCreaciones + ' libro(s) nuevo(s) listos para crear');
+
+    excelResumenTxt.textContent = partes.join(' — ');
+    excelResumen.style.display = partes.length ? 'flex' : 'none';
+    btnAplicar.style.display = (nActualizacionesListas || nCreacionesListas) ? '' : 'none';
+    excelTablaWrap.style.display = (filasErrorYActualizar.length || nCreaciones) ? '' : 'none';
+  }
+
+  formExcel.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var archivo = document.getElementById('ln-excel-archivo').files[0];
+    if (!archivo) return;
+
+    excelEstado.className = 'ln-estado';
+    excelEstado.textContent = '';
+    var textoOriginalBtn = btnPrevisualizar.innerHTML;
+    btnPrevisualizar.disabled = true;
+    btnPrevisualizar.innerHTML = '<i class="bi bi-arrow-repeat"></i> Procesando...';
+
+    var datos = new FormData();
+    datos.append('archivo', archivo);
+    // Si ya hay libros en cola en esta tabla (normalmente los que se trajeron
+    // con "Agregar seleccionados" arriba), el Excel se filtra a esos ISBN
+    // nada más — no se procesa el archivo completo.
+    datos.append('isbns', JSON.stringify(Object.keys(filasCrear)));
+
+    fetch('php/previsualizar_excel_libros.php', { method: 'POST', body: datos })
+      .then(function (r) {
+        return r.text().then(function (texto) {
+          try {
+            return JSON.parse(texto);
+          } catch (e2) {
+            // El servidor no devolvió JSON (típicamente un error fatal de PHP
+            // que imprimió HTML): se muestra el arranque de esa respuesta para
+            // poder diagnosticarlo, en vez de quedar en un "Error de red" ciego.
+            throw new Error('Respuesta inesperada del servidor: ' + texto.slice(0, 300));
+          }
+        });
+      })
+      .then(function (data) {
+        btnPrevisualizar.disabled = false;
+        btnPrevisualizar.innerHTML = textoOriginalBtn;
+        if (!data.success) {
+          mostrarErrorExcel(data.message || 'No se pudo procesar el archivo');
+          return;
+        }
+
+        filasErrorYActualizar = data.filas.filter(function (f) { return !f.faltanteEnCatalogo; }).map(function (f) {
+          f.materiaSeleccionada = f.materiaActualId || '';
+          return f;
+        });
+        filasValidas = filasErrorYActualizar.filter(function (f) { return f.ok; });
+
+        data.filas.filter(function (f) { return f.faltanteEnCatalogo; }).forEach(function (f) {
+          window.agregarOActualizarCreacion({
+            isbn: f.isbn,
+            libro: f.libroNuevo || '',
+            precio: f.precioNuevo,
+            presupuesto: (f.presupuestoNuevo === 0 || f.presupuestoNuevo === 1) ? String(f.presupuestoNuevo) : '',
+          });
+        });
+
+        if (data.filtroActivo && data.isbnsNoEncontrados && data.isbnsNoEncontrados.length) {
+          mostrarErrorExcel(data.isbnsNoEncontrados.length + ' de los libros en cola no se encontraron en este archivo (por ISBN): ' + data.isbnsNoEncontrados.join(', '));
+        }
+
+        window.renderTablaExcel();
+      })
+      .catch(function (err) {
+        btnPrevisualizar.disabled = false;
+        btnPrevisualizar.innerHTML = textoOriginalBtn;
+        mostrarErrorExcel('Error: ' + err.message);
+      });
+  });
+
+  excelTbody.addEventListener('input', function (e) {
+    if (e.target.classList.contains('ln-crear-input')) actualizarCampoCreacion(e.target);
+  });
+  excelTbody.addEventListener('change', function (e) {
+    if (e.target.classList.contains('ln-crear-input')) actualizarCampoCreacion(e.target);
+    if (e.target.classList.contains('ln-actualizar-input')) actualizarCampoActualizar(e.target);
+  });
+
+  function actualizarCampoCreacion(input) {
+    var tr = input.closest('tr');
+    var f = filasCrear[tr.dataset.isbn];
+    if (!f) return;
+    f[input.dataset.campo] = input.value;
+
+    var completa = creacionCompleta(f);
+    var badge = tr.querySelector('.ln-badge-estado');
+    badge.className = 'ln-badge-estado ' + (completa ? 'ok' : 'error');
+    badge.textContent = completa ? 'Listo para crear' : 'Falta completar';
+    actualizarResumenYBoton();
+  }
+
+  function actualizarCampoActualizar(select) {
+    var tr = select.closest('tr');
+    var fila = tr.dataset.fila;
+    var f = filasErrorYActualizar.find(function (x) { return String(x.fila) === String(fila); });
+    if (!f) return;
+    f[select.dataset.campo] = select.value;
+    actualizarResumenYBoton();
+  }
+
+  excelTbody.addEventListener('click', function (e) {
+    var btn = e.target.closest('.ln-btn-quitar-crear');
+    if (!btn) return;
+    var tr = btn.closest('tr');
+    delete filasCrear[tr.dataset.isbn];
+    tr.remove();
+    actualizarResumenYBoton();
+  });
+
+  btnAplicar.addEventListener('click', function () {
+    var filas = filasValidas
+      .filter(function (f) { return f.materiaSeleccionada; })
+      .map(function (f) {
+        return {
+          fila: f.fila, idLibro: f.idLibro, isbn: f.isbn,
+          materiaNuevaId: f.materiaSeleccionada, precioNuevo: f.precioNuevo, presupuestoNuevo: f.presupuestoNuevo,
+        };
+      });
+
+    var nuevas = Object.keys(filasCrear)
+      .map(function (isbn) { return filasCrear[isbn]; })
+      .filter(creacionCompleta)
+      .map(function (f) {
+        return {
+          isbn: f.isbn, libro: f.libro, id_materia: f.idMateria, id_grado: f.idGrado,
+          precio: f.precio, presupuesto: f.presupuesto, id_wo: f.idWo,
+        };
+      });
+
+    if (!filas.length && !nuevas.length) return;
+    btnAplicar.disabled = true;
+
+    fetch('php/aplicar_excel_libros.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filas: filas, nuevas: nuevas })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        btnAplicar.disabled = false;
+        if (!data.success) {
+          mostrarErrorExcel('Error al aplicar: ' + (data.message || 'desconocido'));
+          return;
+        }
+
+        data.actualizados.forEach(function (item) {
+          var tr = excelTbody.querySelector('tr[data-fila="' + item.fila + '"]');
+          if (tr) tr.classList.add('ln-fila-aplicada');
+        });
+        var filasActualizadasIds = data.actualizados.map(function (item) { return String(item.fila); });
+        filasValidas = filasValidas.filter(function (f) { return filasActualizadasIds.indexOf(String(f.fila)) === -1; });
+
+        data.creados.forEach(function (item) {
+          var tr = excelTbody.querySelector('tr[data-isbn="' + item.isbn + '"]');
+          if (tr) tr.classList.add('ln-fila-aplicada');
+          delete filasCrear[item.isbn];
+        });
+
+        var msg = data.actualizados.length + ' libro(s) actualizado(s), ' + data.creados.length + ' libro(s) creado(s).';
+        if (data.omitidos.length) msg += ' ' + data.omitidos.length + ' no se pudieron aplicar (revisá la vista previa).';
+        excelResumenTxt.textContent = msg;
+
+        var nCreacionesListas = Object.keys(filasCrear).filter(function (isbn) { return creacionCompleta(filasCrear[isbn]); }).length;
+        btnAplicar.style.display = (actualizacionesListas() || nCreacionesListas) ? '' : 'none';
+
+        if (window.libroTable) window.libroTable.ajax.reload(null, false);
+      })
+      .catch(function (err) {
+        btnAplicar.disabled = false;
+        mostrarErrorExcel('Error de red: ' + err.message);
+      });
+  });
+})();
+</script>
+<script>
+(function () {
+  var formCrm = document.getElementById('ln-form-crm');
+  if (!formCrm) return; // sección no renderizada (usuario sin permiso de crear/eliminar)
+
+  var btnPrevisualizar = document.getElementById('ln-btn-crm-previsualizar');
+  var btnAplicar = document.getElementById('ln-btn-crm-aplicar');
+  var estado = document.getElementById('ln-crm-estado');
+  var resumen = document.getElementById('ln-crm-resumen');
+  var resumenTxt = document.getElementById('ln-crm-resumen-txt');
+  var tablaWrap = document.getElementById('ln-crm-tabla-wrap');
+  var tbody = document.getElementById('ln-crm-tbody');
+  var periodoNombreEl = document.getElementById('ln-crm-periodo-nombre');
+  var checkAll = document.getElementById('ln-crm-check-all');
+  var buscadorWrap = document.getElementById('ln-crm-buscador-wrap');
+  var buscar = document.getElementById('ln-crm-buscar');
+
+  var filasValidas = [];
+
+  function h(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function fmtMoneda(v) {
+    return v == null ? '—' : Number(v).toLocaleString('es-CO');
+  }
+
+  function mostrarError(msg) {
+    estado.textContent = msg;
+    estado.className = 'ln-estado visible';
+  }
+
+  function pintarPreview(filas) {
+    tbody.innerHTML = '';
+    filas.forEach(function (f) {
+      var tr = document.createElement('tr');
+      tr.className = f.ok ? '' : 'ln-fila-error';
+      tr.dataset.fila = f.fila;
+      tr.dataset.buscar = (String(f.isbn) + ' ' + String(f.libro || '')).toLowerCase();
+
+      var estadoHtml;
+      if (!f.ok) {
+        estadoHtml = '<span class="ln-badge-estado error">' + h(f.errores.join('; ')) + '</span>';
+      } else if (f.sinCambio) {
+        estadoHtml = '<span class="ln-badge-estado">Sin cambio</span>';
+      } else {
+        estadoHtml = '<span class="ln-badge-estado ok">OK</span>';
+      }
+
+      // Solo las filas válidas (ok) se pueden aplicar, así que solo esas
+      // llevan checkbox — las de error quedan sin selector, de solo lectura.
+      var checkHtml = f.ok
+        ? '<input type="checkbox" class="ln-crm-check-fila" data-fila="' + h(f.fila) + '" checked>'
+        : '';
+
+      tr.innerHTML =
+        '<td>' + checkHtml + '</td>' +
+        '<td>' + h(f.fila) + '</td>' +
+        '<td>' + h(f.isbn) + '</td>' +
+        '<td>' + h(f.libro || '—') + '</td>' +
+        '<td>' + fmtMoneda(f.precioActual) + ' → ' + fmtMoneda(f.precioNuevo) + '</td>' +
+        '<td>' + estadoHtml + '</td>';
+      tbody.appendChild(tr);
+    });
+    tablaWrap.style.display = '';
+    buscadorWrap.style.display = '';
+    buscar.value = '';
+    checkAll.checked = true;
+    actualizarResumenSeleccion();
+  }
+
+  function filasSeleccionadas() {
+    var idsMarcados = {};
+    Array.prototype.forEach.call(tbody.querySelectorAll('.ln-crm-check-fila:checked'), function (chk) {
+      idsMarcados[chk.dataset.fila] = true;
+    });
+    return filasValidas.filter(function (f) { return idsMarcados[String(f.fila)]; });
+  }
+
+  function actualizarResumenSeleccion() {
+    var n = filasSeleccionadas().length;
+    btnAplicar.style.display = n ? '' : 'none';
+    var span = document.getElementById('ln-crm-count-seleccionados');
+    if (span) span.textContent = n;
+  }
+
+  function aplicarBusquedaCrm() {
+    var texto = buscar.value.trim().toLowerCase();
+    Array.prototype.forEach.call(tbody.querySelectorAll('tr'), function (tr) {
+      tr.style.display = (!texto || (tr.dataset.buscar || '').indexOf(texto) !== -1) ? '' : 'none';
+    });
+  }
+
+  buscar.addEventListener('input', aplicarBusquedaCrm);
+
+  tbody.addEventListener('change', function (e) {
+    if (e.target.classList.contains('ln-crm-check-fila')) actualizarResumenSeleccion();
+  });
+
+  checkAll.addEventListener('change', function () {
+    Array.prototype.forEach.call(tbody.querySelectorAll('.ln-crm-check-fila'), function (chk) {
+      var tr = chk.closest('tr');
+      if (tr.style.display !== 'none') chk.checked = checkAll.checked;
+    });
+    actualizarResumenSeleccion();
+  });
+
+  formCrm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var archivo = document.getElementById('ln-crm-archivo').files[0];
+    if (!archivo) return;
+
+    estado.className = 'ln-estado';
+    estado.textContent = '';
+    resumen.style.display = 'none';
+    btnAplicar.style.display = 'none';
+    var textoOriginalBtn = btnPrevisualizar.innerHTML;
+    btnPrevisualizar.disabled = true;
+    btnPrevisualizar.innerHTML = '<i class="bi bi-arrow-repeat"></i> Procesando...';
+    filasValidas = [];
+
+    var datos = new FormData();
+    datos.append('archivo', archivo);
+
+    fetch('php/previsualizar_excel_precios_crm.php', { method: 'POST', body: datos })
+      .then(function (r) {
+        return r.text().then(function (texto) {
+          try {
+            return JSON.parse(texto);
+          } catch (e2) {
+            throw new Error('Respuesta inesperada del servidor: ' + texto.slice(0, 300));
+          }
+        });
+      })
+      .then(function (data) {
+        btnPrevisualizar.disabled = false;
+        btnPrevisualizar.innerHTML = textoOriginalBtn;
+        if (!data.success) {
+          mostrarError(data.message || 'No se pudo procesar el archivo');
+          return;
+        }
+
+        if (data.ultimoPeriodo && periodoNombreEl) {
+          periodoNombreEl.textContent = 'período ' + data.ultimoPeriodo.periodo;
+        }
+
+        filasValidas = data.filas.filter(function (f) { return f.ok; });
+        pintarPreview(data.filas); // ya con filasValidas listo, porque calcula el contador de seleccionados
+
+        resumenTxt.textContent = data.totalFilas + ' fila(s) leídas — ' + data.totalValidas + ' válida(s), ' + data.totalErrores + ' con error.';
+        resumen.style.display = 'flex';
+      })
+      .catch(function (err) {
+        btnPrevisualizar.disabled = false;
+        btnPrevisualizar.innerHTML = textoOriginalBtn;
+        mostrarError('Error: ' + err.message);
+      });
+  });
+
+  btnAplicar.addEventListener('click', function () {
+    var seleccionadas = filasSeleccionadas();
+    if (!seleccionadas.length) return;
+    btnAplicar.disabled = true;
+
+    fetch('php/aplicar_excel_precios_crm.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filas: seleccionadas })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        btnAplicar.disabled = false;
+        if (!data.success) {
+          mostrarError('Error al aplicar: ' + (data.message || 'desconocido'));
+          return;
+        }
+
+        var totalFilasPresupuesto = 0;
+        var idsAplicados = {};
+        data.actualizados.forEach(function (item) {
+          var tr = tbody.querySelector('tr[data-fila="' + item.fila + '"]');
+          if (tr) tr.classList.add('ln-fila-aplicada');
+          idsAplicados[String(item.fila)] = true;
+          totalFilasPresupuesto += item.filasPresupuestoActualizadas || 0;
+        });
+
+        var msg = data.actualizados.length + ' libro(s) actualizado(s) en el catálogo, ' + totalFilasPresupuesto + ' fila(s) de presupuesto actualizadas en el período ' + data.idUltimoPeriodo + '.';
+        if (data.omitidos.length) msg += ' ' + data.omitidos.length + ' no se pudieron aplicar (revisá la vista previa).';
+        resumenTxt.textContent = msg;
+
+        // Las filas que sí se aplicaron salen de filasValidas y quedan
+        // destildadas/deshabilitadas para no volver a mandarlas por error.
+        filasValidas = filasValidas.filter(function (f) { return !idsAplicados[String(f.fila)]; });
+        Array.prototype.forEach.call(tbody.querySelectorAll('.ln-crm-check-fila'), function (chk) {
+          if (idsAplicados[chk.dataset.fila]) { chk.checked = false; chk.disabled = true; }
+        });
+        actualizarResumenSeleccion();
+
+        if (window.libroTable) window.libroTable.ajax.reload(null, false);
+      })
+      .catch(function (err) {
+        btnAplicar.disabled = false;
+        mostrarError('Error de red: ' + err.message);
+      });
+  });
+})();
 </script>
 <script src="src/ink-alerts.js"></script>
 </body>
