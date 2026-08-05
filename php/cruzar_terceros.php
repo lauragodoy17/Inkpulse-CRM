@@ -11,7 +11,7 @@ require_once("aut.php");
 
 header('Content-Type: application/json');
 
-if (($_SESSION["tipo"] ?? null) != 1) {
+if (($_SESSION["tipo"] ?? null) != 1 && ($_SESSION["tipo"] ?? null) != 2) {    
     echo json_encode(['success' => false, 'message' => 'No autorizado']);
     exit;
 }

@@ -9,7 +9,7 @@
  */
 require_once("aut.php");
 
-if (($_SESSION["tipo"] ?? null) != 1) {
+if (($_SESSION["tipo"] ?? null) != 1 && ($_SESSION["tipo"] ?? null) != 2) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'No autorizado']);
     exit;
