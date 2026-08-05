@@ -28,7 +28,8 @@ function listar_documentos_salida_almacen($filtros_aplicados = [], $pagina = 0, 
         "registrosPorPagina" => (int)$registros_por_pagina,
         "orden"              => "DESC",
         "canal"              => 0,
-        "registroInicial"    => 0,
+        // El offset real de paginación lo controla registroInicial, NO "pagina".
+        "registroInicial"    => (int)$pagina * (int)$registros_por_pagina,
         "filtros"            => $filtros_limpios // Inyectamos el arreglo de filtros dinámicos asegurados
     ];
     

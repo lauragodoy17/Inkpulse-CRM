@@ -28,7 +28,10 @@
             "registrosPorPagina" => (int)$registros_por_pagina,
             "orden"              => "DESC",
             "canal"              => 0,
-            "registroInicial"    => 0,
+            // El offset real de paginación lo controla registroInicial, NO "pagina"
+            // (confirmado por prueba directa contra otro endpoint: con registroInicial
+            // fijo en 0, WO devolvía siempre la página 0 sin importar "pagina").
+            "registroInicial"    => (int)$pagina * (int)$registros_por_pagina,
             "filtros"            => $filtros_limpios // Inyectamos el arreglo de filtros dinámicos asegurados
         ];
         

@@ -25,7 +25,10 @@ function listar_terceros($filtros = [], $pagina = 0, $registrosPorPagina = 20, $
         "registrosPorPagina" => (int)$registrosPorPagina,
         "orden" => $orden,
         "canal" => 0,
-        "registroInicial" => 0,
+        // El offset real de paginación lo controla registroInicial, NO "pagina"
+        // (confirmado por prueba directa: con registroInicial fijo en 0, WO
+        // devolvía siempre la página 0 sin importar el valor de "pagina").
+        "registroInicial" => (int)$pagina * (int)$registrosPorPagina,
         "filtros" => array_values($filtros)
     ];
     return hacer_peticion_api($endpoint, 'POST', $cuerpo);

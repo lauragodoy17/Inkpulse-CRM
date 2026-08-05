@@ -42,7 +42,8 @@
             "registrosPorPagina" => (int)$registrosPorPagina,
             "orden" => "ASC",
             "canal" => 0,
-            "registroInicial" => 0,
+            // El offset real de paginación lo controla registroInicial, NO "pagina".
+            "registroInicial" => (int)$pagina * (int)$registrosPorPagina,
             "filtros" => []
         ];
         return hacer_peticion_api($endpoint, 'POST', $cuerpo);
