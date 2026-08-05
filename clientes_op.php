@@ -185,6 +185,8 @@
   var piso = null;
   var revisados = 0;
   var nuevos = 0;
+  var idCorrida = 0; // se incrementa en cada iniciar(), para descartar respuestas de
+                      // una corrida anterior que llegan tarde (detener + iniciar rápido)
 
   var btnIniciar = document.getElementById('btn-iniciar');
   var btnDetener = document.getElementById('btn-detener');
@@ -239,13 +241,15 @@
     estado.className = 'cp-estado visible error';
   }
 
-  function siguientePagina() {
-    if (!corriendo) return;
+  function siguientePagina(miCorrida) {
+    if (!corriendo || miCorrida !== idCorrida) return;
     var url = 'php/comparar_terceros.php?pagina=' + pagina + '&porPagina=' + POR_PAGINA;
     if (pagina > 0 && piso != null) url += '&piso=' + piso;
     fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (data) {
+        if (miCorrida !== idCorrida) return; // esta corrida ya no es la vigente: se ignora la respuesta
+
         if (!data.success) {
           mostrarError('Error consultando World Office: ' + (data.message || 'desconocido'));
           detener();
@@ -259,8 +263,8 @@
         actualizarResumen();
 
         pagina++;
-        if (corriendo && totalPaginas != null && pagina < totalPaginas) {
-          siguientePagina();
+        if (corriendo && miCorrida === idCorrida && totalPaginas != null && pagina < totalPaginas) {
+          siguientePagina(miCorrida);
         } else {
           detener();
           progreso.style.width = '100%';
@@ -272,12 +276,15 @@
         }
       })
       .catch(function (err) {
+        if (miCorrida !== idCorrida) return;
         mostrarError('Error de red: ' + err.message);
         detener();
       });
   }
 
   function iniciar() {
+    idCorrida++;
+    var miCorrida = idCorrida;
     corriendo = true;
     pagina = 0; totalPaginas = null; piso = null; revisados = 0; nuevos = 0;
     tbody.innerHTML = '';
@@ -290,7 +297,7 @@
     btnDetener.style.display = '';
     actualizarSeleccion();
     actualizarResumen();
-    siguientePagina();
+    siguientePagina(miCorrida);
   }
 
   function detener() {
