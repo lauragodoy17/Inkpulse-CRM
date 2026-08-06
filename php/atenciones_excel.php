@@ -113,9 +113,10 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("Q6", "Presupuesto");
 $objSpreadsheet->getActiveSheet()->SetCellValue("R6", "Valor adopción total");
 $objSpreadsheet->getActiveSheet()->SetCellValue("S6", "Venta real");
 $objSpreadsheet->getActiveSheet()->SetCellValue("T6", "Fecha y hora de registro");
+$objSpreadsheet->getActiveSheet()->SetCellValue("U6", "Descuento promedio");
 
 
-$objSpreadsheet->getActiveSheet()->getStyle('A6:T6')->applyFromArray([
+$objSpreadsheet->getActiveSheet()->getStyle('A6:U6')->applyFromArray([
     'fill' => [
         'fillType' => Fill::FILL_SOLID,
         'startColor' => [
@@ -229,6 +230,7 @@ if (!empty($unique_cids)) {
         $val_presup = 0;
         $val_adopcion = 0;
         $val_venta_real = 0;
+        $descuentos_adoptados = [];
         $vr_val = $vreal_at[$cid] ?? null;
 
         foreach ($books_at[$cid] ?? [] as $book) {
@@ -247,9 +249,11 @@ if (!empty($unique_cids)) {
                 if ($book["tasa_compra_d"] == 0.00) {
                     $alumnos_tasa_d = floor($alumnos * $book["tasa_compra"]);
                     $precio_neto_d  = $book["precio"] - ($book["precio"] * $book["descuento"]);
+                    $descuentos_adoptados[] = (float)$book["descuento"];
                 } else {
                     $alumnos_tasa_d = floor($alumnos * $book["tasa_compra_d"]);
                     $precio_neto_d  = $book["precio"] - ($book["precio"] * $book["descuento_d"]);
+                    $descuentos_adoptados[] = (float)$book["descuento_d"];
                 }
                 $val_adopcion += $precio_neto_d * $alumnos_tasa_d;
                 if (!is_numeric($vr_val) || $vr_val < 1) {
@@ -260,7 +264,10 @@ if (!empty($unique_cids)) {
         if (is_numeric($vr_val) && $vr_val > 0) {
             $val_venta_real = $vr_val;
         }
-        $colegios_datos[$cid] = ['presupuesto' => $val_presup, 'adopcion' => $val_adopcion, 'venta_real' => $val_venta_real];
+        $val_descuento_prom = !empty($descuentos_adoptados)
+            ? array_sum($descuentos_adoptados) / count($descuentos_adoptados)
+            : 0;
+        $colegios_datos[$cid] = ['presupuesto' => $val_presup, 'adopcion' => $val_adopcion, 'venta_real' => $val_venta_real, 'descuento_promedio' => $val_descuento_prom];
     }
 }
 
@@ -325,7 +332,7 @@ foreach ($solicitudes as $solicitud) {
     $objSpreadsheet->getActiveSheet()->SetCellValue("M$conta", "$solicitud[valor_e]");
     $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", "$solicitud[fecha_e]");
 
-    $datos_cole     = $colegios_datos[$solicitud["cid"]] ?? ['presupuesto' => 0, 'adopcion' => 0, 'venta_real' => 0];
+    $datos_cole     = $colegios_datos[$solicitud["cid"]] ?? ['presupuesto' => 0, 'adopcion' => 0, 'venta_real' => 0, 'descuento_promedio' => 0];
     $fmt_money      = '_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)';
     $entregas_traz  = $trazabilidad_map[$solicitud['id_recurso']]['entrega']       ?? [];
     $legalizaciones = $trazabilidad_map[$solicitud['id_recurso']]['legalizacion']  ?? [];
@@ -417,6 +424,8 @@ foreach ($solicitudes as $solicitud) {
       $objSpreadsheet->getActiveSheet()->SetCellValue("R$conta", $datos_cole['adopcion']);
       $objSpreadsheet->getActiveSheet()->getStyle("S$conta")->getNumberFormat()->setFormatCode($fmt_money);
       $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", $datos_cole['venta_real']);
+      $objSpreadsheet->getActiveSheet()->getStyle("U$conta")->getNumberFormat()->setFormatCode('0.00%');
+      $objSpreadsheet->getActiveSheet()->SetCellValue("U$conta", $datos_cole['descuento_promedio']);
 
     } else {
       // Sin sub-filas: todo en la fila principal
@@ -433,6 +442,8 @@ foreach ($solicitudes as $solicitud) {
       $objSpreadsheet->getActiveSheet()->SetCellValue("R$conta", $datos_cole['adopcion']);
       $objSpreadsheet->getActiveSheet()->getStyle("S$conta")->getNumberFormat()->setFormatCode($fmt_money);
       $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", $datos_cole['venta_real']);
+      $objSpreadsheet->getActiveSheet()->getStyle("U$conta")->getNumberFormat()->setFormatCode('0.00%');
+      $objSpreadsheet->getActiveSheet()->SetCellValue("U$conta", $datos_cole['descuento_promedio']);
     }
 
 	$conta++;
@@ -503,7 +514,7 @@ if (isset($total_a)) {
     $objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$total_a");
 }
 
-foreach (range('A', 'T') as $columnID) {
+foreach (range('A', 'U') as $columnID) {
     $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);
 }
 
