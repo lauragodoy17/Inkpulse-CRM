@@ -520,12 +520,20 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
               <select name="cliente" id="cliente" required>
                 <option value="">Seleccionar</option>
                 <?php
-                  $sql = "SELECT * FROM clientes";
-                  $req = $bdd->prepare($sql); $req->execute();
-                  foreach ($req->fetchAll() as $cl):
+                  // La tabla clientes tiene ~10.000 filas: renderizar todas como <option>
+                  // hacía que select2 se congelara al abrir el desplegable. Solo se imprime
+                  // aquí el cliente ya seleccionado; el resto se busca por AJAX al escribir.
+                  if (isset($cliente_predet) && $cliente_predet !== ''):
+                    $req_cl_sel = $bdd->prepare("SELECT id, cliente FROM clientes WHERE id=:id");
+                    $req_cl_sel->execute([':id' => $cliente_predet]);
+                    $cl_sel = $req_cl_sel->fetch();
+                    if ($cl_sel):
                 ?>
-                <option value="<?= $cl['id'] ?>" <?= (isset($cliente_predet) && $cliente_predet !== '' && $cliente_predet == $cl['id']) ? 'selected' : '' ?>><?= htmlspecialchars($cl['cliente']) ?></option>
-                <?php endforeach; ?>
+                <option value="<?= $cl_sel['id'] ?>" selected><?= htmlspecialchars($cl_sel['cliente']) ?></option>
+                <?php
+                    endif;
+                  endif;
+                ?>
               </select>
             </div>
 
@@ -627,9 +635,17 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
     $('#cliente').select2({
       placeholder: 'Seleccionar cliente',
       allowClear: true,
-      minimumResultsForSearch: 0,
       width: '100%',
+      minimumInputLength: 2,
+      ajax: {
+        url: 'ajax/buscar_clientes.php',
+        dataType: 'json',
+        delay: 300,
+        data: function (params) { return { q: params.term }; },
+        processResults: function (data) { return { results: data }; }
+      },
       language: {
+        inputTooShort: function () { return 'Escribe al menos 2 letras para buscar...'; },
         noResults: function () { return 'Sin resultados'; },
         searching:  function () { return 'Buscando...'; }
       }

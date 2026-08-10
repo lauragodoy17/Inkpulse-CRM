@@ -16,14 +16,21 @@ $libros = $req->fetchAll();
 
 $cole_info    = $bdd->query("SELECT colegio FROM colegios WHERE id={$id_colegio}")->fetch();
 $periodo_info = $bdd->query("SELECT periodo FROM periodos WHERE id={$periodo_id}")->fetch();
-$clientes_all = $bdd->query("SELECT id, cliente FROM clientes ORDER BY cliente ASC")->fetchAll();
 $tipos_doc    = $bdd->query("SELECT id, tipo, descrip FROM tipo_doc WHERE act=1")->fetchAll();
 
 // Cliente definido en la pestaña Adopciones para este colegio/período (editable aquí también).
+// clientes tiene ~10.000 filas: se resuelve solo el ya seleccionado y el resto se busca por AJAX.
 $stmt_cliente_adop = $bdd->prepare("SELECT cliente FROM recursos WHERE id_colegio=? AND id_periodo=?");
 $stmt_cliente_adop->execute([$id_colegio, $periodo_id]);
 $rec_cliente = $stmt_cliente_adop->fetch();
 $cliente_predet = !empty($rec_cliente['cliente']) ? $rec_cliente['cliente'] : '';
+
+$cliente_sel = null;
+if ($cliente_predet !== '') {
+    $stmt_cl_sel = $bdd->prepare("SELECT id, cliente FROM clientes WHERE id=?");
+    $stmt_cl_sel->execute([$cliente_predet]);
+    $cliente_sel = $stmt_cl_sel->fetch();
+}
 
 // Verificar si existe documento de adopción cargado (solo aplica para tipos 1, 3, 10)
 $tiene_archivo = true;
@@ -267,9 +274,9 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
                 <label class="sop-label">Cliente<span class="req">*</span></label>
                 <select name="cliente" id="cliente" required>
                   <option value="">Seleccionar cliente</option>
-                  <?php foreach ($clientes_all as $cl): ?>
-                  <option value="<?= $cl['id'] ?>" <?= ($cliente_predet !== '' && $cliente_predet == $cl['id']) ? 'selected' : '' ?>><?= htmlspecialchars($cl['cliente']) ?></option>
-                  <?php endforeach; ?>
+                  <?php if ($cliente_sel): ?>
+                  <option value="<?= $cliente_sel['id'] ?>" selected><?= htmlspecialchars($cliente_sel['cliente']) ?></option>
+                  <?php endif; ?>
                 </select>
               </div>
 
@@ -419,9 +426,17 @@ $(document).ready(function () {
   $('#cliente').select2({
     placeholder: 'Seleccionar cliente',
     allowClear: true,
-    minimumResultsForSearch: 0,
     width: '100%',
+    minimumInputLength: 2,
+    ajax: {
+      url: 'ajax/buscar_clientes.php',
+      dataType: 'json',
+      delay: 300,
+      data: function (params) { return { q: params.term }; },
+      processResults: function (data) { return { results: data }; }
+    },
     language: {
+      inputTooShort: function () { return 'Escribe al menos 2 letras para buscar...'; },
       noResults:  function () { return 'Sin resultados'; },
       searching:  function () { return 'Buscando...'; }
     }

@@ -1731,16 +1731,18 @@
                                   <span class="form-label-sm">
                                     <i class="bi bi-person-vcard"></i> Cliente <span style="color:#dc2626">*</span>
                                   </span>
-                                  <select name="cliente" id="cliente_adop" class="form-control custom-select2" required>
+                                  <select name="cliente" id="cliente_adop" class="form-control" required>
                                     <option value="">Seleccionar cliente...</option>';
-                          $sql_cl = "SELECT id, cliente FROM clientes ORDER BY cliente ASC";
-                          $req_cl = $bdd->prepare($sql_cl); $req_cl->execute();
-                          $clientes_adop = $req_cl->fetchAll();
-                          foreach ($clientes_adop as $cl_adop) {
-                              $id_cl  = $cl_adop['id'];
-                              $nom_cl = $cl_adop['cliente'];
-                              $sel_cl = ($count > 0 && $recursos["cliente"] == $id_cl) ? ' SELECTED' : '';
-                              echo '<option value="'.$id_cl.'"'.$sel_cl.'>'.htmlspecialchars($nom_cl).'</option>';
+                          // clientes tiene ~10.000 filas: renderizar todas como <option> congelaba
+                          // el desplegable. Solo se imprime aquí el cliente ya guardado; el resto
+                          // se busca por AJAX al escribir (ver select2 abajo).
+                          if ($count > 0 && !empty($recursos["cliente"])) {
+                              $req_cl_sel = $bdd->prepare("SELECT id, cliente FROM clientes WHERE id=:id");
+                              $req_cl_sel->execute([':id' => $recursos["cliente"]]);
+                              $cl_sel_adop = $req_cl_sel->fetch();
+                              if ($cl_sel_adop) {
+                                  echo '<option value="'.$cl_sel_adop['id'].'" SELECTED>'.htmlspecialchars($cl_sel_adop['cliente']).'</option>';
+                              }
                           }
                           echo '</select></div>';
                           echo '<script>
@@ -1748,7 +1750,20 @@
                               $("#cliente_adop").select2({
                                 placeholder: "Seleccionar cliente...",
                                 width: "100%",
-                                dropdownParent: $("#adopciones")
+                                dropdownParent: $("#adopciones"),
+                                minimumInputLength: 2,
+                                ajax: {
+                                  url: "ajax/buscar_clientes.php",
+                                  dataType: "json",
+                                  delay: 300,
+                                  data: function (params) { return { q: params.term }; },
+                                  processResults: function (data) { return { results: data }; }
+                                },
+                                language: {
+                                  inputTooShort: function () { return "Escribe al menos 2 letras para buscar..."; },
+                                  noResults: function () { return "Sin resultados"; },
+                                  searching: function () { return "Buscando..."; }
+                                }
                               });
                             });
                           </script>';
