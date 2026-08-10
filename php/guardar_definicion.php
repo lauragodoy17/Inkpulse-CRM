@@ -185,15 +185,16 @@
 	$valor_reintegro   = $_POST['valor_reintegro'] ?? 0;
 	$descripcion_canal = $_POST['descripcion'] ?? '';
 	$venta_real        = $_POST['venta_real'] ?? 0;
+	$cliente_adop      = $_POST['cliente'] ?? 0;
 
 	if ($num < 1 ) {
 
-		$sql_e = "INSERT INTO recursos(id_periodo,id_colegio,recurso,valor_recurso, reintegro, valor_reintegro,id_canal,descripcion_canal,venta_real,fecha,observaciones,archivo,archivo2,archivo3) VALUES ('".$_POST["periodo"]."', '".$_POST["id_colegio"]."', '".$recurso."','".$valor_recurso."', '".$reintegro."','".$valor_reintegro."','".$_POST["canal"]."','".$descripcion_canal."','".$venta_real."','".date("Y-m-d")."','".$_POST["observaciones"]."','".$archivos_subidos[0]."','".$archivos_subidos[1]."','".$archivos_subidos[2]."')";
+		$sql_e = "INSERT INTO recursos(id_periodo,id_colegio,recurso,valor_recurso, reintegro, valor_reintegro,id_canal,descripcion_canal,venta_real,fecha,observaciones,archivo,archivo2,archivo3,cliente) VALUES ('".$_POST["periodo"]."', '".$_POST["id_colegio"]."', '".$recurso."','".$valor_recurso."', '".$reintegro."','".$valor_reintegro."','".$_POST["canal"]."','".$descripcion_canal."','".$venta_real."','".date("Y-m-d")."','".$_POST["observaciones"]."','".$archivos_subidos[0]."','".$archivos_subidos[1]."','".$archivos_subidos[2]."','".$cliente_adop."')";
 
 	}else {
 
 		$arch_set = $hay_archivos_nuevos ? ", archivo='".$archivos_subidos[0]."', archivo2='".$archivos_subidos[1]."', archivo3='".$archivos_subidos[2]."'" : '';
-		$sql_e = "UPDATE recursos SET recurso='".$recurso."', valor_recurso='".$valor_recurso."', reintegro='".$reintegro."', valor_reintegro='".$valor_reintegro."', id_canal='".$_POST["canal"]."', descripcion_canal='".$descripcion_canal."',venta_real='".$venta_real."' , fecha='".date("Y-m-d")."', observaciones='".$_POST["observaciones"]."'".$arch_set." WHERE id_colegio='".$_POST["id_colegio"]."' AND id_periodo='".$_POST["periodo"]."'";
+		$sql_e = "UPDATE recursos SET recurso='".$recurso."', valor_recurso='".$valor_recurso."', reintegro='".$reintegro."', valor_reintegro='".$valor_reintegro."', id_canal='".$_POST["canal"]."', descripcion_canal='".$descripcion_canal."',venta_real='".$venta_real."' , fecha='".date("Y-m-d")."', observaciones='".$_POST["observaciones"]."', cliente='".$cliente_adop."'".$arch_set." WHERE id_colegio='".$_POST["id_colegio"]."' AND id_periodo='".$_POST["periodo"]."'";
 	}
 
 	

@@ -1711,9 +1711,9 @@
                           // Canal de venta
                           echo '<div class="col-sm-3">
                                   <span class="form-label-sm">
-                                    <i class="bi bi-shop"></i> Canal de venta
+                                    <i class="bi bi-shop"></i> Canal de venta <span style="color:#dc2626">*</span>
                                   </span>
-                                  <select name="canal" id="canal" class="form-control materia">
+                                  <select name="canal" id="canal" class="form-control materia" required>
                                     <option value="">Seleccionar canal...</option>';
                           $sql = "SELECT id, canal_venta FROM canales_venta";
                           $req = $bdd->prepare($sql); $req->execute();
@@ -1725,6 +1725,33 @@
                               echo '<option value="'.$id.'"'.$sel.'>'.$nom.'</option>';
                           }
                           echo '</select></div>';
+
+                          // Cliente
+                          echo '<div class="col-sm-3">
+                                  <span class="form-label-sm">
+                                    <i class="bi bi-person-vcard"></i> Cliente <span style="color:#dc2626">*</span>
+                                  </span>
+                                  <select name="cliente" id="cliente_adop" class="form-control custom-select2" required>
+                                    <option value="">Seleccionar cliente...</option>';
+                          $sql_cl = "SELECT id, cliente FROM clientes ORDER BY cliente ASC";
+                          $req_cl = $bdd->prepare($sql_cl); $req_cl->execute();
+                          $clientes_adop = $req_cl->fetchAll();
+                          foreach ($clientes_adop as $cl_adop) {
+                              $id_cl  = $cl_adop['id'];
+                              $nom_cl = $cl_adop['cliente'];
+                              $sel_cl = ($count > 0 && $recursos["cliente"] == $id_cl) ? ' SELECTED' : '';
+                              echo '<option value="'.$id_cl.'"'.$sel_cl.'>'.htmlspecialchars($nom_cl).'</option>';
+                          }
+                          echo '</select></div>';
+                          echo '<script>
+                            $(function () {
+                              $("#cliente_adop").select2({
+                                placeholder: "Seleccionar cliente...",
+                                width: "100%",
+                                dropdownParent: $("#adopciones")
+                              });
+                            });
+                          </script>';
 
                           // Documento(s) de adopción (máx. 3, solo para tipos 1, 3, 10)
                           if (in_array($_SESSION['tipo'], [1, 3, 10])) {

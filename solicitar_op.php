@@ -3,13 +3,17 @@
 <?php
 /* -- Data fetch ------------------------------------------------ */
 if (isset($_GET['id_pedido'])) {
-  $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.fecha_r, z.zona, c.colegio, u.nombres, u.apellidos
+  $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.fecha_r, pe.cliente, z.zona, c.colegio, u.nombres, u.apellidos
                  FROM pedidos pe JOIN colegios c ON pe.id_colegio=c.id
                  JOIN zonas z ON z.codigo=c.cod_zona
                  JOIN usuarios u ON u.cod_zona=z.codigo
                  WHERE pe.id='".$_GET['id_pedido']."'";
   $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
   $pedido = $req_pedido->fetch();
+
+  // El pedido de venta ya trae su cliente (elegido al solicitarlo); se usa como
+  // valor de partida aquí, editable igual que en los demás orígenes.
+  $cliente_predet = !empty($pedido['cliente']) ? $pedido['cliente'] : '';
 }
 if (isset($_GET['id_pedido_dist'])) {
   $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.fecha_r, pe.colegio, u.nombres, u.apellidos
@@ -120,7 +124,7 @@ if (isset($_GET['id_devol_v'])) {
 }
 if (isset($_POST['pedidos_agp'])) {
   foreach ($_POST['pedidos_agp'] as $pedido_agp) {
-    $sql_pedido = "SELECT u.nombres, u.apellidos, z.zona
+    $sql_pedido = "SELECT pe.cliente, u.nombres, u.apellidos, z.zona
                    FROM pedidos pe JOIN colegios c ON pe.id_colegio=c.id
                    JOIN zonas z ON z.codigo=c.cod_zona
                    JOIN usuarios u ON u.cod_zona=z.codigo
@@ -129,6 +133,7 @@ if (isset($_POST['pedidos_agp'])) {
     $pedido = $req_pedido->fetch();
     break;
   }
+  $cliente_predet = !empty($pedido['cliente']) ? $pedido['cliente'] : '';
 }
 
 $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
