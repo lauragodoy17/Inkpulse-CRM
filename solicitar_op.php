@@ -19,13 +19,83 @@ if (isset($_GET['id_pedido_dist'])) {
   $pedido = $req_pedido->fetch();
 }
 if (isset($_GET['id_muestreo'])) {
-  $sql_pedido = "SELECT pe.fecha,pe.observaciones, z.zona, c.colegio, u.nombres, u.apellidos
+  $sql_pedido = "SELECT pe.fecha,pe.observaciones, pe.id_colegio, pe.id_periodo, z.zona, c.colegio, c.responsable, u.nombres, u.apellidos
                  FROM muestreos pe JOIN colegios c ON pe.id_colegio=c.id
                  JOIN zonas z ON z.codigo=c.cod_zona
                  JOIN usuarios u ON u.cod_zona=z.codigo
                  WHERE pe.id='".$_GET['id_muestreo']."'";
   $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
   $pedido = $req_pedido->fetch();
+
+  // El cliente de muestras no está ligado al colegio ni a sus ventas: es una
+  // cuenta por promotor y por temporada, con el patrón "AA{año}-{PROMOTOR} - MUESTRAS"
+  // (ej. "AA27- JAIRO RICO - MUESTRA" para la temporada 2027). Se busca la cuenta
+  // de ese promotor para la temporada del muestreo actual.
+  $cliente_predet = '';
+  if ($pedido && !empty($pedido['id_periodo']) && !empty($pedido['nombres'])) {
+    $req_periodo = $bdd->prepare("SELECT periodo FROM periodos WHERE id=:id_periodo");
+    $req_periodo->execute([':id_periodo' => $pedido['id_periodo']]);
+    $periodo_row = $req_periodo->fetch();
+    if ($periodo_row) {
+      preg_match('/\d{4}/', $periodo_row['periodo'], $m);
+      if ($m) {
+        $anio = $m[0];
+        $aa = 'AA'.substr($anio, 2, 2);
+        // La temporada se identifica como "AA{yy}" (ej. AA27) o con el año completo
+        // (ej. 2027), según cómo se haya nombrado la cuenta de ese promotor.
+        $sql_cliente = "SELECT id FROM clientes
+                        WHERE cliente LIKE '%MUESTRA%'
+                          AND (cliente LIKE :aa OR cliente LIKE :anio)
+                          AND cliente LIKE :nombres
+                          AND cliente LIKE :apellidos
+                        ORDER BY id DESC LIMIT 1";
+        $req_cliente = $bdd->prepare($sql_cliente);
+        $req_cliente->execute([
+          ':aa'        => '%'.$aa.'%',
+          ':anio'      => '%'.$anio.'%',
+          ':nombres'   => '%'.$pedido['nombres'].'%',
+          ':apellidos' => '%'.$pedido['apellidos'].'%',
+        ]);
+        $ult_cliente = $req_cliente->fetch();
+        if ($ult_cliente) $cliente_predet = $ult_cliente['id'];
+      }
+    }
+  }
+
+  // Si no hay una cuenta de "MUESTRAS {temporada}" para ese promotor, se busca
+  // un cliente cuyo nombre coincida con el del promotor.
+  if ($cliente_predet === '' && !empty($pedido['nombres']) && !empty($pedido['apellidos'])) {
+    $sql_cliente2 = "SELECT id FROM clientes
+                     WHERE cliente LIKE :nombres AND cliente LIKE :apellidos
+                     ORDER BY id DESC LIMIT 1";
+    $req_cliente2 = $bdd->prepare($sql_cliente2);
+    $req_cliente2->execute([
+      ':nombres'   => '%'.$pedido['nombres'].'%',
+      ':apellidos' => '%'.$pedido['apellidos'].'%',
+    ]);
+    $c2 = $req_cliente2->fetch();
+    if ($c2) $cliente_predet = $c2['id'];
+  }
+
+  // Último respaldo: coincidencia con el responsable del colegio.
+  if ($cliente_predet === '' && !empty($pedido['responsable'])) {
+    $palabras = array_values(array_filter(
+      explode(' ', trim($pedido['responsable'])),
+      function ($p) { return mb_strlen($p) >= 3; }
+    ));
+    if ($palabras) {
+      $conds = []; $params = [];
+      foreach ($palabras as $i => $palabra) {
+        $conds[] = "cliente LIKE :p$i";
+        $params[":p$i"] = '%'.$palabra.'%';
+      }
+      $sql_cliente3 = "SELECT id FROM clientes WHERE ".implode(' AND ', $conds)." ORDER BY id DESC LIMIT 1";
+      $req_cliente3 = $bdd->prepare($sql_cliente3);
+      $req_cliente3->execute($params);
+      $c3 = $req_cliente3->fetch();
+      if ($c3) $cliente_predet = $c3['id'];
+    }
+  }
 }
 if (isset($_GET['id_devol_c'])) {
   $sql_pedido = "SELECT pe.fecha,pe.observaciones, c.cliente
@@ -339,6 +409,10 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
             <div class="mc-card-icon teal"><i class="bi bi-person"></i></div>
             <div class="mc-card-text"><p class="mc-card-label">Promotor</p><p class="mc-card-val"><?= htmlspecialchars($pedido['nombres'].' '.$pedido['apellidos']) ?></p></div>
           </div>
+          <div class="mc-card">
+            <div class="mc-card-icon amber"><i class="bi bi-person-badge"></i></div>
+            <div class="mc-card-text"><p class="mc-card-label">Responsable</p><p class="mc-card-val"><?= htmlspecialchars($pedido['responsable'] ?: '—') ?></p></div>
+          </div>
         </div>
         <?php endif; ?>
 
@@ -445,7 +519,7 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
                   $req = $bdd->prepare($sql); $req->execute();
                   foreach ($req->fetchAll() as $cl):
                 ?>
-                <option value="<?= $cl['id'] ?>"><?= htmlspecialchars($cl['cliente']) ?></option>
+                <option value="<?= $cl['id'] ?>" <?= (isset($cliente_predet) && $cliente_predet !== '' && $cliente_predet == $cl['id']) ? 'selected' : '' ?>><?= htmlspecialchars($cl['cliente']) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -453,7 +527,7 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
             <!-- Contacto -->
             <div class="sop-field">
               <label class="sop-label">Contacto</label>
-              <input type="text" class="sop-input" name="solicitante" id="solicitante" placeholder="Contacto" />
+              <input type="text" class="sop-input" name="solicitante" id="solicitante" placeholder="Contacto" value="<?= isset($_GET['id_muestreo']) ? htmlspecialchars($pedido['responsable'] ?? '') : '' ?>" />
             </div>
 
             <?php if ($show_archivo): ?>
