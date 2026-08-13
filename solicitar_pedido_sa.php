@@ -24,6 +24,7 @@ $materias = $req->fetchAll();
     input[type=number] { -moz-appearance:textfield; }
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .custom-select2 { width: 100% !important; }
 
     .libro-block { border-top: 1px solid #e2e8f0; margin-top: 16px; padding-top: 16px; }
     .libro-block:first-child { border-top: none; margin-top: 0; padding-top: 0; }
@@ -143,7 +144,7 @@ $materias = $req->fetchAll();
                   </div>
                   <div class="form-group col-md-3 col-sm-6">
                     <label id="l_libro" for="libro" class="control-label">Libro <small style="color:red;">*</small></label>
-                    <select name="libro" id="libro" class="form-control"></select>
+                    <select name="libro" id="libro" class="form-control custom-select2"></select>
                   </div>
                   <div class="form-group col-md-3 col-sm-6">
                     <label id="l_descuento" for="descuento" class="control-label">Descuento % <small style="color:red;">*</small></label>
@@ -182,7 +183,7 @@ $materias = $req->fetchAll();
                   </div>
                   <div class="form-group col-md-3 col-sm-6">
                     <label id="l_libro<?= $i ?>" for="libro<?= $i ?>" class="control-label">Libro <small style="color:red;">*</small></label>
-                    <select name="libro" id="libro<?= $i ?>" class="form-control"></select>
+                    <select name="libro" id="libro<?= $i ?>" class="form-control custom-select2"></select>
                   </div>
                   <div class="form-group col-md-3 col-sm-6">
                     <label id="l_descuento<?= $i ?>" for="descuento<?= $i ?>" class="control-label">Descuento % <small style="color:red;">*</small></label>
