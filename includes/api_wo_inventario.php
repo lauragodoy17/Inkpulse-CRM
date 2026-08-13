@@ -48,3 +48,80 @@ function consultar_existencias_por_empresa($idInventario) {
 function consultar_existencias_por_bodega($idInventario) {
     return hacer_peticion_api('/inventarios/' . rawurlencode($idInventario) . '/existencias/bodega', 'GET', null);
 }
+
+/**
+ * Existencia real vendible de un producto: solo bodega id=1 "General"
+ * (excluye Muestras General id=4 y bodegas temporales como id=52, que no
+ * son inventario disponible para despacho — ver php/clasificar_libros_bodega.php).
+ * Devuelve null si la API respondió con error (para no interpretar un fallo
+ * de conexión como "sin existencias").
+ */
+function existencia_bodega_general($idInventario) {
+    $resp = consultar_existencias_por_bodega($idInventario);
+    if (($resp['status'] ?? '') === 'error') return null;
+    $filas = $resp['data']['content'] ?? [];
+    foreach ($filas as $f) {
+        if ((int)($f['id'] ?? 0) === 1) return (float)($f['cantidad'] ?? 0);
+    }
+    return 0.0;
+}
+
+/**
+ * Igual que existencia_bodega_general() pero para varios productos a la vez,
+ * disparando las peticiones GET /inventarios/{id}/existencias/bodega en
+ * paralelo (curl_multi) en vez de una por una. Con una lista de pedidos que
+ * comparten pocos libros únicos, esto es lo que evita que la consulta tarde
+ * "cantidad de libros × ~400ms" — con 20 libros únicos, en serie son ~8s,
+ * en paralelo (lotes del tamaño de $concurrencia) baja a ~1-2s.
+ * Devuelve [idInventario => cantidad|null] (null = la API falló para ese id).
+ */
+function existencias_bodega_general_bulk(array $idsInventario, $concurrencia = 30) {
+    $ids = array_values(array_unique(array_filter($idsInventario, fn($v) => $v !== null && $v !== '')));
+    $resultados = [];
+    if (!$ids) return $resultados;
+
+    foreach (array_chunk($ids, max(1, (int)$concurrencia)) as $lote) {
+        $mh = curl_multi_init();
+        $handles = [];
+
+        foreach ($lote as $id) {
+            $ch = curl_init(API_URL_BASE . '/inventarios/' . rawurlencode($id) . '/existencias/bodega');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Authorization: ' . API_TOKEN
+            ]);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_ENCODING, '');
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$id] = $ch;
+        }
+
+        $activos = null;
+        do {
+            $estado = curl_multi_exec($mh, $activos);
+            if ($activos > 0) curl_multi_select($mh);
+        } while ($activos > 0 && $estado === CURLM_OK);
+
+        foreach ($handles as $id => $ch) {
+            $respuesta = curl_multi_getcontent($ch);
+            $data = json_decode($respuesta, true);
+            $cantidad = null;
+            if (is_array($data) && ($data['status'] ?? '') !== 'error') {
+                $cantidad = 0.0;
+                foreach ($data['data']['content'] ?? [] as $f) {
+                    if ((int)($f['id'] ?? 0) === 1) { $cantidad = (float)($f['cantidad'] ?? 0); break; }
+                }
+            }
+            $resultados[$id] = $cantidad;
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+        curl_multi_close($mh);
+    }
+
+    return $resultados;
+}

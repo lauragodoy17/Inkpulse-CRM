@@ -12,6 +12,7 @@
 	require '../lib/PHPMailer/src/Exception.php';
 	require '../lib/PHPMailer/src/PHPMailer.php';
 	require '../lib/PHPMailer/src/SMTP.php';
+	require_once("../includes/stock_bajo.php");
 
 	header("Content-Type:text/html;charset=utf-8");
 
@@ -198,6 +199,58 @@
 		echo "An error has occurred please try again: {$mail->ErrorInfo}";
 	}*/
 
+	// Aviso de stock bajo (bodega General, World Office) a facturación
+	try {
+		$bajo_stock = libros_bajo_stock_pedidos($bdd, [$pedido['id']], 'pedidos2');
+		$libros_bajos = $bajo_stock[$pedido['id']] ?? [];
+
+		if ($libros_bajos) {
+			$filas_html = '';
+			foreach ($libros_bajos as $lb) {
+				$filas_html .= '<tr><td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;">'.htmlspecialchars($lb['libro']).'</td>'
+					. '<td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">'.$lb['existencia'].' unid.</td></tr>';
+			}
+
+			$mail_stock = new PHPMailer(true);
+			$mail_stock->isSMTP();
+			$mail_stock->Host       = 'somoseureka.com.co';
+			$mail_stock->SMTPAuth   = true;
+			$mail_stock->SMTPAutoTLS = false;
+			$mail_stock->Username   = 'crm@somoseureka.com.co';
+			$mail_stock->Password   = 'cRm14356$';
+			$mail_stock->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+			$mail_stock->Port       = 587;
+			$mail_stock->SMTPOptions = [
+				'ssl' => [
+					'verify_peer' => false,
+					'verify_peer_name' => false,
+					'allow_self_signed' => true
+				]
+			];
+
+			$mail_stock->setFrom('crm@somoseureka.com.co', 'CRM Eureka');
+			$mail_stock->addAddress('felipe.vargas@somoseureka.com.co', 'felipe.vargas@somoseureka.com.co');
+			$mail_stock->addCC('comercial@somoseureka.com.co');
+			$mail_stock->addCC('oltoledo@hotmail.com');
+			$mail_stock->addReplyTo('crm@somoseureka.com.co', 'CRM Eureka');
+
+			$mail_stock->isHTML(true);
+			$mail_stock->CharSet = 'UTF-8';
+			$mail_stock->Subject = 'Stock bajo en pedido sin adopción #'.$pedido['id'].' - '.$_POST['colegio'];
+			$mail_stock->Body =
+				'<p style="font-size:15px;">El pedido sin adopción <strong>#'.$pedido['id'].'</strong>, solicitado por '.htmlspecialchars($promo['promotor']).' para el colegio <strong>'.htmlspecialchars($_POST['colegio']).'</strong>, incluye libros cuya existencia en la bodega General de World Office está por debajo de 50 unidades:</p>'
+				. '<table style="border-collapse:collapse;font-size:14px;"><thead><tr>'
+				. '<th style="padding:4px 10px;text-align:left;border-bottom:2px solid #d1d5db;">Libro</th>'
+				. '<th style="padding:4px 10px;border-bottom:2px solid #d1d5db;">Existencia</th>'
+				. '</tr></thead><tbody>'.$filas_html.'</tbody></table>'
+				. '<p style="font-size:14px;margin-top:14px;">Haz clic <a href="https://crm.somoseureka.com.co/pedido_colegio_sa.php?id_pedido='.$pedido['id'].'">aquí</a> para revisar el pedido.</p>';
+			$mail_stock->AltBody = 'El pedido sin adopción #'.$pedido['id'].' para '.$_POST['colegio'].' incluye libros con existencia baja en bodega General.';
+
+			$mail_stock->send();
+		}
+	} catch (Exception $e) {
+		error_log('No se pudo enviar el aviso de stock bajo del pedido sin adopción #'.$pedido['id'].': '.$e->getMessage());
+	}
 
 	header("Location: ../pedido_colegio_sa.php?id_pedido=".$pedido["id"]."");
 

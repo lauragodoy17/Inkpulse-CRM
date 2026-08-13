@@ -135,6 +135,7 @@ foreach ($libros_raw as $lb) {
   ]);
 }
 
+$show_stock       = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1);
 $show_plataforma  = (intval($pedido['tipo'] ?? 0) == 3 || ($pedido['codzona'] ?? '') == '5656');
 $show_tipo_pedido = (intval($pedido['tipo'] ?? 0) == 3 || ($pedido['codzona'] ?? '') == '5656' || intval($pedido['tipo'] ?? 0) == 10);
 $can_act = ($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2 || $_SESSION['id'] == 21 || $_SESSION['tipo'] == 10);
@@ -327,6 +328,12 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
 
       <center id="impre"></center>
 
+      <?php if ($show_stock): ?>
+      <div id="stock-alert-banner" class="d-print-none" style="display:none;background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:.85rem;font-weight:600;">
+        <i class="bi bi-exclamation-triangle-fill"></i> <span id="stock-alert-texto"></span>
+      </div>
+      <?php endif; ?>
+
       <!-- Tarjetas informativas -->
       <div class="mc-cards">
         <div class="mc-card">
@@ -464,13 +471,14 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <th>Cantidad</th>
                 <th>Valor Venta</th>
                 <?php if ($show_plataforma): ?><th>Plataforma</th><?php endif; ?>
+                <?php if ($show_stock): ?><th class="d-print-none">Existencia</th><?php endif; ?>
                 <th class="print-col-descaprob<?= $ph_desc_aprob ?>">Descuento Aprobado</th>
                 <th class="print-col-cantaprob<?= $ph_cant_aprob ?>">Cantidad Aprobada</th>
               </tr>
             </thead>
             <tbody>
               <?php $i = 1; foreach ($libros as $lb): ?>
-              <tr>
+              <tr data-libroid="<?= $lb['libroid'] ?>">
                 <td><?= $i++ ?></td>
                 <td class="print-col-isbn<?= $ph_isbn ?>"><?= htmlspecialchars($lb['isbn']) ?></td>
                 <td><?= htmlspecialchars($lb['libro']) ?></td>
@@ -485,6 +493,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <?php if ($show_plataforma): ?>
                 <td style="text-align:center"><?= (intval($lb['plataforma']) == 1) ? 'Sí' : 'No' ?></td>
                 <?php endif; ?>
+                <?php if ($show_stock): ?><td class="pc-stock-cell d-print-none" style="text-align:center">—</td><?php endif; ?>
                 <td class="print-col-descaprob<?= $ph_desc_aprob ?>" style="text-align:center">
                   <input type="number" id="d<?= $lb['lpid'] ?>" class="ap-desc-input"
                          data-lpid="<?= $lb['lpid'] ?>" value="<?= htmlspecialchars($lb['descuento_aprob']) ?>">
@@ -510,6 +519,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <td style="text-align:center;font-weight:700"><?= $total_c ?></td>
                 <td style="font-weight:700">$ <?= number_format($total_v, 0, ',', '.') ?></td>
                 <?php if ($show_plataforma): ?><td></td><?php endif; ?>
+                <?php if ($show_stock): ?><td class="d-print-none"></td><?php endif; ?>
                 <td class="print-col-descaprob<?= $ph_desc_aprob ?>"></td>
                 <td class="print-col-cantaprob<?= $ph_cant_aprob ?>"></td>
               </tr>
@@ -536,7 +546,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
           </button>
           <?php if ($can_act): ?>
             <?php if (intval($pedido['eid'] ?? 0) == 1): ?>
-              <button type="submit" class="mc-btn mc-btn-green">
+              <button type="button" id="btn-aprobar" class="mc-btn mc-btn-green">
                 <i class="bi bi-check-circle"></i> Aprobar
               </button>
               <button type="button" id="rechazar" class="mc-btn mc-btn-red">
@@ -638,6 +648,64 @@ $('#entregar').on('click', function () {
 });
 $('#modificar').on('click', function () {
   $('#form_pedido').attr('action', 'php/mod_pedido.php').submit();
+});
+<?php if ($show_stock): ?>
+window.stockCheckPromise = $.ajax({
+  url: 'ajax/stock_bajo_pedidos.php',
+  type: 'POST',
+  data: { origen: 'pedidos', ids: [<?= $id_pedido ?>] },
+  dataType: 'json'
+}).done(function (data) {
+  var libros = data[<?= $id_pedido ?>];
+  if (!libros || !libros.length) {
+    $('#pc-table .pc-stock-cell').html('<span style="color:#94a3b8;font-size:12px">OK</span>');
+    return;
+  }
+  window.hayStockBajo = true;
+  var porLibro = {};
+  libros.forEach(function (l) { porLibro[l.id_libro] = l.existencia; });
+  $('#pc-table tbody tr').each(function () {
+    var $tr = $(this);
+    var id  = $tr.data('libroid');
+    var $celda = $tr.find('.pc-stock-cell');
+    if (porLibro.hasOwnProperty(id)) {
+      $celda.html('<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:#fee2e2;color:#dc2626;">' +
+        '<i class="bi bi-exclamation-triangle-fill"></i> ' + porLibro[id] + ' unid.</span>');
+    } else {
+      $celda.html('<span style="color:#94a3b8;font-size:12px">OK</span>');
+    }
+  });
+  var texto = libros.length === 1
+    ? '1 libro de este pedido tiene existencia baja en la bodega General: '
+    : libros.length + ' libros de este pedido tienen existencia baja en la bodega General: ';
+  texto += libros.map(function (l) { return l.libro + ' (' + l.existencia + ' unid.)'; }).join(', ');
+  $('#stock-alert-texto').text(texto);
+  $('#stock-alert-banner').show();
+}).fail(function () {
+  $('#pc-table .pc-stock-cell').html('<span style="color:#94a3b8;font-size:12px" title="No se pudo verificar">—</span>');
+});
+<?php endif; ?>
+
+$('#btn-aprobar').on('click', function () {
+  function procederAprobar() {
+    if (window.hayStockBajo) {
+      inkConfirm({
+        title: '¿Aprobar este pedido?',
+        text:  'Hay libros de este pedido con existencia baja en la bodega General (menos de 50 unidades). ¿Deseas aprobarlo de todas formas?',
+        type:  'warning',
+        btnOk: 'Sí, aprobar'
+      }, function () {
+        $('#form_pedido').trigger('submit');
+      });
+    } else {
+      $('#form_pedido').trigger('submit');
+    }
+  }
+  if (window.stockCheckPromise) {
+    window.stockCheckPromise.always(procederAprobar);
+  } else {
+    procederAprobar();
+  }
 });
 </script>
 <script src="src/ink-alerts.js"></script>

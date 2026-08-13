@@ -84,6 +84,7 @@ foreach ($libros_raw as $lb) {
   ]);
 }
 
+$show_stock = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1);
 $is_admin  = ($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2);
 $is_viewer = ($_SESSION['id'] == 21);
 $can_edit  = ($is_admin || $is_viewer || ($pedido['verify'] ?? 1) == 0);
@@ -283,6 +284,12 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
 
       <center id="impre"></center>
 
+      <?php if ($show_stock): ?>
+      <div id="stock-alert-banner" class="d-print-none" style="display:none;background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:.85rem;font-weight:600;">
+        <i class="bi bi-exclamation-triangle-fill"></i> <span id="stock-alert-texto"></span>
+      </div>
+      <?php endif; ?>
+
       <?php if (($pedido['estado'] ?? '') == 1 && ($pedido['verify'] ?? 1) == 0): ?>
       <div class="mc-notice">
         <i class="bi bi-info-circle-fill"></i>
@@ -391,6 +398,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <th>Precio facturación</th>
                 <th>Cantidad</th>
                 <th>Valor venta</th>
+                <?php if ($show_stock): ?><th class="d-print-none">Existencia</th><?php endif; ?>
                 <?php if ($is_admin || $is_viewer): ?>
                 <th class="print-col-descaprob<?= $ph_desc_aprob ?>">Descuento aprobado</th>
                 <th class="print-col-cantaprob<?= $ph_cant_aprob ?>">Cantidad aprobada</th>
@@ -400,7 +408,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
             </thead>
             <tbody>
               <?php $i = 1; foreach ($libros as $lb): ?>
-              <tr id="<?= $lb['lpid'] ?>">
+              <tr id="<?= $lb['lpid'] ?>" data-libroid="<?= $lb['libroid'] ?>">
                 <td><?= $i++ ?></td>
                 <td class="print-col-isbn<?= $ph_isbn ?>"><?= htmlspecialchars($lb['isbn']) ?></td>
                 <td><?= htmlspecialchars($lb['libro']) ?></td>
@@ -412,6 +420,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <td>$ <?= number_format($lb['precio_fact'], 0, ',', '.') ?></td>
                 <td style="text-align:center"><?= intval($lb['cantidad']) ?></td>
                 <td>$ <?= number_format($lb['v_venta'], 0, ',', '.') ?></td>
+                <?php if ($show_stock): ?><td class="psa-stock-cell d-print-none" style="text-align:center">—</td><?php endif; ?>
                 <?php if ($is_admin || $is_viewer): ?>
                 <td class="print-col-descaprob<?= $ph_desc_aprob ?>" style="text-align:center">
                   <input type="number" id="d<?= $lb['lpid'] ?>" name="cantidad_a"
@@ -440,6 +449,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <td style="text-align:right;font-weight:700">Total</td>
                 <td style="text-align:center;font-weight:700"><?= $total_c ?></td>
                 <td style="font-weight:700">$ <?= number_format($total_v, 0, ',', '.') ?></td>
+                <?php if ($show_stock): ?><td class="d-print-none"></td><?php endif; ?>
                 <?php if ($is_admin || $is_viewer): ?><td class="print-col-descaprob<?= $ph_desc_aprob ?>"></td><td class="print-col-cantaprob<?= $ph_cant_aprob ?>"></td><?php endif; ?>
                 <?php if ($can_edit): ?><td></td><?php endif; ?>
               </tr>
@@ -515,7 +525,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
           </button>
           <?php if ($is_admin || $is_viewer): ?>
             <?php if (($pedido['estado'] ?? '') == 1): ?>
-              <button type="submit" class="mc-btn mc-btn-green">
+              <button type="button" id="btn-aprobar" class="mc-btn mc-btn-green">
                 <i class="bi bi-check-circle"></i> Aprobar
               </button>
               <button type="button" id="rechazar" class="mc-btn mc-btn-red">
@@ -684,6 +694,64 @@ $(document).on('click', '.btn-remove-book', function () {
 $(document).on('click', '.btn-save-book', function () {
   $('input[name="salida"]').val('guardar');
   $('#form_pedido').attr('action', 'php/mod_pedido_sa.php').submit();
+});
+<?php if ($show_stock): ?>
+window.stockCheckPromise = $.ajax({
+  url: 'ajax/stock_bajo_pedidos.php',
+  type: 'POST',
+  data: { origen: 'pedidos2', ids: [<?= $id_pedido ?>] },
+  dataType: 'json'
+}).done(function (data) {
+  var libros = data[<?= $id_pedido ?>];
+  if (!libros || !libros.length) {
+    $('#psa-table .psa-stock-cell').html('<span style="color:#94a3b8;font-size:12px">OK</span>');
+    return;
+  }
+  window.hayStockBajo = true;
+  var porLibro = {};
+  libros.forEach(function (l) { porLibro[l.id_libro] = l.existencia; });
+  $('#psa-table tbody tr').each(function () {
+    var $tr = $(this);
+    var id  = $tr.data('libroid');
+    var $celda = $tr.find('.psa-stock-cell');
+    if (porLibro.hasOwnProperty(id)) {
+      $celda.html('<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:#fee2e2;color:#dc2626;">' +
+        '<i class="bi bi-exclamation-triangle-fill"></i> ' + porLibro[id] + ' unid.</span>');
+    } else {
+      $celda.html('<span style="color:#94a3b8;font-size:12px">OK</span>');
+    }
+  });
+  var texto = libros.length === 1
+    ? '1 libro de este pedido tiene existencia baja en la bodega General: '
+    : libros.length + ' libros de este pedido tienen existencia baja en la bodega General: ';
+  texto += libros.map(function (l) { return l.libro + ' (' + l.existencia + ' unid.)'; }).join(', ');
+  $('#stock-alert-texto').text(texto);
+  $('#stock-alert-banner').show();
+}).fail(function () {
+  $('#psa-table .psa-stock-cell').html('<span style="color:#94a3b8;font-size:12px" title="No se pudo verificar">—</span>');
+});
+<?php endif; ?>
+
+$('#btn-aprobar').on('click', function () {
+  function procederAprobar() {
+    if (window.hayStockBajo) {
+      inkConfirm({
+        title: '¿Aprobar este pedido?',
+        text:  'Hay libros de este pedido con existencia baja en la bodega General (menos de 50 unidades). ¿Deseas aprobarlo de todas formas?',
+        type:  'warning',
+        btnOk: 'Sí, aprobar'
+      }, function () {
+        $('#form_pedido').trigger('submit');
+      });
+    } else {
+      $('#form_pedido').trigger('submit');
+    }
+  }
+  if (window.stockCheckPromise) {
+    window.stockCheckPromise.always(procederAprobar);
+  } else {
+    procederAprobar();
+  }
 });
 </script>
 </body>
