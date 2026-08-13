@@ -3,6 +3,7 @@ require_once("php/aut.php");
 require_once("conexion/bdd.php");
 
 $tp = intval($_GET['tp'] ?? 2);
+$show_stock = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1);
 
 $status_cfg = [
   2 => ['label'=>'Pendientes',  'badge'=>'lm-badge-yellow', 'icon'=>'bi-hourglass-split'],
@@ -20,20 +21,20 @@ $st_accent = [
 ];
 $ac = $st_accent[$tp] ?? $st_accent[2];
 
+// El listado real de filas ahora lo trae ajax/lista_pedidos_sa_data.php
+// (server-side DataTables). Aquí solo se necesita el total para la tarjeta.
 if ($tp == 2) {
-  $sql = "SELECT p.id, u.nombres, u.apellidos, p.fecha, p.colegio FROM pedidos2 p JOIN usuarios u ON u.id=p.id_usuario WHERE p.estado='1' AND p.verify='1' GROUP BY p.id";
+  $where_estado = "p.estado='1' AND p.verify='1'";
 } elseif ($tp == 3) {
-  $sql = "SELECT p.id, u.nombres, u.apellidos, p.fecha, p.colegio FROM pedidos2 p JOIN usuarios u ON u.id=p.id_usuario WHERE p.estado='2' GROUP BY p.id";
+  $where_estado = "p.estado='2'";
 } elseif ($tp == 4) {
-  $sql = "SELECT p.id, u.nombres, u.apellidos, p.fecha, p.colegio FROM pedidos2 p JOIN usuarios u ON u.id=p.id_usuario WHERE p.estado='4' GROUP BY p.id";
+  $where_estado = "p.estado='4'";
 } else {
-  $sql = "SELECT p.id, u.nombres, u.apellidos, p.fecha, p.colegio FROM pedidos2 p JOIN usuarios u ON u.id=p.id_usuario WHERE p.estado='3' GROUP BY p.id";
+  $where_estado = "p.estado='3'";
 }
 
-$req = $bdd->prepare($sql);
-$req->execute();
-$pedidos = $req->fetchAll();
-$total   = count($pedidos);
+$req = $bdd->query("SELECT COUNT(*) FROM (SELECT p.id FROM pedidos2 p JOIN usuarios u ON u.id=p.id_usuario WHERE $where_estado GROUP BY p.id) t");
+$total = intval($req->fetchColumn());
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -158,27 +159,12 @@ $total   = count($pedidos);
                 <th>Fecha</th>
                 <th>Distribuidor</th>
                 <th>Colegio</th>
+                <?php if ($show_stock): ?><th>Stock</th><?php endif; ?>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              <?php foreach ($pedidos as $p):
-                $promotor = htmlspecialchars(trim(($p['nombres'] ?? '').' '.($p['apellidos'] ?? '')));
-                $fecha_d  = date('d/m/Y', strtotime($p['fecha']));
-                $fecha_r  = substr($p['fecha'], 0, 10);
-              ?>
-              <tr data-date="<?= $fecha_r ?>">
-                <td><?= $p['id'] ?></td>
-                <td><?= $fecha_d ?></td>
-                <td><?= $promotor ?></td>
-                <td><?= htmlspecialchars($p['colegio']) ?></td>
-                <td>
-                  <a href="pedido_colegio_sa.php?id_pedido=<?= $p['id'] ?>&tp=<?= $tp ?>" class="lm-btn-ver">
-                    <i class="bi bi-eye"></i> Ver detalle
-                  </a>
-                </td>
-              </tr>
-              <?php endforeach; ?>
+              <!-- Las filas las pinta DataTables via ajax/lista_pedidos_sa_data.php (server-side) -->
             </tbody>
           </table>
         </div>
@@ -199,23 +185,45 @@ $total   = count($pedidos);
 <script src="src/plugins/datatables/js/responsive.bootstrap4.min.js"></script>
 <script>
 $(document).ready(function () {
-  var table;
+  var TP = <?= json_encode($tp) ?>;
+  var SHOW_STOCK = <?= json_encode($show_stock) ?>;
 
-  $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
-    if (settings.nTable.id !== 'lps-table') return true;
-    var desde = $('#lps-fecha-desde').val();
-    var hasta = $('#lps-fecha-hasta').val();
-    if ((desde || hasta) && table) {
-      var raw = $(table.row(dataIndex).node()).data('date') || '';
-      if (desde && raw < desde) return false;
-      if (hasta && raw > hasta) return false;
+  var columns = [
+    { data: 'id' },
+    { data: 'fecha_d' },
+    { data: 'promotor' },
+    { data: 'colegio' },
+  ];
+  if (SHOW_STOCK) {
+    columns.push({ data: null, orderable: false, className: 'lps-stock-cell', render: function () { return '—'; } });
+  }
+  columns.push({
+    data: null, orderable: false,
+    render: function (data, type, row) {
+      return '<a href="pedido_colegio_sa.php?id_pedido=' + row.id + '&tp=' + TP + '" class="lm-btn-ver">' +
+             '<i class="bi bi-eye"></i> Ver detalle</a>';
     }
-    return true;
   });
 
-  table = $('#lps-table').DataTable({
+  var table = $('#lps-table').DataTable({
     autoWidth: false,
+    processing: true,
+    serverSide: true,
     order: [[0, 'desc']],
+    ajax: {
+      url: 'ajax/lista_pedidos_sa_data.php',
+      type: 'POST',
+      data: function (d) {
+        d.tp          = TP;
+        d.fecha_desde = $('#lps-fecha-desde').val();
+        d.fecha_hasta = $('#lps-fecha-hasta').val();
+      },
+      dataSrc: function (json) {
+        $('.lm-count-badge').text(json.recordsFiltered + ' registros');
+        return json.data;
+      }
+    },
+    columns: columns,
     language: {
       lengthMenu:   'Mostrar _MENU_ registros',
       zeroRecords:  'No se encontraron resultados',
@@ -223,13 +231,22 @@ $(document).ready(function () {
       info:         'Mostrando _START_ a _END_ de _TOTAL_ registros',
       infoEmpty:    'Sin registros disponibles',
       infoFiltered: '(filtrado de _MAX_ registros)',
+      processing:   'Buscando...',
       search:       '',
       paginate: { first:'«', previous:'‹', next:'›', last:'»' }
     },
-    initComplete: function () { $('.dataTables_filter').hide(); }
+    initComplete: function () { $('.dataTables_filter').hide(); },
+    drawCallback: function () {
+      if (SHOW_STOCK) cargarStockBajo(table);
+    }
   });
 
-  $('#lps-search').on('keyup', function () { table.search(this.value).draw(); });
+  var searchTimer;
+  $('#lps-search').on('keyup', function () {
+    clearTimeout(searchTimer);
+    var val = this.value;
+    searchTimer = setTimeout(function () { table.search(val).draw(); }, 300);
+  });
   $('#lps-btn-apply').on('click', function () { table.draw(); });
   $('#lps-fecha-desde, #lps-fecha-hasta').on('change', function () { table.draw(); });
   $('#lps-btn-clear').on('click', function () {
@@ -237,7 +254,45 @@ $(document).ready(function () {
     $('#lps-fecha-desde, #lps-fecha-hasta').val('');
     table.search('').draw();
   });
+
+  function cargarStockBajo(table) {
+    var filas = table.rows({ page: 'current' }).data().toArray();
+    var ids = filas.map(function (r) { return r.id; });
+    if (!ids.length) return;
+
+    $.ajax({
+      url: 'ajax/stock_bajo_pedidos.php',
+      type: 'POST',
+      data: { origen: 'pedidos2', ids: ids },
+      dataType: 'json'
+    }).done(function (data) {
+      $(table.column(4).nodes()).each(function (i) {
+        var libros = data[filas[i].id];
+        var $celda = $(this);
+        if (libros && libros.length) {
+          var titulo = libros.map(function (l) { return l.libro + ': ' + l.existencia + ' unid.'; }).join('\n');
+          $celda.html(
+            '<span class="lm-stock-badge" title="' + $('<div>').text(titulo).html() + '">' +
+            '<i class="bi bi-exclamation-triangle-fill"></i> Stock bajo</span>'
+          );
+        } else {
+          $celda.html('<span style="color:#94a3b8;font-size:12px">OK</span>');
+        }
+      });
+    }).fail(function () {
+      $(table.column(4).nodes()).html('<span style="color:#94a3b8;font-size:12px" title="No se pudo verificar">—</span>');
+    });
+  }
 });
 </script>
+<?php if ($show_stock): ?>
+<style>
+  .lm-stock-badge {
+    display:inline-flex; align-items:center; gap:4px;
+    font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px;
+    background:#fee2e2; color:#dc2626; cursor:default;
+  }
+</style>
+<?php endif; ?>
 </body>
 </html>

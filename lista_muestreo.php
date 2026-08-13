@@ -1,6 +1,7 @@
 <?php
 require_once("php/aut.php");
 require_once("conexion/bdd.php");
+require_once("includes/lista_muestreo_query.php");
 
 $tp = intval($_GET['tp'] ?? 2);
 
@@ -23,69 +24,29 @@ $st_accent = [
 ];
 $ac = $st_accent[$tp] ?? $st_accent[2];
 
-$gp_periodo = $bdd->query("SELECT id FROM periodos ORDER BY id DESC LIMIT 1")->fetch();
-
-if ($tp == 1) {
-  $sql = "SELECT e.estado AS estado_nombre, s.id, s.fecha, s.fecha_entrega, s.conse,
-                 CONCAT(t.nombre,' ',t.apellido) AS solicitante, ca.cargo, c.colegio,
-                 CONCAT(u.nombres,' ',u.apellidos) AS promotor
-          FROM solicitudes_recursos s
-          JOIN estados_pedidos e ON e.id=s.estado
-          LEFT JOIN trabajadores_colegios t ON s.solicitante=t.id
-          LEFT JOIN cargos ca ON ca.id=t.cargo
-          JOIN colegios c ON c.id=s.id_colegio
-          JOIN usuarios u ON u.id=s.usuario
-          WHERE s.id_periodo='".$gp_periodo['id']."'
-          ORDER BY s.id DESC";
-} elseif ($tp == 2) {
-  if ($_SESSION['tipo'] != 10) {
-    $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, c.sub_zona, c.responsable, cal.calendario FROM muestreos p JOIN colegios c ON p.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.id=p.id_usuario LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE p.estado='1' GROUP BY p.id";
-  } else {
-    $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, c.sub_zona, c.responsable, cal.calendario FROM muestreos p JOIN colegios c ON p.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.id=p.id_usuario LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE p.estado='1' AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."') GROUP BY p.id";
-  }
-} elseif ($tp == 3) {
-  if ($_SESSION['tipo'] != 10) {
-    $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, c.sub_zona, c.responsable, cal.calendario FROM muestreos p JOIN colegios c ON p.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.id=p.id_usuario LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE p.estado='2' GROUP BY p.id";
-  } else {
-    $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, c.sub_zona, c.responsable, cal.calendario FROM muestreos p JOIN colegios c ON p.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.id=p.id_usuario LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE p.estado='2' AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."') GROUP BY p.id";
-  }
-} elseif ($tp == 4) {
-  if ($_SESSION['tipo'] != 10) {
-    $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, c.sub_zona, c.responsable, cal.calendario FROM muestreos p JOIN colegios c ON p.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.id=p.id_usuario LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE p.estado='4' GROUP BY p.id";
-  } else {
-    $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, c.sub_zona, c.responsable, cal.calendario FROM muestreos p JOIN colegios c ON p.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.id=p.id_usuario LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE p.estado='4' AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."') GROUP BY p.id";
-  }
-} else {
-  if ($_SESSION['tipo'] != 10) {
-    $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, c.sub_zona, c.responsable, cal.calendario FROM muestreos p JOIN colegios c ON p.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.id=p.id_usuario LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE p.estado='3' GROUP BY p.id";
-  } else {
-    $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, c.sub_zona, c.responsable, cal.calendario FROM muestreos p JOIN colegios c ON p.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.id=p.id_usuario LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE p.estado='3' AND (c.cod_zona='".$_SESSION['zona']."' OR c.zona_madre='".$_SESSION['zona']."') GROUP BY p.id";
-  }
-}
-
-$req = $bdd->prepare($sql);
-$req->execute();
-$pedidos = $req->fetchAll();
-$total   = count($pedidos);
-
-$sub_zonas_map = [];
-if ($tp != 1) {
-  foreach ($bdd->query("SELECT id, sub_zona FROM sub_zonas")->fetchAll() as $sz)
-    $sub_zonas_map[$sz['id']] = $sz['sub_zona'];
-}
-
+// El listado real de filas ahora lo trae ajax/lista_muestreo_data.php (server-side
+// DataTables). Aquí solo se necesita el total (para la tarjeta) y, para tp!=1,
+// las opciones de los selects de filtro — con consultas livianas.
 $responsables_uniq = [];
 $empresas_uniq     = [];
-if ($tp != 1) {
-  foreach ($pedidos as $p) {
-    $tipo_p  = intval($p['tipo'] ?? 0);
-    $parts   = explode("/", $p['zona'] ?? '');
-    $empresa = ($tipo_p == 3 || $tipo_p == 1) ? trim($parts[0] ?? '') : trim($p['zona'] ?? '');
-    $resp    = ($tipo_p == 3 || $tipo_p == 1)
-                 ? trim(($p['nombres'] ?? '').' '.($p['apellidos'] ?? ''))
-                 : trim($p['responsable'] ?? '');
-    if ($empresa && !in_array($empresa, $empresas_uniq))    $empresas_uniq[]     = $empresa;
-    if ($resp    && !in_array($resp,    $responsables_uniq)) $responsables_uniq[] = $resp;
+
+if ($tp == 1) {
+  $gp_periodo = $bdd->query("SELECT id FROM periodos ORDER BY id DESC LIMIT 1")->fetch();
+  $req = $bdd->prepare("SELECT COUNT(*) FROM solicitudes_recursos s WHERE s.id_periodo = :periodo");
+  $req->execute([':periodo' => $gp_periodo['id']]);
+  $total = intval($req->fetchColumn());
+} else {
+  list($lm_from, $lm_where, $lm_params, $lm_select_calc) = lista_muestreo_query_parts($tp);
+
+  $req = $bdd->prepare("SELECT COUNT(*) FROM (SELECT p.id $lm_from $lm_where GROUP BY p.id) t");
+  $req->execute($lm_params);
+  $total = intval($req->fetchColumn());
+
+  $req = $bdd->prepare("SELECT DISTINCT $lm_select_calc $lm_from $lm_where");
+  $req->execute($lm_params);
+  foreach ($req->fetchAll() as $r) {
+    if (!empty($r['resp_calc'])    && !in_array($r['resp_calc'], $responsables_uniq))    $responsables_uniq[] = $r['resp_calc'];
+    if (!empty($r['empresa_calc']) && !in_array($r['empresa_calc'], $empresas_uniq))      $empresas_uniq[]     = $r['empresa_calc'];
   }
   sort($empresas_uniq);
   sort($responsables_uniq);
@@ -247,23 +208,7 @@ if ($tp != 1) {
               </tr>
             </thead>
             <tbody>
-              <?php foreach ($pedidos as $p):
-                $fecha_d = date('d/m/Y', strtotime($p['fecha']));
-                $fecha_e = $p['fecha_entrega'] ? date('d/m/Y', strtotime($p['fecha_entrega'])) : '—';
-                $fecha_r = substr($p['fecha'], 0, 10);
-              ?>
-              <tr data-date="<?= $fecha_r ?>">
-                <td><?= $p['id'] ?></td>
-                <td><?= htmlspecialchars($p['conse']) ?></td>
-                <td><?= $fecha_d ?></td>
-                <td><?= $fecha_e ?></td>
-                <td><?= htmlspecialchars($p['solicitante'] ?? '—') ?></td>
-                <td><?= htmlspecialchars($p['cargo'] ?? '—') ?></td>
-                <td><?= htmlspecialchars($p['colegio']) ?></td>
-                <td><?= htmlspecialchars($p['promotor']) ?></td>
-                <td><span class="estado-badge eb-pending"><?= htmlspecialchars($p['estado_nombre']) ?></span></td>
-              </tr>
-              <?php endforeach; ?>
+              <!-- Las filas las pinta DataTables via ajax/lista_muestreo_data.php (server-side) -->
             </tbody>
           </table>
 
@@ -282,43 +227,7 @@ if ($tp != 1) {
               </tr>
             </thead>
             <tbody>
-              <?php foreach ($pedidos as $p):
-                $tipo_p   = intval($p['tipo'] ?? 0);
-                if ($tipo_p == 3 || $tipo_p == 1) {
-                  $parts    = explode("/", $p['zona'] ?? '');
-                  $empresa  = htmlspecialchars(trim($parts[0] ?? ''));
-                  $n_zona   = htmlspecialchars(trim($parts[1] ?? ''));
-                  $resp     = htmlspecialchars(trim(($p['nombres'] ?? '').' '.($p['apellidos'] ?? '')));
-                  $raw_emp  = trim($parts[0] ?? '');
-                  $raw_resp = trim(($p['nombres'] ?? '').' '.($p['apellidos'] ?? ''));
-                } else {
-                  $empresa  = htmlspecialchars($p['zona'] ?? '');
-                  $n_zona   = htmlspecialchars($sub_zonas_map[$p['sub_zona']] ?? '—');
-                  $resp     = htmlspecialchars($p['responsable'] ?? '—');
-                  $raw_emp  = $p['zona'] ?? '';
-                  $raw_resp = $p['responsable'] ?? '';
-                }
-                $fecha_d = date('d/m/Y', strtotime($p['fecha']));
-                $fecha_r = substr($p['fecha'], 0, 10);
-                $url_detalle = ($tp == 2)
-                  ? "muestreo_colegio.php?id_pedido={$p['id']}"
-                  : "muestreo_colegio_resto.php?id_pedido={$p['id']}&tp={$tp}";
-              ?>
-              <tr data-date="<?= $fecha_r ?>" data-responsable="<?= htmlspecialchars($raw_resp) ?>" data-empresa="<?= htmlspecialchars($raw_emp) ?>">
-                <td><?= $p['id'] ?></td>
-                <td><?= $fecha_d ?></td>
-                <td><?= $empresa ?></td>
-                <td><?= $n_zona ?></td>
-                <td><?= $resp ?></td>
-                <td><?= htmlspecialchars($p['colegio']) ?></td>
-                <td><?= htmlspecialchars($p['calendario'] ?? '—') ?></td>
-                <td>
-                  <a href="<?= $url_detalle ?>" class="lm-btn-ver">
-                    <i class="bi bi-eye"></i> Ver detalle
-                  </a>
-                </td>
-              </tr>
-              <?php endforeach; ?>
+              <!-- Las filas las pinta DataTables via ajax/lista_muestreo_data.php (server-side) -->
             </tbody>
           </table>
           <?php endif; ?>
@@ -341,30 +250,61 @@ if ($tp != 1) {
 <script src="src/plugins/datatables/js/responsive.bootstrap4.min.js"></script>
 <script>
 $(document).ready(function () {
-  var table;
+  var TP  = <?= json_encode($tp) ?>;
+  var TP1 = (TP === 1);
 
-  $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
-    if (settings.nTable.id !== 'lm-table') return true;
-    var resp    = $('#lm-responsable').val();
-    var empresa = $('#lm-empresa').val();
-    var desde   = $('#lm-fecha-desde').val();
-    var hasta   = $('#lm-fecha-hasta').val();
-    if (table) {
-      var $row = $(table.row(dataIndex).node());
-      if (resp    && $row.data('responsable') !== resp)    return false;
-      if (empresa && $row.data('empresa')     !== empresa) return false;
-      if (desde || hasta) {
-        var raw = $row.data('date') || '';
-        if (desde && raw < desde) return false;
-        if (hasta && raw > hasta) return false;
+  var columns = TP1 ? [
+    { data: 'id' },
+    { data: 'conse' },
+    { data: 'fecha_d' },
+    { data: 'fecha_entrega' },
+    { data: 'solicitante' },
+    { data: 'cargo' },
+    { data: 'colegio' },
+    { data: 'promotor' },
+    {
+      data: 'estado_nombre', orderable: false,
+      render: function (data) { return '<span class="estado-badge eb-pending">' + data + '</span>'; }
+    },
+  ] : [
+    { data: 'id' },
+    { data: 'fecha_d' },
+    { data: 'empresa' },
+    { data: 'zona' },
+    { data: 'responsable' },
+    { data: 'colegio' },
+    { data: 'calendario' },
+    {
+      data: null, orderable: false,
+      render: function (data, type, row) {
+        return '<a href="' + row.url_detalle + '" class="lm-btn-ver"><i class="bi bi-eye"></i> Ver detalle</a>';
       }
-    }
-    return true;
-  });
+    },
+  ];
 
-  table = $('#lm-table').DataTable({
-    autoWidth:  false,
-    order:      [[0, 'desc']],
+  var table = $('#lm-table').DataTable({
+    autoWidth:   false,
+    processing:  true,
+    serverSide:  true,
+    order:       [[0, 'desc']],
+    ajax: {
+      url: 'ajax/lista_muestreo_data.php',
+      type: 'POST',
+      data: function (d) {
+        d.tp = TP;
+        if (!TP1) {
+          d.responsable = $('#lm-responsable').val();
+          d.empresa     = $('#lm-empresa').val();
+        }
+        d.fecha_desde = $('#lm-fecha-desde').val();
+        d.fecha_hasta = $('#lm-fecha-hasta').val();
+      },
+      dataSrc: function (json) {
+        $('.lm-count-badge').text(json.recordsFiltered + ' registros');
+        return json.data;
+      }
+    },
+    columns: columns,
     language: {
       lengthMenu:   'Mostrar _MENU_ registros',
       zeroRecords:  'No se encontraron resultados',
@@ -372,15 +312,21 @@ $(document).ready(function () {
       info:         'Mostrando _START_ a _END_ de _TOTAL_ registros',
       infoEmpty:    'Sin registros disponibles',
       infoFiltered: '(filtrado de _MAX_ registros)',
+      processing:   'Buscando...',
       search:       '',
       paginate: { first:'«', previous:'‹', next:'›', last:'»' }
     },
     initComplete: function () { $('.dataTables_filter').hide(); }
   });
 
-  $('#lm-search').on('keyup', function () { table.search(this.value).draw(); });
+  var searchTimer;
+  $('#lm-search').on('keyup', function () {
+    clearTimeout(searchTimer);
+    var val = this.value;
+    searchTimer = setTimeout(function () { table.search(val).draw(); }, 300);
+  });
   $('#lm-btn-apply').on('click', function () { table.draw(); });
-  $('#lm-fecha-desde, #lm-fecha-hasta').on('change', function () { table.draw(); });
+  $('#lm-fecha-desde, #lm-fecha-hasta, #lm-responsable, #lm-empresa').on('change', function () { table.draw(); });
   $('#lm-btn-clear').on('click', function () {
     $('#lm-search').val('');
     $('#lm-responsable, #lm-empresa').val('');
