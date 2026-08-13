@@ -9,9 +9,20 @@ $req_col = $bdd->prepare("SELECT colegio FROM colegios WHERE id='".$id_colegio."
 $req_col->execute();
 $colegio_row = $req_col->fetch();
 
-$req_clientes = $bdd->prepare("SELECT id, cliente FROM clientes");
-$req_clientes->execute();
-$clientes = $req_clientes->fetchAll();
+// Cliente definido en la pestaña Adopciones para este colegio/período (editable aquí también),
+// igual que en solicitar_pedido.php. clientes tiene ~10.000 filas: se resuelve solo el ya
+// seleccionado y el resto se busca por AJAX (ajax/buscar_clientes.php).
+$stmt_cliente_adop = $bdd->prepare("SELECT cliente FROM recursos WHERE id_colegio=? AND id_periodo=?");
+$stmt_cliente_adop->execute([$id_colegio, $periodo_id]);
+$rec_cliente = $stmt_cliente_adop->fetch();
+$cliente_predet = !empty($rec_cliente['cliente']) ? $rec_cliente['cliente'] : '';
+
+$cliente_sel = null;
+if ($cliente_predet !== '') {
+    $stmt_cl_sel = $bdd->prepare("SELECT id, cliente FROM clientes WHERE id=?");
+    $stmt_cl_sel->execute([$cliente_predet]);
+    $cliente_sel = $stmt_cl_sel->fetch();
+}
 
 $sql_libros = "SELECT l.id, l.id_grado, l.libro, p.tasa_compra, p.tasa_compra_d, m.materia, p.cod_area
                FROM libros l
@@ -119,9 +130,9 @@ $mostrar_tipo = ($_SESSION['tipo'] == 3 || $_SESSION['zona'] == '5656');
                   <label class="control-label">Cliente <small style="color:red;">*</small></label>
                   <select class="form-control select2" name="cliente" id="cliente" style="width:100%;" required>
                     <option value="">Seleccionar</option>
-                    <?php foreach ($clientes as $cl): ?>
-                    <option value="<?= $cl['id'] ?>"><?= htmlspecialchars($cl['cliente']) ?></option>
-                    <?php endforeach; ?>
+                    <?php if ($cliente_sel): ?>
+                    <option value="<?= $cliente_sel['id'] ?>" selected><?= htmlspecialchars($cliente_sel['cliente']) ?></option>
+                    <?php endif; ?>
                   </select>
                 </div>
               </div>
@@ -232,7 +243,20 @@ $(document).ready(function () {
   $('#cliente').select2({
     placeholder: 'Seleccionar cliente',
     allowClear: true,
-    width: '100%'
+    width: '100%',
+    minimumInputLength: 2,
+    ajax: {
+      url: 'ajax/buscar_clientes.php',
+      dataType: 'json',
+      delay: 300,
+      data: function (params) { return { q: params.term }; },
+      processResults: function (data) { return { results: data }; }
+    },
+    language: {
+      inputTooShort: function () { return 'Escribe al menos 2 letras para buscar...'; },
+      noResults:  function () { return 'Sin resultados'; },
+      searching:  function () { return 'Buscando...'; }
+    }
   });
 });
 
