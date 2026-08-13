@@ -30,7 +30,7 @@ try {
         $bdd->prepare("UPDATE pedidos2 SET estado = '4' WHERE id = ?")->execute([$id]);
         $titulo   = '¡Pedido entregado!';
         $mensaje  = "El pedido SA #$id fue marcado como entregado.";
-        $redirect = '../lista_pedidos_sa.php?tp=4';
+        $redirect = '../lista_pedidos_sa.php?tp=3';
 
     } else {
         $error = 'Acción no reconocida.';
