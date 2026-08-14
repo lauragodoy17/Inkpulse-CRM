@@ -1,66 +1,66 @@
-<?php
-	/*ini_set("display_errors", 1);
+﻿<?php
+  /*ini_set("display_errors", 1);
 
-	ini_set("display_startup_errors", 1);
+  ini_set("display_startup_errors", 1);
 
-	error_reporting(E_ALL);*/
+  error_reporting(E_ALL);*/
 
-	require_once("../php/aut.php");
-  	include("../conexion/bdd.php");
+  require_once("../php/aut.php");
+    include("../conexion/bdd.php");
 
-	$sql_periodo="SELECT * FROM periodos WHERE id='".$_GET['periodo']."'";
+  $sql_periodo="SELECT * FROM periodos WHERE id='".$_GET['periodo']."'";
 
-	$req_periodo = $bdd->prepare($sql_periodo);
-	$req_periodo->execute();
-	$gp_periodo = $req_periodo->fetch();
+  $req_periodo = $bdd->prepare($sql_periodo);
+  $req_periodo->execute();
+  $gp_periodo = $req_periodo->fetch();
 
-	$sql_hp = "SELECT id FROM presupuestos WHERE id_periodo='".$gp_periodo["id"]."' AND id_colegio='".$_GET["colegio"]."'";
-	$req_hp = $bdd->prepare($sql_hp);
-	$req_hp->execute();
-	$num_hp = $req_hp->rowCount();
+  $sql_hp = "SELECT id FROM presupuestos WHERE id_periodo='".$gp_periodo["id"]."' AND id_colegio='".$_GET["colegio"]."'";
+  $req_hp = $bdd->prepare($sql_hp);
+  $req_hp->execute();
+  $num_hp = $req_hp->rowCount();
 
-	$show_guardar = ($num_hp >= 1 && $_SESSION["tipo"] != 4) &&
-		(!($_SESSION['tipo'] == 3 && $_SESSION["zona"] != '5656') || $_GET["f_cierre"] > date("Y-m-d"));
+  $show_guardar = ($num_hp >= 1 && $_SESSION["tipo"] != 4) &&
+    (!($_SESSION['tipo'] == 3 && $_SESSION["zona"] != '5656') || $_GET["f_cierre"] > date("Y-m-d"));
 
-	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia, mt.costo_almacenamiento
-	                  FROM ia_modelos m
-	                  JOIN ia_modelo_tokens mt ON mt.id_modelo = m.id
-	                  WHERE m.activo = 1
-	                  ORDER BY mt.id DESC LIMIT 1";
-	$modelo_activo = $bdd->query($sql_costo_ia)->fetch();
-	$costo_ia = $modelo_activo['costo_ia'] ?? 0;
+  $sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia, mt.costo_almacenamiento
+                    FROM ia_modelos m
+                    JOIN ia_modelo_tokens mt ON mt.id_modelo = m.id
+                    WHERE m.activo = 1
+                    ORDER BY mt.id DESC LIMIT 1";
+  $modelo_activo = $bdd->query($sql_costo_ia)->fetch();
+  $costo_ia = $modelo_activo['costo_ia'] ?? 0;
 
-	try { $bdd->exec("ALTER TABLE ia_trm ADD COLUMN id_periodo INT NULL"); } catch (Exception $e) {}
-	$req_trm = $bdd->prepare("SELECT trm FROM ia_trm WHERE id_periodo = ? ORDER BY fecha DESC, id DESC LIMIT 1");
-	$req_trm->execute([$_GET['periodo']]);
-	$trm_row = $req_trm->fetch() ?: $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch();
-	$trm_actual = $trm_row['trm'] ?? 0;
-	$costo_ia_cop = $costo_ia * $trm_actual;
+  try { $bdd->exec("ALTER TABLE ia_trm ADD COLUMN id_periodo INT NULL"); } catch (Exception $e) {}
+  $req_trm = $bdd->prepare("SELECT trm FROM ia_trm WHERE id_periodo = ? ORDER BY fecha DESC, id DESC LIMIT 1");
+  $req_trm->execute([$_GET['periodo']]);
+  $trm_row = $req_trm->fetch() ?: $bdd->query("SELECT trm FROM ia_trm ORDER BY fecha DESC, id DESC LIMIT 1")->fetch();
+  $trm_actual = $trm_row['trm'] ?? 0;
+  $costo_ia_cop = $costo_ia * $trm_actual;
 
-	$req_cant_profes = $bdd->prepare("SELECT COUNT(*) AS total FROM trabajadores_colegios WHERE id_colegio=? AND cargo=6 AND activo=1");
-	$req_cant_profes->execute([$_GET['colegio']]);
-	$cantidad_profesores = $req_cant_profes->fetch()['total'];
+  $req_cant_profes = $bdd->prepare("SELECT COUNT(*) AS total FROM trabajadores_colegios WHERE id_colegio=? AND cargo=6 AND activo=1");
+  $req_cant_profes->execute([$_GET['colegio']]);
+  $cantidad_profesores = $req_cant_profes->fetch()['total'];
 
-	// Si ya se guardó una cantidad manual para este colegio+periodo, esa reemplaza
-	// el conteo automático de trabajadores_colegios.
-	try { $bdd->exec("CREATE TABLE IF NOT EXISTS ia_profesores_colegio (id INT AUTO_INCREMENT PRIMARY KEY, id_colegio INT NOT NULL, id_periodo INT NOT NULL, cantidad_profesores INT NOT NULL, UNIQUE KEY uniq_colegio_periodo (id_colegio, id_periodo))"); } catch (Exception $e) {}
-	$req_profes_manual = $bdd->prepare("SELECT cantidad_profesores FROM ia_profesores_colegio WHERE id_colegio=? AND id_periodo=?");
-	$req_profes_manual->execute([$_GET['colegio'], $_GET['periodo']]);
-	$profes_manual = $req_profes_manual->fetch();
-	if ($profes_manual) {
-		$cantidad_profesores = (int)$profes_manual['cantidad_profesores'];
-	}
+  // Si ya se guardó una cantidad manual para este colegio+periodo, esa reemplaza
+  // el conteo automático de trabajadores_colegios.
+  try { $bdd->exec("CREATE TABLE IF NOT EXISTS ia_profesores_colegio (id INT AUTO_INCREMENT PRIMARY KEY, id_colegio INT NOT NULL, id_periodo INT NOT NULL, cantidad_profesores INT NOT NULL, UNIQUE KEY uniq_colegio_periodo (id_colegio, id_periodo))"); } catch (Exception $e) {}
+  $req_profes_manual = $bdd->prepare("SELECT cantidad_profesores FROM ia_profesores_colegio WHERE id_colegio=? AND id_periodo=?");
+  $req_profes_manual->execute([$_GET['colegio'], $_GET['periodo']]);
+  $profes_manual = $req_profes_manual->fetch();
+  if ($profes_manual) {
+    $cantidad_profesores = (int)$profes_manual['cantidad_profesores'];
+  }
 
-	$req_interacciones = $bdd->prepare("SELECT interacciones FROM ia_presupuestos WHERE id_modelo_tokens=? AND id_periodo=? ORDER BY id DESC LIMIT 1");
-	$req_interacciones->execute([$modelo_activo['id_modelo_tokens'] ?? 0, $_GET['periodo']]);
-	$interacciones = $req_interacciones->fetch()['interacciones'] ?? 0;
+  $req_interacciones = $bdd->prepare("SELECT interacciones FROM ia_presupuestos WHERE id_modelo_tokens=? AND id_periodo=? ORDER BY id DESC LIMIT 1");
+  $req_interacciones->execute([$modelo_activo['id_modelo_tokens'] ?? 0, $_GET['periodo']]);
+  $interacciones = $req_interacciones->fetch()['interacciones'] ?? 0;
 
-	$costo_ia_semanal = $costo_ia_cop * $interacciones * $cantidad_profesores;
-	$costo_almacenamiento_anual = $modelo_activo['costo_almacenamiento'] ?? 0;
-	$costo_almacenamiento_semanal = $costo_almacenamiento_anual / 53;
+  $costo_ia_semanal = $costo_ia_cop * $interacciones * $cantidad_profesores;
+  $costo_almacenamiento_anual = $modelo_activo['costo_almacenamiento'] ?? 0;
+  $costo_almacenamiento_semanal = $costo_almacenamiento_anual / 53;
 
-	$costo_semanal = $costo_ia_semanal + $costo_almacenamiento_semanal;
-	$costo_anual = ($costo_ia_semanal * 53) + $costo_almacenamiento_anual;
+  $costo_semanal = $costo_ia_semanal + $costo_almacenamiento_semanal;
+  $costo_anual = ($costo_ia_semanal * 53) + $costo_almacenamiento_anual;
 ?>
 
 <style>
@@ -808,7 +808,7 @@
         $req_exist_d->execute();
         $ids_exist_adop = array_map('intval', array_column($req_exist_d->fetchAll(PDO::FETCH_ASSOC), 'id_libro_eureka'));
 
-		echo "<form action='php/guardar_definicion.php' class='miFormulario' method='POST' id='form_definicion' name='f2' enctype='multipart/form-data'>";
+    echo "<form action='php/guardar_definicion.php' class='miFormulario' method='POST' id='form_definicion' name='f2' enctype='multipart/form-data'>";
                               
             echo "<div class='adop-table-wrap mt-2'>
                 <table id='dataTables-adop'>
@@ -977,14 +977,14 @@
                                         if ($presup["definido"] ==1) {
                                             echo "<td><input type='checkbox' name='definir[]' class='definir' checked value='".$libro2["id"]."/'".$presup["id"]."></td>";
                                         }
-	                                    else {
+                                      else {
 
-	                                        echo "<td><input type='checkbox' name='definir[]' class='definir' value='".$libro2["id"]."/1".$presup["id"]."'></td>";
+                                          echo "<td><input type='checkbox' name='definir[]' class='definir' value='".$libro2["id"]."/1".$presup["id"]."'></td>";
 
-	                                    }
-                                	}else {
-                                    	echo"<td></td>";
-                                	}
+                                      }
+                                  }else {
+                                      echo"<td></td>";
+                                  }
 
 
                                     echo "<input type='hidden' name='presupuesto_d[]' value='".$libro2["id"]."' id='presupuesto_d".$libro2["id"]."'>
@@ -1402,10 +1402,10 @@
 
 
                                             if ($_SESSION['tipo']!=6) {
-	                                    		echo "var desc_max=parseFloat(".$libro_p["desc_max"].")* 100;";
-			                                }else{
-			                                        	echo "var desc_max=parseFloat(".$libro_p["desc_max_dist"].")* 100;";
-			                                }
+                                          echo "var desc_max=parseFloat(".$libro_p["desc_max"].")* 100;";
+                                      }else{
+                                                echo "var desc_max=parseFloat(".$libro_p["desc_max_dist"].")* 100;";
+                                      }
 
                                             if ($_SESSION['tipo']!=1) {
                                                 
@@ -1432,20 +1432,20 @@
                                                 }
 
                                             }
-		                                    
+                                        
                                             
                                             if ($_SESSION['tipo']!=1) {
-    		                                    echo"
+                                            echo"
 
-    		                                    if (desc_max > 0){
-    		                                    	if (descuento > desc_max){
+                                            if (desc_max > 0){
+                                              if (descuento > desc_max){
 
-    				                                    alert('el descuento no debe superar: '+desc_max);
-    				                                    $('#descuento_d".$libro_p["id"]."').val(desc_max);
-    				                                    $('#descuento_d".$libro_p["id"]."').focus();
-    				                                    descuento=desc_max;
-    			                                	}
-    		                                    }";
+                                                alert('el descuento no debe superar: '+desc_max);
+                                                $('#descuento_d".$libro_p["id"]."').val(desc_max);
+                                                $('#descuento_d".$libro_p["id"]."').focus();
+                                                descuento=desc_max;
+                                            }
+                                            }";
                                             }
                                            echo"descuento= descuento/100;
 
@@ -1747,24 +1747,32 @@
                           echo '</select></div>';
                           echo '<script>
                             $(function () {
-                              $("#cliente_adop").select2({
-                                placeholder: "Seleccionar cliente...",
-                                width: "100%",
-                                dropdownParent: $("#adopciones"),
-                                minimumInputLength: 2,
-                                ajax: {
-                                  url: "ajax/buscar_clientes.php",
-                                  dataType: "json",
-                                  delay: 300,
-                                  data: function (params) { return { q: params.term }; },
-                                  processResults: function (data) { return { results: data }; }
-                                },
-                                language: {
-                                  inputTooShort: function () { return "Escribe al menos 2 letras para buscar..."; },
-                                  noResults: function () { return "Sin resultados"; },
-                                  searching: function () { return "Buscando..."; }
-                                }
-                              });
+                              $("#cliente_adop").select2({ 
+                                placeholder: "Seleccionar cliente...", 
+                                width: "100%", 
+                                dropdownParent: $("#adopciones"), 
+                                minimumInputLength: 2, 
+                                ajax: { 
+                                    url: "ajax/buscar_clientes.php", 
+                                    dataType: "json", 
+                                    delay: 300, 
+                                    data: function (params) { 
+                                        return { 
+                                            q: params.term, // Término de búsqueda actual
+                                            periodo: '.$_GET["periodo"].', // <--- Tu nuevo parámetro estático
+                                            
+                                        }; 
+                                    }, 
+                                    processResults: function (data) { 
+                                        return { results: data }; 
+                                    } 
+                                }, 
+                                language: { 
+                                    inputTooShort: function () { return "Escribe al menos 2 letras para buscar..."; }, 
+                                    noResults: function () { return "Sin resultados"; }, 
+                                    searching: function () { return "Buscando..."; } 
+                                } 
+                            });
                             });
                           </script>';
 
@@ -1839,7 +1847,7 @@
                           echo '</div>'; // .adop-footer-form
                           echo '</form>';
                        ?>
-	
+  
 </div>
 <script>var librosYaEnAdop = <?= json_encode($ids_exist_adop) ?>;</script>
 <script src="../vendors/scripts/core.js"></script>
@@ -1879,7 +1887,7 @@
           ],
         });
     });
-	//libros definicion
+  //libros definicion
 
     $('#gradod').on('change',function(){
         var valor = $(this).val();
@@ -2092,7 +2100,7 @@
         }else{
           
           for (i=0;i<document.f2.elements.length;i++)
-          	if(document.f2.elements[i].type == "checkbox")
+            if(document.f2.elements[i].type == "checkbox")
                 document.f2.elements[i].checked=0 
 
         }
@@ -2131,9 +2139,9 @@
                                         
     $('#total_vp_d').text(formatNumber.new(total_vp_d));
 
-    	total_uni_vr_d=0;
+      total_uni_vr_d=0;
 
-      	$('.uni_vr_d').each(function(){
+        $('.uni_vr_d').each(function(){
 
         total_uni_vr_d+=parseFloat($(this).val()) || 0;
 
@@ -2144,7 +2152,7 @@
 
     $('#total_vr').text(formatNumber.new(total_uni_vr_d));
 
-   	var cumplimiento=(total_uni_vr_d / total_vp_d) * 100;
+    var cumplimiento=(total_uni_vr_d / total_vp_d) * 100;
 
     // ── Actualizar tarjetas de resumen ────────────────────────
     $('#adop-card-vp').text($('#total_vp_d').text() || '—');

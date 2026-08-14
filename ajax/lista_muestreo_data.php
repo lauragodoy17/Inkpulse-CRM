@@ -44,7 +44,7 @@ if ($tp == 1) {
   $extra = [];
   $extra_params = [];
   if ($search_val !== '') {
-    $extra[] = "(c.colegio LIKE :s OR s.conse LIKE :s OR ca.cargo LIKE :s OR e.estado LIKE :s
+    $extra[] = "(s.id LIKE :s OR c.colegio LIKE :s OR s.conse LIKE :s OR ca.cargo LIKE :s OR e.estado LIKE :s
                  OR CONCAT(t.nombre,' ',t.apellido) LIKE :s OR CONCAT(u.nombres,' ',u.apellidos) LIKE :s)";
     $extra_params[':s'] = '%' . $search_val . '%';
   }
@@ -111,7 +111,7 @@ if ($tp == 1) {
   $having = [];
   $having_params = [];
   if ($search_val !== '') {
-    $having[] = "(c.colegio LIKE :s OR resp_calc LIKE :s OR empresa_calc LIKE :s OR cal.calendario LIKE :s)";
+    $having[] = "(p.id LIKE :s OR c.colegio LIKE :s OR resp_calc LIKE :s OR empresa_calc LIKE :s OR cal.calendario LIKE :s)";
     $having_params[':s'] = '%' . $search_val . '%';
   }
   if ($responsable !== '') {

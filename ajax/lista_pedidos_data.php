@@ -34,7 +34,7 @@ $records_total = intval($req->fetchColumn());
 $having = [];
 $having_params = [];
 if ($search_val !== '') {
-  $having[] = "(c.colegio LIKE :s OR resp_calc LIKE :s OR empresa_calc LIKE :s OR cal.calendario LIKE :s)";
+  $having[] = "(p.id LIKE :s OR c.colegio LIKE :s OR resp_calc LIKE :s OR empresa_calc LIKE :s OR cal.calendario LIKE :s)";
   $having_params[':s'] = '%' . $search_val . '%';
 }
 if ($responsable !== '') {

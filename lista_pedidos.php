@@ -138,7 +138,7 @@ sort($responsables_uniq);
       <div class="filter-toolbar">
         <div class="ft-search">
           <i class="bi bi-search ft-search-icon"></i>
-          <input type="text" id="lp-search" placeholder="Buscar por colegio, responsable, empresa...">
+          <input type="text" id="lp-search" placeholder="Buscar por # de pedido, colegio, responsable, empresa...">
         </div>
         <?php if (!empty($responsables_uniq)): ?>
         <select class="ft-select" id="lp-responsable">

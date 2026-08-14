@@ -155,7 +155,7 @@ if ($tp == 1) {
       <div class="filter-toolbar">
         <div class="ft-search">
           <i class="bi bi-search ft-search-icon"></i>
-          <input type="text" id="lm-search" placeholder="Buscar por colegio, responsable, empresa...">
+          <input type="text" id="lm-search" placeholder="Buscar por # de pedido, colegio, responsable, empresa...">
         </div>
         <?php if ($tp != 1 && !empty($responsables_uniq)): ?>
         <select class="ft-select" id="lm-responsable">

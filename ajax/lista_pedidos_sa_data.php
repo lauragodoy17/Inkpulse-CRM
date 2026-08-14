@@ -37,7 +37,7 @@ $records_total = intval($req->fetchColumn());
 $having = [];
 $having_params = [];
 if ($search_val !== '') {
-  $having[] = "(p.colegio LIKE :s OR CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) LIKE :s)";
+  $having[] = "(p.id LIKE :s OR p.colegio LIKE :s OR CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) LIKE :s)";
   $having_params[':s'] = '%' . $search_val . '%';
 }
 if ($fecha_desde !== '') {

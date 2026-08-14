@@ -132,7 +132,7 @@ $total = intval($req->fetchColumn());
       <div class="filter-toolbar">
         <div class="ft-search">
           <i class="bi bi-search ft-search-icon"></i>
-          <input type="text" id="lps-search" placeholder="Buscar por colegio o distribuidor...">
+          <input type="text" id="lps-search" placeholder="Buscar por # de pedido, colegio o distribuidor...">
         </div>
         <div class="ft-date-wrap">
           <span class="ft-date-label">Desde</span>
