@@ -163,7 +163,8 @@
   $sql = "SELECT e.estado, s.estado as idestado, s.id, s.fecha,
                  CONCAT(t.nombre, ' ', t.apellido) as solicitante,
                  ca.cargo, s.fecha_entrega, s.id_periodo,
-                 s.archivo, s.contab, s.conse, c.colegio, c.codigo
+                 s.archivo, s.contab, s.conse, c.colegio, c.codigo,
+                 s.distribucion_grupo_id, s.distribucion_anio_num, s.distribucion_total_anios
           FROM solicitudes_recursos s
           JOIN estados_pedidos e   ON e.id = s.estado
           JOIN colegios c          ON c.id = s.id_colegio
@@ -172,6 +173,16 @@
           WHERE s.id='".$_GET["id"]."'";
   $req = $bdd->prepare($sql); $req->execute();
   $solicitud = $req->fetch();
+
+  // ── Presupuesto reservado a futuro (solo en la solicitud raíz que se distribuyó en años) ──
+  $pendientes_futuro = [];
+  if (empty($solicitud["distribucion_grupo_id"]) && (int)$solicitud["distribucion_total_anios"] > 1) {
+    $sql_pend = "SELECT anio_objetivo, SUM(monto) as total FROM atenciones_pendientes_distribucion
+                 WHERE id_solicitud_origen=? AND materializado=0
+                 GROUP BY anio_objetivo ORDER BY anio_objetivo ASC";
+    $req_pend = $bdd->prepare($sql_pend); $req_pend->execute([$solicitud["id"]]);
+    $pendientes_futuro = $req_pend->fetchAll();
+  }
 
   $num = ($solicitud["id"] < 221) ? $solicitud["id"] : $solicitud["conse"];
 
@@ -257,6 +268,25 @@
       <p class="vs-info-val"><?= htmlspecialchars($solicitud["fecha_entrega"]) ?></p>
     </div>
   </div>
+
+  <?php if (!empty($pendientes_futuro)): ?>
+  <div style="margin-bottom:16px;padding:10px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;">
+    <span style="font-size:.83rem;font-weight:600;color:#1e40af;">
+      <i class="bi bi-hourglass-top" style="margin-right:6px"></i>
+      Presupuesto reservado a futuro (distribución en años):
+      <?php
+        $partes = [];
+        foreach ($pendientes_futuro as $p) {
+          $partes[] = $p['anio_objetivo'] . ': $ ' . number_format($p['total'], 0, ',', '.');
+        }
+        echo htmlspecialchars(implode(' · ', $partes));
+      ?>
+    </span>
+    <div style="font-size:.76rem;color:#3b82f6;margin-top:3px;">
+      Todavía no aparece en ningún reporte de atenciones — se activa solo cuando ese período exista.
+    </div>
+  </div>
+  <?php endif; ?>
 
   <!-- Áreas comprometidas -->
   <p class="vs-section-title"><i class="bi bi-grid-3x3-gap"></i> Áreas comprometidas</p>
@@ -476,7 +506,9 @@
         if ($tot_legaliza <= 0 && in_array((int)$solicitud['idestado'], [2, 4])) {
           $tot_legaliza = (float)array_sum($t_legaliza);
         }
-        $saldo_pendiente = max($tot_presup - $tot_legaliza, 0);
+        // Saldo por entregar = Presupuesto - Total entregado (no contra lo legalizado: lo
+        // legalizado ya tiene su propia tarjeta "Total legalizado" más abajo).
+        $saldo_pendiente = max($tot_presup - $tot_valor_e, 0);
         ?>
       </tbody>
       <tfoot>

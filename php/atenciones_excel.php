@@ -27,6 +27,13 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/materializar_atenciones_pendientes.php");
+
+// Si alguna solicitud distribuida en años (ver php/solicitud_recurso.php) tenía una cuota
+// pendiente justo para el período que se está reportando, y ese período ya existe (por eso se
+// puede seleccionar acá), se convierte ahora en una solicitud real antes de armar el reporte.
+materializar_atenciones_pendientes($bdd, (int)$_POST["periodo"]);
+
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
 $objSpreadsheet->getProperties()->setTitle("Reporte de cubrimiento");
@@ -114,9 +121,12 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("R6", "Valor adopción total");
 $objSpreadsheet->getActiveSheet()->SetCellValue("S6", "Venta real");
 $objSpreadsheet->getActiveSheet()->SetCellValue("T6", "Fecha y hora de registro");
 $objSpreadsheet->getActiveSheet()->SetCellValue("U6", "Descuento promedio");
+$objSpreadsheet->getActiveSheet()->SetCellValue("V6", "Porcentaje atención");
+$objSpreadsheet->getActiveSheet()->SetCellValue("W6", "Porcentaje gasto total");
+$objSpreadsheet->getActiveSheet()->SetCellValue("X6", "Falta por Legalizar");
 
 
-$objSpreadsheet->getActiveSheet()->getStyle('A6:U6')->applyFromArray([
+$objSpreadsheet->getActiveSheet()->getStyle('A6:X6')->applyFromArray([
     'fill' => [
         'fillType' => Fill::FILL_SOLID,
         'startColor' => [
@@ -334,12 +344,23 @@ foreach ($solicitudes as $solicitud) {
 
     $datos_cole     = $colegios_datos[$solicitud["cid"]] ?? ['presupuesto' => 0, 'adopcion' => 0, 'venta_real' => 0, 'descuento_promedio' => 0];
     $fmt_money      = '_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)';
+    // Porcentaje atención = columna K (Acumulado) sobre columna S (Venta real).
+    $val_venta_real_pct  = (float)$datos_cole['venta_real'];
+    $porcentaje_atencion = $val_venta_real_pct != 0 ? ((float)$total['total_e']) / $val_venta_real_pct : 0;
+    // Porcentaje gasto total = columna U (Descuento promedio) + columna V (Porcentaje atención).
+    $porcentaje_gasto_total = ((float)$datos_cole['descuento_promedio']) + $porcentaje_atencion;
     $entregas_traz  = $trazabilidad_map[$solicitud['id_recurso']]['entrega']       ?? [];
     $legalizaciones = $trazabilidad_map[$solicitud['id_recurso']]['legalizacion']  ?? [];
     $tot_legal_r    = array_sum(array_column($legalizaciones, 'valor'));
     if ($tot_legal_r == 0) {
         $tot_legal_r = (float)$solicitud["legaliza"];
     }
+    // Falta por legalizar = columna I (Valor) menos columna M (Valor recurso entregado, la suma
+    // de TODAS las entregas/cuotas que se hayan hecho). El valor de M en la rama con sub-filas es
+    // $tot_entrega_r (se calcula más abajo, después de recorrer las cuotas de entrega); por eso
+    // acá se deja el valor por defecto de la rama sin sub-filas y se recalcula dentro del bloque
+    // "if" una vez que $tot_entrega_r ya existe.
+    $falta_legalizar = max(((float)$solicitud["presupuesto"]) - ((float)$solicitud["valor_e"]), 0);
 
     if (!empty($entregas_traz) || !empty($legalizaciones)) {
       // Quitar I, K, M, O, P, Q, R, S de la fila principal (van al total)
@@ -403,6 +424,8 @@ foreach ($solicitudes as $solicitud) {
       $tot_entrega_r = !empty($entregas_traz)
         ? array_sum(array_column($entregas_traz, 'valor'))
         : (float)$solicitud["valor_e"];
+      // Falta por legalizar = columna I (Valor) menos el total real de entregas (todas las cuotas).
+      $falta_legalizar = max(((float)$solicitud["presupuesto"]) - $tot_entrega_r, 0);
 
       // Fila de total: negrita, con todos los valores numéricos
       $conta++;
@@ -426,6 +449,12 @@ foreach ($solicitudes as $solicitud) {
       $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", $datos_cole['venta_real']);
       $objSpreadsheet->getActiveSheet()->getStyle("U$conta")->getNumberFormat()->setFormatCode('0.00%');
       $objSpreadsheet->getActiveSheet()->SetCellValue("U$conta", $datos_cole['descuento_promedio']);
+      $objSpreadsheet->getActiveSheet()->getStyle("V$conta")->getNumberFormat()->setFormatCode('0.00%');
+      $objSpreadsheet->getActiveSheet()->SetCellValue("V$conta", $porcentaje_atencion);
+      $objSpreadsheet->getActiveSheet()->getStyle("W$conta")->getNumberFormat()->setFormatCode('0.00%');
+      $objSpreadsheet->getActiveSheet()->SetCellValue("W$conta", $porcentaje_gasto_total);
+      $objSpreadsheet->getActiveSheet()->getStyle("X$conta")->getNumberFormat()->setFormatCode($fmt_money);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("X$conta", $falta_legalizar);
 
     } else {
       // Sin sub-filas: todo en la fila principal
@@ -444,6 +473,12 @@ foreach ($solicitudes as $solicitud) {
       $objSpreadsheet->getActiveSheet()->SetCellValue("S$conta", $datos_cole['venta_real']);
       $objSpreadsheet->getActiveSheet()->getStyle("U$conta")->getNumberFormat()->setFormatCode('0.00%');
       $objSpreadsheet->getActiveSheet()->SetCellValue("U$conta", $datos_cole['descuento_promedio']);
+      $objSpreadsheet->getActiveSheet()->getStyle("V$conta")->getNumberFormat()->setFormatCode('0.00%');
+      $objSpreadsheet->getActiveSheet()->SetCellValue("V$conta", $porcentaje_atencion);
+      $objSpreadsheet->getActiveSheet()->getStyle("W$conta")->getNumberFormat()->setFormatCode('0.00%');
+      $objSpreadsheet->getActiveSheet()->SetCellValue("W$conta", $porcentaje_gasto_total);
+      $objSpreadsheet->getActiveSheet()->getStyle("X$conta")->getNumberFormat()->setFormatCode($fmt_money);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("X$conta", $falta_legalizar);
     }
 
 	$conta++;
@@ -514,7 +549,7 @@ if (isset($total_a)) {
     $objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$total_a");
 }
 
-foreach (range('A', 'U') as $columnID) {
+foreach (range('A', 'X') as $columnID) {
     $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);
 }
 

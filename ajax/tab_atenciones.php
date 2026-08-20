@@ -1,6 +1,12 @@
 <?php
   require_once("../php/aut.php");
   include("../conexion/bdd.php");
+  require_once("../includes/materializar_atenciones_pendientes.php");
+
+  // Si alguna solicitud distribuida en años (ver php/solicitud_recurso.php) tenía una cuota
+  // pendiente para este período, y el período ya existe (por eso se está viendo este tab), se
+  // convierte ahora en una solicitud real — sin costo si no hay nada pendiente.
+  materializar_atenciones_pendientes($bdd, (int)$_GET['periodo']);
 
   // ── Métricas para las tarjetas ──────────────────────────────
   $sql_total = "SELECT SUM(r.valor_e) as total FROM solicitudes_recursos s
@@ -364,7 +370,7 @@
           <div class="at-section">
             <p class="at-section-title"><i class="bi bi-person-badge"></i> Solicitante</p>
             <div class="row">
-              <div class="form-group col-sm-6 col-12">
+              <div class="form-group col-sm-5 col-12">
                 <label for="solicitante">Solicitante del colegio <span class="at-req">*</span></label>
                 <select name="solicitante" id="solicitante" class="form-control" required>
                   <option value="">Seleccionar persona...</option>
@@ -380,11 +386,27 @@
                 <label for="fecha_entrega">Fecha de entrega <span class="at-req">*</span></label>
                 <input type="date" class="form-control" name="fecha_entrega" id="fecha_entrega" required>
               </div>
-              <div class="form-group col-sm-3 col-6">
+              <div class="form-group col-sm-2 col-6">
                 <label for="reintegro">Reintegro</label>
                 <input type="text" class="form-control" name="reintegro" id="reintegro" autocomplete="off" placeholder="Opcional">
               </div>
+              <div class="form-group col-sm-2 col-6">
+                <label for="distribucion_anios">Distribución en años <span class="at-req">*</span></label>
+                <select name="distribucion_anios" id="distribucion_anios" class="form-control" required>
+                  <option value="1" selected>1 año</option>
+                  <option value="2">2 años</option>
+                  <option value="3">3 años</option>
+                  <option value="4">4 años</option>
+                </select>
+              </div>
             </div>
+            <p style="font-size:11.5px;color:#6b7280;margin:8px 0 0;">
+              <i class="bi bi-info-circle"></i>
+              Si eliges más de 1 año, el presupuesto de cada recurso solicitado se reparte en partes iguales
+              entre este período y los siguientes años del mismo calendario. Los años futuros quedan
+              reservados y aparecen solos en su reporte de atenciones cuando ese período llegue a existir
+              (no hace falta crearlo de antemano).
+            </p>
           </div>
 
           <!-- Áreas comprometidas -->
