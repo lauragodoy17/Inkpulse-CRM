@@ -1753,7 +1753,7 @@
                                 dropdownParent: $("#adopciones"), 
                                 minimumInputLength: 2, 
                                 ajax: { 
-                                    url: "ajax/buscar_clientes.php", 
+                                    url: "ajax/buscar_clientes_adop.php", 
                                     dataType: "json", 
                                     delay: 300, 
                                     data: function (params) { 
