@@ -17,7 +17,7 @@ $pedido_base = $req_pedido->fetch();
 
 // Full data
 if ($tipo == 1) {
-    $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.archivo,pe.codigo,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado JOIN clientes c ON pe.persona=c.id WHERE pe.id='".$pedido_base["id"]."'";
+    $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.archivo,pe.codigo,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado LEFT JOIN clientes c ON pe.persona=c.id WHERE pe.id='".$pedido_base["id"]."'";
 } else {
     $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.archivo,pe.codigo,u.nombres, u.apellidos, e.id as eid,e.estado, c.proveedor as cliente, c.id as cid FROM devoluciones_prov pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado JOIN proveedores c ON pe.persona=c.id WHERE pe.id='".$pedido_base["id"]."'";
 }
@@ -289,7 +289,7 @@ if (isset($n_op['estado']) && $n_op['estado'] == 2) {
           <div class="mc-card-icon green"><i class="bi bi-person-lines-fill"></i></div>
           <div>
             <p class="mc-card-label"><?= $tipo_lbl ?></p>
-            <p class="mc-card-val"><?= htmlspecialchars($pedido['cliente']) ?></p>
+            <p class="mc-card-val"><?= htmlspecialchars($pedido['cliente'] ?? '—') ?></p>
           </div>
         </div>
         <div class="mc-card">
