@@ -128,32 +128,19 @@
           </div>
           <div class="sm-section-body">
             <div class="row">
-              <?php if ($_GET['tp'] != 2): ?>
-              <div class="col-md-5 col-12 mb-3">
-                <label class="control-label">Cliente <small style="color:red;">*</small></label>
-                <select class="form-control custom-select2" name="cliente" id="cliente" style="width:100%;" required>
-                  <option value="">Seleccionar</option>
-                  <?php
-                    $sql = "SELECT * FROM clientes";
-                    $req = $bdd->prepare($sql); $req->execute();
-                    foreach ($req->fetchAll() as $c)
-                      echo '<option value="'.$c["id"].'">'.$c["cliente"].'</option>';
-                  ?>
-                </select>
-              </div>
-              <?php else: ?>
-              <div class="col-md-5 col-12 mb-3">
-                <label class="control-label">Proveedor <small style="color:red;">*</small></label>
-                <select class="form-control custom-select2" name="persona" id="persona" style="width:100%;" required>
-                  <option value="">Seleccionar</option>
-                  <?php
-                    $sql = "SELECT * FROM proveedores";
-                    $req = $bdd->prepare($sql); $req->execute();
-                    foreach ($req->fetchAll() as $c)
-                      echo '<option value="'.$c["id"].'">'.$c["proveedor"].'</option>';
-                  ?>
-                </select>
-              </div>
+              <?php if ($_GET['tp'] == 2): ?>
+                <div class="col-md-5 col-12 mb-3">
+                  <label class="control-label">Proveedor <small style="color:red;">*</small></label>
+                  <select class="form-control custom-select2" name="persona" id="persona" style="width:100%;" required>
+                    <option value="">Seleccionar</option>
+                    <?php
+                      $sql = "SELECT * FROM proveedores";
+                      $req = $bdd->prepare($sql); $req->execute();
+                      foreach ($req->fetchAll() as $c)
+                        echo '<option value="'.$c["id"].'">'.$c["proveedor"].'</option>';
+                    ?>
+                  </select>
+                </div>
               <?php endif; ?>
 
               <?php if ($_SESSION["tipo"] == 1 || $_SESSION["tipo"] == 2): ?>

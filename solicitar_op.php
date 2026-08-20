@@ -38,6 +38,54 @@ if (isset($_GET['id_muestreo'])) {
   $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
   $pedido = $req_pedido->fetch();
 
+  
+}
+if (isset($_GET['id_devol_c'])) {
+  $sql_pedido = "SELECT pe.fecha,pe.observaciones, c.cliente
+                 FROM devoluciones pe JOIN clientes c ON pe.persona=c.id
+                 WHERE pe.id='".$_GET['id_devol_c']."'";
+  $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
+  $pedido = $req_pedido->fetch();
+}
+if (isset($_GET['id_devol_p'])) {
+  $sql_pedido = "SELECT pe.fecha, pe.observaciones, p.proveedor AS cliente
+                 FROM devoluciones_prov pe JOIN proveedores p ON pe.persona = p.id
+                 WHERE pe.id='".$_GET['id_devol_p']."'";
+  $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
+  $pedido = $req_pedido->fetch();
+}
+if (isset($_GET['id_devol_v'])) {
+  $sql_pedido = "SELECT pe.fecha,pe.observaciones, c.cliente
+                 FROM devoluciones_v pe JOIN clientes c ON pe.cliente=c.id
+                 WHERE pe.id='".$_GET['id_devol_v']."'";
+  $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
+  $pedido = $req_pedido->fetch();
+}
+if (isset($_POST['pedidos_agp'])) {
+  foreach ($_POST['pedidos_agp'] as $pedido_agp) {
+    $sql_pedido = "SELECT pe.id_colegio, pe.id_periodo, u.nombres, u.apellidos, z.zona
+                   FROM pedidos pe JOIN colegios c ON pe.id_colegio=c.id
+                   JOIN zonas z ON z.codigo=c.cod_zona
+                   JOIN usuarios u ON u.cod_zona=z.codigo
+                   WHERE pe.id='".$pedido_agp."'";
+    $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
+    $pedido = $req_pedido->fetch();
+    break;
+  }
+  // Igual que en el caso de un solo pedido: el cliente se toma de Adopciones (recursos),
+  // no del guardado en el pedido, usando el colegio/período del primer pedido del grupo.
+  $cliente_predet = '';
+  if ($pedido && !empty($pedido['id_colegio']) && !empty($pedido['id_periodo'])) {
+    $req_rec_cli = $bdd->prepare("SELECT cliente FROM recursos WHERE id_colegio=:id_colegio AND id_periodo=:id_periodo");
+    $req_rec_cli->execute([':id_colegio' => $pedido['id_colegio'], ':id_periodo' => $pedido['id_periodo']]);
+    $rec_cli = $req_rec_cli->fetch();
+    if ($rec_cli && !empty($rec_cli['cliente'])) $cliente_predet = $rec_cli['cliente'];
+  }
+}
+
+
+if (isset($_GET['id_muestreo']) || isset($_GET['id_devol_c'])) {
+  
   // El cliente de muestras no está ligado al colegio ni a sus ventas: es una
   // cuenta por promotor y por temporada, con el patrón "AA{año}-{PROMOTOR} - MUESTRAS"
   // (ej. "AA27- JAIRO RICO - MUESTRA" para la temporada 2027). Se busca la cuenta
@@ -107,49 +155,10 @@ if (isset($_GET['id_muestreo'])) {
       if ($c3) $cliente_predet = $c3['id'];
     }
   }
+
+
 }
-if (isset($_GET['id_devol_c'])) {
-  $sql_pedido = "SELECT pe.fecha,pe.observaciones, c.cliente
-                 FROM devoluciones pe JOIN clientes c ON pe.persona=c.id
-                 WHERE pe.id='".$_GET['id_devol_c']."'";
-  $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
-  $pedido = $req_pedido->fetch();
-}
-if (isset($_GET['id_devol_p'])) {
-  $sql_pedido = "SELECT pe.fecha, pe.observaciones, p.proveedor AS cliente
-                 FROM devoluciones_prov pe JOIN proveedores p ON pe.persona = p.id
-                 WHERE pe.id='".$_GET['id_devol_p']."'";
-  $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
-  $pedido = $req_pedido->fetch();
-}
-if (isset($_GET['id_devol_v'])) {
-  $sql_pedido = "SELECT pe.fecha,pe.observaciones, c.cliente
-                 FROM devoluciones_v pe JOIN clientes c ON pe.cliente=c.id
-                 WHERE pe.id='".$_GET['id_devol_v']."'";
-  $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
-  $pedido = $req_pedido->fetch();
-}
-if (isset($_POST['pedidos_agp'])) {
-  foreach ($_POST['pedidos_agp'] as $pedido_agp) {
-    $sql_pedido = "SELECT pe.id_colegio, pe.id_periodo, u.nombres, u.apellidos, z.zona
-                   FROM pedidos pe JOIN colegios c ON pe.id_colegio=c.id
-                   JOIN zonas z ON z.codigo=c.cod_zona
-                   JOIN usuarios u ON u.cod_zona=z.codigo
-                   WHERE pe.id='".$pedido_agp."'";
-    $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
-    $pedido = $req_pedido->fetch();
-    break;
-  }
-  // Igual que en el caso de un solo pedido: el cliente se toma de Adopciones (recursos),
-  // no del guardado en el pedido, usando el colegio/período del primer pedido del grupo.
-  $cliente_predet = '';
-  if ($pedido && !empty($pedido['id_colegio']) && !empty($pedido['id_periodo'])) {
-    $req_rec_cli = $bdd->prepare("SELECT cliente FROM recursos WHERE id_colegio=:id_colegio AND id_periodo=:id_periodo");
-    $req_rec_cli->execute([':id_colegio' => $pedido['id_colegio'], ':id_periodo' => $pedido['id_periodo']]);
-    $rec_cli = $req_rec_cli->fetch();
-    if ($rec_cli && !empty($rec_cli['cliente'])) $cliente_predet = $rec_cli['cliente'];
-  }
-}
+
 
 $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
              && !isset($_GET['id_devol_c'])  && !isset($_GET['id_devol_p'])
@@ -780,4 +789,3 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
 
 </body>
 </html>
-

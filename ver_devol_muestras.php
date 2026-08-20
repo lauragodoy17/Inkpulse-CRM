@@ -7,7 +7,7 @@ if ($_SESSION["tipo"] == 1 || $_SESSION["tipo"] == 2) {
           FROM devoluciones p
           JOIN usuarios u ON u.id=p.id_usuario
           JOIN estados_pedidos e ON e.id=p.estado
-          JOIN clientes c ON c.id=p.persona
+          LEFT JOIN clientes c ON c.id=p.persona
           WHERE p.tipo='1'";
 } else {
   $sql = "SELECT p.id, p.tipo, u.nombres, u.apellidos, p.fecha, e.estado, c.cliente
@@ -34,7 +34,7 @@ sort($estados_uniq);
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Inkpulse - Devolución</title>
+  <title>Inkpulse - Devolución</title> 
   <link rel="apple-touch-icon" sizes="180x180" href="vendors/images/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="vendors/images/favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="vendors/images/favicon-16x16.png" />
@@ -163,7 +163,6 @@ sort($estados_uniq);
                 <th>#</th>
                 <th>Fecha</th>
                 <th>Usuario</th>
-                <th>Cliente</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
@@ -186,7 +185,6 @@ sort($estados_uniq);
                 <td><?= $p['id'] ?></td>
                 <td><?= $fecha_d ?></td>
                 <td><?= $promotor ?></td>
-                <td><?= htmlspecialchars($p['cliente']) ?></td>
                 <td><span class="estado-badge <?= $est_cls ?>"><?= htmlspecialchars($p['estado']) ?></span></td>
                 <td>
                   <a href="vista_devol.php?id_devol=<?= $p['id'] ?>&tipo=<?= $p['tipo'] ?>" class="lm-btn-ver">
