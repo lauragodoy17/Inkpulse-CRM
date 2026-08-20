@@ -124,9 +124,11 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("U6", "Descuento promedio");
 $objSpreadsheet->getActiveSheet()->SetCellValue("V6", "Porcentaje atención");
 $objSpreadsheet->getActiveSheet()->SetCellValue("W6", "Porcentaje gasto total");
 $objSpreadsheet->getActiveSheet()->SetCellValue("X6", "Falta por Legalizar");
+$objSpreadsheet->getActiveSheet()->SetCellValue("Y6", "Valor total solicitado");
+$objSpreadsheet->getActiveSheet()->SetCellValue("Z6", "Fraccionado por año");
 
 
-$objSpreadsheet->getActiveSheet()->getStyle('A6:X6')->applyFromArray([
+$objSpreadsheet->getActiveSheet()->getStyle('A6:Z6')->applyFromArray([
     'fill' => [
         'fillType' => Fill::FILL_SOLID,
         'startColor' => [
@@ -137,11 +139,11 @@ $objSpreadsheet->getActiveSheet()->getStyle('A6:X6')->applyFromArray([
 
 if ($_POST['promotor']==0) {
 
-	$sql="SELECT s.id,e.estado,s.fecha, s.solicitante, s.estado as idestado, s.contab, s.conse, c.colegio, c.cod_zona, c.id as cid, r.id as id_recurso, r.recurso, t.tipo, cat.categoria, r.presupuesto, r.tipo_e, r.valor_e, r.fecha_e, r.legaliza, CONCAT(u.nombres,' ', u.apellidos) AS promotor FROM solicitudes_recursos s JOIN estados_pedidos e ON e.id=s.estado JOIN colegios c ON c.id=s.id_colegio JOIN recursos_solicitados r ON r.id_solicitud=s.id JOIN tipos_recursos t ON t.id=r.tipo JOIN categoria_recursos cat ON cat.id=r.categoria JOIN usuarios u ON u.id=s.usuario WHERE s.id_periodo='".$_POST["periodo"]."' ORDER BY s.id DESC";
+	$sql="SELECT s.id,e.estado,s.fecha, s.solicitante, s.estado as idestado, s.contab, s.conse, s.distribucion_grupo_id, s.distribucion_total_anios, c.colegio, c.cod_zona, c.id as cid, r.id as id_recurso, r.recurso, t.tipo, cat.categoria, r.presupuesto, r.tipo_e, r.valor_e, r.fecha_e, r.legaliza, CONCAT(u.nombres,' ', u.apellidos) AS promotor FROM solicitudes_recursos s JOIN estados_pedidos e ON e.id=s.estado JOIN colegios c ON c.id=s.id_colegio JOIN recursos_solicitados r ON r.id_solicitud=s.id JOIN tipos_recursos t ON t.id=r.tipo JOIN categoria_recursos cat ON cat.id=r.categoria JOIN usuarios u ON u.id=s.usuario WHERE s.id_periodo='".$_POST["periodo"]."' ORDER BY s.id DESC";
 
 }else{
 
-    $sql="SELECT s.id,e.estado,s.fecha, s.solicitante, s.estado as idestado, s.contab, s.conse, c.colegio, c.cod_zona, c.id as cid, r.id as id_recurso, r.recurso, t.tipo, cat.categoria, r.presupuesto, r.tipo_e, r.valor_e, r.fecha_e, r.legaliza, CONCAT(u.nombres,' ', u.apellidos) AS promotor FROM solicitudes_recursos s JOIN estados_pedidos e ON e.id=s.estado JOIN colegios c ON c.id=s.id_colegio JOIN recursos_solicitados r ON r.id_solicitud=s.id JOIN tipos_recursos t ON t.id=r.tipo JOIN categoria_recursos cat ON cat.id=r.categoria JOIN usuarios u ON u.cod_zona=c.cod_zona WHERE s.id_periodo='".$_POST["periodo"]."' AND u.id='".$_POST["promotor"]."' ORDER BY `s`.`id` DESC";
+    $sql="SELECT s.id,e.estado,s.fecha, s.solicitante, s.estado as idestado, s.contab, s.conse, s.distribucion_grupo_id, s.distribucion_total_anios, c.colegio, c.cod_zona, c.id as cid, r.id as id_recurso, r.recurso, t.tipo, cat.categoria, r.presupuesto, r.tipo_e, r.valor_e, r.fecha_e, r.legaliza, CONCAT(u.nombres,' ', u.apellidos) AS promotor FROM solicitudes_recursos s JOIN estados_pedidos e ON e.id=s.estado JOIN colegios c ON c.id=s.id_colegio JOIN recursos_solicitados r ON r.id_solicitud=s.id JOIN tipos_recursos t ON t.id=r.tipo JOIN categoria_recursos cat ON cat.id=r.categoria JOIN usuarios u ON u.cod_zona=c.cod_zona WHERE s.id_periodo='".$_POST["periodo"]."' AND u.id='".$_POST["promotor"]."' ORDER BY `s`.`id` DESC";
 
 
 }
@@ -281,6 +283,76 @@ if (!empty($unique_cids)) {
     }
 }
 
+// ── Distribución en años: valor total solicitado + fraccionamiento por año ──────────
+// La "raíz" de una distribución es la solicitud del año 1 (distribucion_grupo_id NULL,
+// distribucion_total_anios>1); una cuota ya materializada de un año siguiente apunta a esa
+// raíz vía distribucion_grupo_id (ver php/solicitud_recurso.php e
+// includes/materializar_atenciones_pendientes.php). Para mostrar el valor total y el
+// fraccionamiento completo hay que sumar 3 fuentes: la solicitud raíz, cualquier cuota ya
+// materializada (ambas son solicitudes_recursos reales, posiblemente en otros períodos) y las
+// cuotas de años futuros que aún no existen como solicitud (atenciones_pendientes_distribucion).
+$root_ids_dist = [];
+foreach ($solicitudes as $s) {
+    $es_dist = !empty($s['distribucion_grupo_id']) || ((int)($s['distribucion_total_anios'] ?? 0) > 1);
+    if ($es_dist) {
+        $root_ids_dist[] = !empty($s['distribucion_grupo_id']) ? (int)$s['distribucion_grupo_id'] : (int)$s['id'];
+    }
+}
+$root_ids_dist = array_values(array_unique($root_ids_dist));
+
+$dist_total_map    = []; // root_id => valor total (todos los años)
+$dist_por_anio_map = []; // root_id => [anio => monto]
+
+if (!empty($root_ids_dist)) {
+    $ph_r = implode(',', array_fill(0, count($root_ids_dist), '?'));
+
+    // Año 1 (raíz) + cuotas ya materializadas: solicitudes reales, cada una con su propio período.
+    $req_fam = $bdd->prepare("SELECT sr.id, sr.id_periodo, sr.distribucion_grupo_id, r.presupuesto
+        FROM solicitudes_recursos sr JOIN recursos_solicitados r ON r.id_solicitud=sr.id
+        WHERE sr.id IN ($ph_r) OR sr.distribucion_grupo_id IN ($ph_r)");
+    $req_fam->execute(array_merge($root_ids_dist, $root_ids_dist));
+    $fam_rows = $req_fam->fetchAll(PDO::FETCH_ASSOC);
+
+    $periodo_ids_fam  = array_values(array_unique(array_column($fam_rows, 'id_periodo')));
+    $anio_periodo_map = [];
+    if (!empty($periodo_ids_fam)) {
+        $ph_p = implode(',', array_fill(0, count($periodo_ids_fam), '?'));
+        $req_per = $bdd->prepare("SELECT id, periodo FROM periodos WHERE id IN ($ph_p)");
+        $req_per->execute($periodo_ids_fam);
+        foreach ($req_per->fetchAll(PDO::FETCH_ASSOC) as $row)
+            $anio_periodo_map[$row['id']] = anio_de_periodo($row['periodo']);
+    }
+
+    foreach ($fam_rows as $row) {
+        $root_id = !empty($row['distribucion_grupo_id']) ? (int)$row['distribucion_grupo_id'] : (int)$row['id'];
+        $anio    = $anio_periodo_map[$row['id_periodo']] ?? null;
+        $monto   = (float)$row['presupuesto'];
+        $dist_total_map[$root_id] = ($dist_total_map[$root_id] ?? 0) + $monto;
+        if ($anio !== null) {
+            $dist_por_anio_map[$root_id][$anio] = ($dist_por_anio_map[$root_id][$anio] ?? 0) + $monto;
+        }
+    }
+
+    // Cuotas de años siguientes que aún no existen como solicitud real.
+    $req_pend = $bdd->prepare("SELECT id_solicitud_origen, anio_objetivo, SUM(monto) as total
+        FROM atenciones_pendientes_distribucion
+        WHERE id_solicitud_origen IN ($ph_r) AND materializado=0
+        GROUP BY id_solicitud_origen, anio_objetivo");
+    $req_pend->execute($root_ids_dist);
+    foreach ($req_pend->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $root_id = (int)$row['id_solicitud_origen'];
+        $anio    = (int)$row['anio_objetivo'];
+        $monto   = (float)$row['total'];
+        $dist_total_map[$root_id] = ($dist_total_map[$root_id] ?? 0) + $monto;
+        $dist_por_anio_map[$root_id][$anio] = ($dist_por_anio_map[$root_id][$anio] ?? 0) + $monto;
+    }
+
+    foreach ($dist_por_anio_map as $rid => $por_anio) {
+        ksort($dist_por_anio_map[$rid]);
+    }
+}
+// --------------------------------------------------------------
+
 $conta=7;
 
 foreach ($solicitudes as $solicitud) {
@@ -361,6 +433,20 @@ foreach ($solicitudes as $solicitud) {
     // acá se deja el valor por defecto de la rama sin sub-filas y se recalcula dentro del bloque
     // "if" una vez que $tot_entrega_r ya existe.
     $falta_legalizar = max(((float)$solicitud["presupuesto"]) - ((float)$solicitud["valor_e"]), 0);
+
+    // Distribución en años: valor total (todos los años) + fraccionamiento, solo para
+    // solicitudes que son raíz o cuota materializada de una distribución (ver precálculo arriba).
+    $es_dist_row = !empty($solicitud['distribucion_grupo_id']) || ((int)($solicitud['distribucion_total_anios'] ?? 0) > 1);
+    $root_id_row = !empty($solicitud['distribucion_grupo_id']) ? (int)$solicitud['distribucion_grupo_id'] : (int)$solicitud['id'];
+    $valor_total_dist = ($es_dist_row && isset($dist_total_map[$root_id_row])) ? $dist_total_map[$root_id_row] : null;
+    $fraccion_dist = '';
+    if ($es_dist_row && !empty($dist_por_anio_map[$root_id_row])) {
+        $partes_dist = [];
+        foreach ($dist_por_anio_map[$root_id_row] as $anio_dist => $monto_dist) {
+            $partes_dist[] = $anio_dist . ': $' . number_format($monto_dist, 0, ',', '.');
+        }
+        $fraccion_dist = implode(' · ', $partes_dist);
+    }
 
     if (!empty($entregas_traz) || !empty($legalizaciones)) {
       // Quitar I, K, M, O, P, Q, R, S de la fila principal (van al total)
@@ -455,6 +541,11 @@ foreach ($solicitudes as $solicitud) {
       $objSpreadsheet->getActiveSheet()->SetCellValue("W$conta", $porcentaje_gasto_total);
       $objSpreadsheet->getActiveSheet()->getStyle("X$conta")->getNumberFormat()->setFormatCode($fmt_money);
       $objSpreadsheet->getActiveSheet()->SetCellValue("X$conta", $falta_legalizar);
+      if ($valor_total_dist !== null) {
+        $objSpreadsheet->getActiveSheet()->getStyle("Y$conta")->getNumberFormat()->setFormatCode($fmt_money);
+        $objSpreadsheet->getActiveSheet()->SetCellValue("Y$conta", $valor_total_dist);
+        $objSpreadsheet->getActiveSheet()->SetCellValue("Z$conta", $fraccion_dist);
+      }
 
     } else {
       // Sin sub-filas: todo en la fila principal
@@ -479,6 +570,11 @@ foreach ($solicitudes as $solicitud) {
       $objSpreadsheet->getActiveSheet()->SetCellValue("W$conta", $porcentaje_gasto_total);
       $objSpreadsheet->getActiveSheet()->getStyle("X$conta")->getNumberFormat()->setFormatCode($fmt_money);
       $objSpreadsheet->getActiveSheet()->SetCellValue("X$conta", $falta_legalizar);
+      if ($valor_total_dist !== null) {
+        $objSpreadsheet->getActiveSheet()->getStyle("Y$conta")->getNumberFormat()->setFormatCode($fmt_money);
+        $objSpreadsheet->getActiveSheet()->SetCellValue("Y$conta", $valor_total_dist);
+        $objSpreadsheet->getActiveSheet()->SetCellValue("Z$conta", $fraccion_dist);
+      }
     }
 
 	$conta++;
@@ -549,7 +645,7 @@ if (isset($total_a)) {
     $objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$total_a");
 }
 
-foreach (range('A', 'X') as $columnID) {
+foreach (range('A', 'Z') as $columnID) {
     $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);
 }
 
