@@ -23,7 +23,7 @@ $ac_map = [
 $ac = $ac_map[$tp] ?? ['hdr' => '#374151', 'even' => '#f8fafc', 'hover' => '#f1f5f9', 'accent' => '#6b7280'];
 
 if ($tp == 1) {
-  $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
+  $sql = "SELECT e.estado, s.id, s.id_periodo, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
           c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
@@ -35,7 +35,7 @@ if ($tp == 1) {
           JOIN usuarios u ON u.id=s.usuario
           ORDER BY s.id DESC";
 } elseif ($tp == 2) {
-  $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
+  $sql = "SELECT e.estado, s.id, s.id_periodo, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
           c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
@@ -47,7 +47,7 @@ if ($tp == 1) {
           JOIN usuarios u ON u.id=s.usuario
           WHERE s.estado=1 ORDER BY s.id DESC";
 } elseif ($tp == 3) {
-  $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
+  $sql = "SELECT e.estado, s.id, s.id_periodo, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
           c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
@@ -59,7 +59,7 @@ if ($tp == 1) {
           JOIN usuarios u ON u.id=s.usuario
           WHERE s.estado=2 ORDER BY s.id DESC";
 } elseif ($tp == 4) {
-  $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
+  $sql = "SELECT e.estado, s.id, s.id_periodo, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
           c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
@@ -71,7 +71,7 @@ if ($tp == 1) {
           JOIN usuarios u ON u.id=s.usuario
           WHERE s.estado=4 ORDER BY s.id DESC";
 } elseif ($tp == 5) {
-  $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
+  $sql = "SELECT e.estado, s.id, s.id_periodo, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
           c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
@@ -83,7 +83,7 @@ if ($tp == 1) {
           JOIN usuarios u ON u.id=s.usuario
           WHERE s.estado=3 ORDER BY s.id DESC";
 } else {
-  $sql = "SELECT e.estado, s.id, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
+  $sql = "SELECT e.estado, s.id, s.id_periodo, s.fecha, CONCAT(t.nombre,' ',t.apellido) as solicitante, ca.cargo,
           s.fecha_entrega, s.conse, s.contab, s.archivo,
           (SELECT SUM(r.legaliza) FROM recursos_solicitados r WHERE r.id_solicitud = s.id) as total_legaliza,
           c.colegio, CONCAT(u.nombres,' ',u.apellidos) as promotor, s.estado as id_estado
@@ -341,10 +341,20 @@ sort($estados_uniq);
                   default => 'la-badge-gray',
                 };
                 $fecha_raw = substr($s['fecha'], 0, 10);
+
+                $sql_periodo = "SELECT periodo, SUBSTRING(periodo, 3, 2) AS anio_corto
+                  FROM periodos
+                  WHERE id = '".$s['id_periodo']."'";
+
+                $req_periodo = $bdd->prepare($sql_periodo);
+                $req_periodo->execute();
+                $gp_periodo = $req_periodo->fetch();
+
+                $soli_conse=$gp_periodo["anio_corto"]." - ".$s["conse"];
               ?>
               <?php $fila_legal = ($legal_badge !== null) ? '1' : '0'; ?>
               <tr data-fecha="<?= $fecha_raw ?>" data-promotor="<?= htmlspecialchars($s['promotor']) ?>" data-estado="<?= htmlspecialchars($s['estado']) ?>" data-legal="<?= $fila_legal ?>">
-                <td><a href="vista_solicitud.php?id=<?= $s['id'] ?>" class="la-link vista_soli"><?= htmlspecialchars($s['conse']) ?></a></td>
+                <td><a href="vista_solicitud.php?id=<?= $s['id'] ?>" class="la-link vista_soli"><?= htmlspecialchars($soli_conse) ?></a></td>
                 <td><?= htmlspecialchars($s['fecha']) ?></td>
                 <td><?= htmlspecialchars($s['promotor']) ?></td>
                 <td><?= htmlspecialchars($s['colegio']) ?></td>

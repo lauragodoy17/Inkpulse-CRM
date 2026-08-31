@@ -184,7 +184,17 @@
     $pendientes_futuro = $req_pend->fetchAll();
   }
 
-  $num = ($solicitud["id"] < 221) ? $solicitud["id"] : $solicitud["conse"];
+
+  $sql_periodo = "SELECT periodo, SUBSTRING(periodo, 3, 2) AS anio_corto
+      FROM periodos
+      WHERE id = '".$solicitud['id_periodo']."'";
+
+  $req_periodo = $bdd->prepare($sql_periodo);
+  $req_periodo->execute();
+  $gp_periodo = $req_periodo->fetch();
+
+  $soli_conse=$gp_periodo["anio_corto"]." - ".$solicitud["conse"];
+
 
   // Badge estado
   $estado_lower = strtolower($solicitud["estado"]);
@@ -240,7 +250,7 @@
 
   <!-- Encabezado -->
   <div class="vs-header">
-    <p class="vs-num"><i class="bi bi-file-earmark-text" style="color:#6366f1;margin-right:6px"></i>Solicitud #<?= htmlspecialchars($num) ?></p>
+    <p class="vs-num"><i class="bi bi-file-earmark-text" style="color:#6366f1;margin-right:6px"></i>Solicitud #<?= htmlspecialchars($soli_conse) ?></p>
     <span class="vs-badge <?= $badge ?>"><?= htmlspecialchars($solicitud["estado"]) ?></span>
     <?php if ($legal_estado === 'proceso'): ?>
       <span class="vs-badge en-proceso"><i class="bi bi-hourglass-split" style="margin-right:4px"></i>En proceso de legalización</span>

@@ -341,7 +341,6 @@ $es_admin = $tipo_sesion === 1;
     if (actual && unicos.indexOf(actual) !== -1) $select.val(actual);
   }
 
-  var colegiosParaAsignar = [];
   var periodoInicializado = false;
 
   function actualizarEnlaceExcel() {
@@ -372,23 +371,18 @@ $es_admin = $tipo_sesion === 1;
       var filas = resp.filas || [];
       poblarFiltro($('#filtro-empresa').data('todos', 'Todas'), filas.map(function (f) { return f.empresa; }));
       poblarFiltro($('#filtro-cliente').data('todos', 'Todos'), filas.map(function (f) { return f.cliente; }));
-      colegiosParaAsignar = filas.map(function (f) { return { id: f.id_colegio, colegio: f.colegio }; })
-        .sort(function (a, b) { return a.colegio.localeCompare(b.colegio, 'es'); });
 
       var $panel = $('#panel-sin-cruzar');
       var $lista = $('#lista-sin-cruzar');
       var sinCruzar = resp.sinCruzar || [];
       if (sinCruzar.length) {
-        var opcionesColegio = '<option value="">Seleccionar colegio...</option>' + colegiosParaAsignar.map(function (c) {
-          return '<option value="' + c.id + '">' + h(c.colegio) + '</option>';
-        }).join('');
         $lista.html(sinCruzar.map(function (d) {
           return '<div class="col-sincruzar-item" data-id-wo="' + h(d.id_wo) + '">' +
             '<strong>' + h(d.tipo_documento) + ' ' + h(d.numero) + '</strong> — ' + h(d.fecha) +
             '<div class="concepto">' + h(d.concepto) + '</div>' +
             (esAdmin ? (
               '<div class="col-sincruzar-asignar">' +
-              '<select class="sincruzar-select">' + opcionesColegio + '</select>' +
+              '<select class="sincruzar-select"><option></option></select>' +
               '<button type="button" class="btn-asignar">Asignar</button>' +
               '<span class="resultado"></span>' +
               '</div>'
@@ -397,11 +391,25 @@ $es_admin = $tipo_sesion === 1;
         }).join(''));
         $panel.show();
         if (esAdmin) {
+          // Búsqueda por AJAX en vez de precargar los ~3.840 colegios del sistema en cada uno de
+          // los (potencialmente miles de) <select> del panel — eso colgaba el navegador
+          // (12M+ <option> en el DOM con documentos sin cruzar del orden de 3.000).
           $('.sincruzar-select').select2({
-            placeholder: 'Selecciona o escribe un colegio...',
+            placeholder: 'Escribe para buscar un colegio...',
             allowClear: true,
             width: '100%',
+            minimumInputLength: 2,
+            ajax: {
+              url: 'php/colocacion_buscar_colegio.php',
+              dataType: 'json',
+              delay: 250,
+              data: function (params) { return { q: params.term }; },
+              processResults: function (data) {
+                return { results: (data || []).map(function (c) { return { id: c.id, text: c.colegio }; }) };
+              }
+            },
             language: {
+              inputTooShort: function () { return 'Escribe al menos 2 letras...'; },
               noResults: function () { return 'Sin resultados'; },
               searching: function () { return 'Buscando...'; }
             }

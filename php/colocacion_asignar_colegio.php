@@ -1,10 +1,14 @@
 <?php
 /**
  * /php/colocacion_asignar_colegio.php
- * Asigna manualmente un colegio de Calendario B a un documento de World Office que el
- * cruce automático (includes/matching_colegios.php) no pudo emparejar. Marca
- * `asignado_manual = 1` para que una futura sincronización (php/sync_colocacion_wo.php) no
- * sobrescriba la asignación manual con el resultado (probablemente NULL de nuevo) del matcher.
+ * Asigna manualmente un colegio (de cualquier calendario — un documento sin cruzar puede ser
+ * tanto de Calendario A como de B) a un documento de World Office que el cruce automático
+ * (includes/matching_colegios.php) no pudo emparejar. Marca `asignado_manual = 1` para que una
+ * futura sincronización (php/sync_colocacion_wo.php) no sobrescriba la asignación manual con el
+ * resultado (probablemente NULL de nuevo) del matcher. Si el colegio asignado es de Calendario A,
+ * el documento queda cruzado en la base de datos pero NO aparecerá en las filas de
+ * reporte_colocacion.php (que solo muestra el calendario del periodo filtrado) — solo dejará de
+ * salir en el panel "sin cruzar".
  */
 require_once("aut.php");
 
@@ -25,10 +29,10 @@ if ($id_wo <= 0 || $id_colegio <= 0) {
     exit;
 }
 
-$stmt = $bdd->prepare("SELECT id FROM colegios WHERE id = ? AND id_calendario = 2");
+$stmt = $bdd->prepare("SELECT id FROM colegios WHERE id = ?");
 $stmt->execute([$id_colegio]);
 if (!$stmt->fetchColumn()) {
-    echo json_encode(['success' => false, 'message' => 'El colegio no existe en Calendario B']);
+    echo json_encode(['success' => false, 'message' => 'El colegio no existe']);
     exit;
 }
 
