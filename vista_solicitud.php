@@ -508,7 +508,7 @@
         }
         // Saldo por entregar = Presupuesto - Total entregado (no contra lo legalizado: lo
         // legalizado ya tiene su propia tarjeta "Total legalizado" más abajo).
-        $saldo_pendiente = max($tot_presup - $tot_valor_e, 0);
+        //$saldo_pendiente = max($tot_presup - $tot_valor_e, 0);
         ?>
       </tbody>
       <tfoot>
@@ -535,10 +535,14 @@
       <p class="vs-info-label">Total entregado</p>
       <p class="vs-info-val">$ <?= number_format($tot_valor_e, 0, ',', '.') ?></p>
     </div>
-    <div class="vs-info-card" style="border-left-color:<?= $saldo_pendiente > 0 ? '#f59e0b' : '#16a34a' ?>">
-      <p class="vs-info-label">Saldo por entregar</p>
-      <p class="vs-info-val" style="color:<?= $saldo_pendiente > 0 ? '#b45309' : '#16a34a' ?>">$ <?= number_format($saldo_pendiente, 0, ',', '.') ?></p>
-    </div>
+<?php /*
+<div class="vs-info-card" style="border-left-color:<?= $saldo_pendiente > 0 ? '#f59e0b' : '#16a34a' ?>"> 
+  <p class="vs-info-label">Saldo por entregar</p> 
+  <p class="vs-info-val" style="color:<?= $saldo_pendiente > 0 ? '#b45309' : '#16a34a' ?>">
+    $ <?= number_format($saldo_pendiente, 0, ',', '.') ?>
+  </p> 
+</div>
+*/ ?>
     <div class="vs-info-card" style="border-left-color:#16a34a">
       <p class="vs-info-label">Total legalizado</p>
       <p class="vs-info-val">$ <?= number_format($tot_legaliza, 0, ',', '.') ?></p>
@@ -567,7 +571,7 @@
       </a>
     <?php endif; ?>
 
-    <?php if (($_SESSION['tipo'] == 1) && $solicitud["idestado"] == 4 && $legal_estado !== 'completo'): ?>
+    <?php if (($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2) && $solicitud["idestado"] == 4 && $legal_estado !== 'completo'): ?>
       <a class="btn btn-success btn-sm"
          href="php/cerrar_legalizacion.php?solicitud=<?= $solicitud["id"] ?>"
          onclick="return confirm('¿Marcar esta solicitud como legalización completa?')">
@@ -646,7 +650,7 @@
   <?php endif; ?>
 
   <!-- Archivo de legalización -->
-  <?php if ($solicitud["idestado"] == 4 && $solicitud["archivo"] == ""): ?>
+  <?php if (($solicitud["idestado"] == 2 || $solicitud["idestado"] == 4) && $solicitud["archivo"] == ""): ?>
   <div class="vs-archivo">
     <form action="php/archivo_solicitud.php" method="POST" enctype="multipart/form-data">
       <label class="control-label"><i class="bi bi-paperclip" style="color:#6366f1;margin-right:4px"></i> Archivo de legalización</label>

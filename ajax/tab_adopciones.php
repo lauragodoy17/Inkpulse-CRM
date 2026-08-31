@@ -1777,7 +1777,7 @@
                           </script>';
 
                           // Documento(s) de adopción (máx. 3, solo para tipos 1, 3, 10)
-                          if (in_array($_SESSION['tipo'], [1, 3, 10])) {
+                          if (in_array($_SESSION['tipo'], [1, 2, 3, 10])) {
                               $archivos_existentes = [];
                               if ($count > 0) {
                                   foreach (['archivo', 'archivo2', 'archivo3'] as $campo_arch) {
