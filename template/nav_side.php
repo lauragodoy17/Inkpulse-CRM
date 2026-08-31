@@ -523,7 +523,7 @@ $periodos_active     = $current_page === 'periodos.php';
 									><span class="mtext">Órdenes de Pedido</span>
 								</a>
 								<ul class="submenu">
-									<?php if ($_SESSION["tipo"] ==1) {?>
+									<?php if ($_SESSION["tipo"] ==1 || $_SESSION["tipo"] ==2) {?>
 										<li><a href="clientes_op.php">Comparar clientes</a></li>
 									<?php } ?>
 									<li><a href="solicitar_op.php">Solicitar</a></li>
