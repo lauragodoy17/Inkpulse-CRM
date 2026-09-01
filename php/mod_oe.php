@@ -38,17 +38,26 @@ foreach ($_POST['material_e'] ?? [] as $material_raw) {
     if (!$ok) { $error = "Error al insertar un material nuevo."; break; }
 }
 
-// Actualizar cantidad y costo por material
+// Actualizar cantidad, costo y título por material
 if (!$error) {
     foreach ($_POST['mat_p'] ?? [] as $val) {
         if (trim($val) === '') continue;
-        $parts = explode("/", $val, 3);
-        $mat   = $parts[0] ?? '';
-        $cant  = $parts[1] ?? '';
-        $costo = $parts[2] ?? 0;
+        $parts  = explode("/", $val, 4);
+        $mat    = $parts[0] ?? '';
+        $cant   = $parts[1] ?? '';
+        $costo  = $parts[2] ?? 0;
+        $nombre = trim($parts[3] ?? '');
         if (trim($mat) === '') continue;
-        $ok = $bdd->prepare("UPDATE materiales_oe SET cantidad = ?, costo = ? WHERE id = ?")->execute([$cant, $costo, $mat]);
-        if (!$ok) { $error = "Error al actualizar cantidad/costo de un material."; break; }
+
+        if ($nombre !== '') {
+            $nombre = str_replace(['"', "'"], '', $nombre);
+            $ok = $bdd->prepare("UPDATE materiales_oe SET material = ?, cantidad = ?, costo = ? WHERE id = ?")
+                       ->execute([$nombre, $cant, $costo, $mat]);
+        } else {
+            $ok = $bdd->prepare("UPDATE materiales_oe SET cantidad = ?, costo = ? WHERE id = ?")
+                       ->execute([$cant, $costo, $mat]);
+        }
+        if (!$ok) { $error = "Error al actualizar un material."; break; }
     }
 }
 

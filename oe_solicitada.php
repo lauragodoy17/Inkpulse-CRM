@@ -407,7 +407,15 @@ $total_cantidad_arr = $total_entregas_arr = $total_valor_arr = [];
                 ?>
                 <tr id="<?= $mid ?>" data-mid="<?= $mid ?>">
                   <td><?= $i ?></td>
-                  <td><?= htmlspecialchars($mat['material']) ?></td>
+                  <td>
+                    <?php if ($_SESSION['tipo'] != 8): ?>
+                      <select class="form-control titulo-select-edit" id="titulo_edit<?= $mid ?>" style="width:100%;min-width:180px">
+                        <option value="<?= htmlspecialchars($mat['material']) ?>" selected><?= htmlspecialchars($mat['material']) ?></option>
+                      </select>
+                    <?php else: ?>
+                      <?= htmlspecialchars($mat['material']) ?>
+                    <?php endif; ?>
+                  </td>
                   <td>
                     <?php if ($_SESSION['tipo'] != 8): ?>
                       <input type="number" class="form-control dc" min="0" id="cantidad<?= $mid ?>" name="cantidad" value="<?= $mat['cantidad'] ?>">
@@ -445,7 +453,7 @@ $total_cantidad_arr = $total_entregas_arr = $total_valor_arr = [];
                   <?php endif; ?>
 
                   <input type="hidden" name="mpid[]" value="<?= $mid ?>" id="mpid<?= $mid ?>">
-                  <input type="hidden" name="mat_p[]" id="m<?= $mid ?>" value="<?= $mid ?>/<?= $mat['cantidad'] ?>/<?= $mat['costo'] ?>">
+                  <input type="hidden" name="mat_p[]" id="m<?= $mid ?>" value="<?= $mid ?>/<?= $mat['cantidad'] ?>/<?= $mat['costo'] ?>/<?= htmlspecialchars($mat['material']) ?>">
                 </tr>
                 <?php $i++; endforeach; ?>
               </tbody>
@@ -603,9 +611,10 @@ $(document).ready(function () {
   }
 
   function updateValorFila(mid) {
-    var cant  = parseFloat($('#cantidad' + mid).val()) || 0;
-    var costo = parseFloat($('#costo'    + mid).val()) || 0;
-    $('#m' + mid).val(mid + '/' + cant + '/' + costo);
+    var cant   = parseFloat($('#cantidad' + mid).val()) || 0;
+    var costo  = parseFloat($('#costo'    + mid).val()) || 0;
+    var titulo = $('#titulo_edit' + mid).val() || '';
+    $('#m' + mid).val(mid + '/' + cant + '/' + costo + '/' + titulo);
     $('#valor' + mid).text(fmtMoney(cant * costo));
 
     var total = 0;
@@ -625,6 +634,13 @@ $(document).ready(function () {
 
   $(document).on('keyup', 'input[id^="costo"]', function () {
     var mid = this.id.slice('costo'.length);
+    updateValorFila(mid);
+  });
+
+  // Título editable de materiales ya montados en la orden
+  $('.titulo-select-edit').each(function () { initTituloSelect($(this)); });
+  $(document).on('change', '.titulo-select-edit', function () {
+    var mid = $(this).closest('tr').data('mid');
     updateValorFila(mid);
   });
 
