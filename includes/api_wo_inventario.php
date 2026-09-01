@@ -67,6 +67,76 @@ function existencia_bodega_general($idInventario) {
 }
 
 /**
+ * Clasifica varios productos según en qué bodega(s) de World Office tienen
+ * existencias — mismo criterio que php/clasificar_libros_bodega.php (que lo
+ * hace uno por uno para libros ya existentes): 1 si solo está en bodega
+ * id=1 "General", 4 si solo está en id=4 "Muestras General", 3 si está en
+ * ambas, 0 si no está en ninguna de las dos. Dispara las peticiones GET
+ * /inventarios/{id}/existencias/bodega en paralelo (curl_multi), igual que
+ * existencias_bodega_general_bulk() — se usa para precargar la bodega de un
+ * libro que todavía no existe en el catálogo local (traído desde "Buscar
+ * libros nuevos en World Office" en libros.php).
+ * Devuelve [idInventario => 0|1|3|4|null] (null = la API falló para ese id).
+ */
+function clasificar_bodega_bulk(array $idsInventario, $concurrencia = 30) {
+    $bodegaGeneral = 1;
+    $bodegaMuestrasGeneral = 4;
+
+    $ids = array_values(array_unique(array_filter($idsInventario, fn($v) => $v !== null && $v !== '')));
+    $resultados = [];
+    if (!$ids) return $resultados;
+
+    foreach (array_chunk($ids, max(1, (int)$concurrencia)) as $lote) {
+        $mh = curl_multi_init();
+        $handles = [];
+
+        foreach ($lote as $id) {
+            $ch = curl_init(API_URL_BASE . '/inventarios/' . rawurlencode($id) . '/existencias/bodega');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Authorization: ' . API_TOKEN
+            ]);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_ENCODING, '');
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$id] = $ch;
+        }
+
+        $activos = null;
+        do {
+            $estado = curl_multi_exec($mh, $activos);
+            if ($activos > 0) curl_multi_select($mh);
+        } while ($activos > 0 && $estado === CURLM_OK);
+
+        foreach ($handles as $id => $ch) {
+            $respuesta = curl_multi_getcontent($ch);
+            $data = json_decode($respuesta, true);
+            $tipo = null;
+            if (is_array($data) && ($data['status'] ?? '') !== 'error') {
+                $enGeneral = false;
+                $enMuestras = false;
+                foreach ($data['data']['content'] ?? [] as $f) {
+                    $idBodega = (int)($f['id'] ?? 0);
+                    if ($idBodega === $bodegaGeneral) $enGeneral = true;
+                    if ($idBodega === $bodegaMuestrasGeneral) $enMuestras = true;
+                }
+                $tipo = ($enGeneral && $enMuestras) ? 3 : ($enGeneral ? 1 : ($enMuestras ? 4 : 0));
+            }
+            $resultados[$id] = $tipo;
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+        curl_multi_close($mh);
+    }
+
+    return $resultados;
+}
+
+/**
  * Igual que existencia_bodega_general() pero para varios productos a la vez,
  * disparando las peticiones GET /inventarios/{id}/existencias/bodega en
  * paralelo (curl_multi) en vez de una por una. Con una lista de pedidos que

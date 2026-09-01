@@ -30,6 +30,7 @@ $grados = $req_grados->fetchAll();
 
 $lugares_bodega = $bdd->query("SELECT id, id_tipo, corredor, lugar FROM lugares WHERE act=1 ORDER BY id_tipo, corredor, lugar")->fetchAll();
 $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubicaciones WHERE act=1 ORDER BY id_lugar, piso, ubicacion")->fetchAll();
+$editoriales = $bdd->query("SELECT id, editorial FROM editoriales ORDER BY editorial")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -374,7 +375,9 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
                   <th>ISBN</th>
                   <th>Libro</th>
                   <th>Materia</th>
+                  <th>Editorial</th>
                   <th>Grado</th>
+                  <th>Bodega</th>
                   <th>Precio</th>
                   <th>Presupuesto</th>
                   <th>Estado</th>
@@ -690,6 +693,7 @@ $ubicaciones_bodega = $bdd->query("SELECT id, id_lugar, piso, ubicacion FROM ubi
   var SOLO_UBICACION = <?= json_encode($es_solo_ubicacion) ?>;
   var MATERIAS = <?= json_encode($materias) ?>;
   var GRADOS = <?= json_encode($grados) ?>;
+  var EDITORIALES = <?= json_encode($editoriales) ?>;
 
 $(document).ready(function () {
   $.fn.dataTable.ext.errMode = 'none';
@@ -970,7 +974,7 @@ $(document).ready(function () {
       var tr = document.createElement('tr');
       tr.dataset.buscar = (n.isbn + ' ' + n.descripcion).toLowerCase();
       tr.innerHTML =
-        '<td><input type="checkbox" class="ln-check-fila" data-isbn="' + h(n.isbn) + '" data-titulo="' + h(n.descripcion) + '" data-idwo="' + h(n.id) + '"></td>' +
+        '<td><input type="checkbox" class="ln-check-fila" data-isbn="' + h(n.isbn) + '" data-titulo="' + h(n.descripcion) + '" data-idwo="' + h(n.id) + '" data-editorial="' + h(n.editorial) + '"></td>' +
         '<td>' + h(n.isbn) + '</td>' +
         '<td>' + h(n.descripcion) + '</td>' +
         '<td>' + h(n.editorial) + '</td>';
@@ -1013,13 +1017,16 @@ $(document).ready(function () {
     var checks = tbody.querySelectorAll('.ln-check-fila:checked');
     if (!checks.length) return;
     var agregados = 0;
+    var isbnPorIdWo = {};
     Array.prototype.forEach.call(checks, function (chk) {
       var tr = chk.closest('tr');
       window.agregarOActualizarCreacion({
         isbn: chk.dataset.isbn,
         libro: chk.dataset.titulo,
         idWo: chk.dataset.idwo,
+        editorialWo: chk.dataset.editorial,
       });
+      if (chk.dataset.idwo) isbnPorIdWo[chk.dataset.idwo] = chk.dataset.isbn;
       tr.classList.add('ln-fila-agregada');
       chk.disabled = true;
       chk.checked = false;
@@ -1033,7 +1040,41 @@ $(document).ready(function () {
     if (detallesExcel) detallesExcel.open = true;
 
     if (window.inkToast) inkToast(agregados + ' libro(s) agregado(s) a "Actualizar precios y materia".', 'ok');
+
+    precargarBodegasWo(isbnPorIdWo);
   });
+
+  // Completa la "Bodega" consultando en World Office en qué bodega(s) tiene
+  // existencias cada producto (igual que "Clasificar libros por bodega", pero
+  // para libros que todavía no existen en el catálogo local). No bloquea el
+  // agregado de filas: llega y completa el select solo si el usuario no lo
+  // había tocado ya a mano.
+  function precargarBodegasWo(isbnPorIdWo) {
+    var idsWo = Object.keys(isbnPorIdWo);
+    if (!idsWo.length) return;
+
+    fetch('php/clasificar_bodega_wo.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: idsWo })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.success) return;
+        var huboCambios = false;
+        Object.keys(data.tipos).forEach(function (idWo) {
+          var isbn = isbnPorIdWo[idWo];
+          var f = isbn && filasCrear[isbn];
+          var tipo = data.tipos[idWo];
+          if (f && !f.idBodega && tipo !== null && tipo !== undefined) {
+            f.idBodega = String(tipo);
+            huboCambios = true;
+          }
+        });
+        if (huboCambios) window.renderTablaExcel();
+      })
+      .catch(function () { /* si falla, la bodega queda para elegir a mano */ });
+  }
 
   function mostrarError(msg) {
     estado.textContent = msg;
@@ -1160,8 +1201,38 @@ $(document).ready(function () {
     return out;
   }
 
+  function opcionesEditorial(seleccionadoId) {
+    var out = '<option value="">Seleccione</option>';
+    EDITORIALES.forEach(function (e) {
+      out += '<option value="' + e.id + '"' + (String(seleccionadoId) === String(e.id) ? ' selected' : '') + '>' + h(e.editorial) + '</option>';
+    });
+    return out;
+  }
+
+  // Bodega de World Office a la que pertenece el libro (mismo dominio que
+  // libros.tipo, ver php/clasificar_libros_bodega.php): 0 Ninguna, 1 General,
+  // 4 Muestras General, 3 Ambas. Es de solo lectura: se completa consultando
+  // World Office (precargarBodegasWo) y no se puede editar a mano — si WO no
+  // responde queda sin dato y se puede corregir después con "Clasificar
+  // libros por bodega".
+  var BODEGAS = [
+    { id: '1', nombre: 'General' },
+    { id: '4', nombre: 'Muestras General' },
+    { id: '3', nombre: 'Ambas' },
+    { id: '0', nombre: 'Ninguna' },
+  ];
+
+  // Busca en el catálogo local una editorial cuyo nombre coincida (sin
+  // distinguir mayúsculas/espacios) con el nombre que trae World Office.
+  function buscarIdEditorialPorNombre(nombre) {
+    if (!nombre) return '';
+    var norm = String(nombre).trim().toLowerCase();
+    var match = EDITORIALES.find(function (e) { return String(e.editorial).trim().toLowerCase() === norm; });
+    return match ? String(match.id) : '';
+  }
+
   function creacionCompleta(f) {
-    return !!(f.libro && f.idMateria && f.idGrado && f.precio !== '' && f.presupuesto !== '');
+    return !!(f.libro && f.idMateria && f.idGrado && f.idEditorial && f.precio !== '' && f.presupuesto !== '');
   }
 
   // Agrega un libro nuevo (por ISBN) a filasCrear, o completa los campos
@@ -1176,12 +1247,17 @@ $(document).ready(function () {
       if ((existente.precio === '' || existente.precio == null) && datos.precio != null && datos.precio !== '') existente.precio = datos.precio;
       if ((existente.presupuesto === '' || existente.presupuesto == null) && datos.presupuesto) existente.presupuesto = datos.presupuesto;
       if (!existente.idWo && datos.idWo) existente.idWo = datos.idWo;
+      if (!existente.editorialWo && datos.editorialWo) existente.editorialWo = datos.editorialWo;
+      if (!existente.idEditorial && datos.editorialWo) existente.idEditorial = buscarIdEditorialPorNombre(datos.editorialWo);
     } else {
       filasCrear[isbn] = {
         isbn: isbn,
         libro: datos.libro || '',
         idMateria: datos.idMateria || '',
         idGrado: '',
+        idEditorial: buscarIdEditorialPorNombre(datos.editorialWo),
+        editorialWo: datos.editorialWo || '',
+        idBodega: '',
         precio: (datos.precio != null && datos.precio !== '') ? datos.precio : '',
         presupuesto: datos.presupuesto || '',
         idWo: datos.idWo || '',
@@ -1211,6 +1287,8 @@ $(document).ready(function () {
       '<td>' + h(f.libroActual || f.libroNuevo || '—') + '</td>' +
       '<td>' + materiaHtml + '</td>' +
       '<td>—</td>' +
+      '<td>—</td>' +
+      '<td>—</td>' +
       '<td>' + fmtMoneda(f.precioActual) + ' → ' + fmtMoneda(f.precioNuevo) + '</td>' +
       '<td>' + fmtPresupuesto(f.presupuestoActual) + ' → ' + fmtPresupuesto(f.presupuestoNuevo) + '</td>' +
       '<td>' + estadoHtml + '</td>';
@@ -1222,12 +1300,21 @@ $(document).ready(function () {
     tr.className = 'ln-fila-crear';
     tr.dataset.isbn = f.isbn;
     var completa = creacionCompleta(f);
+    var editorialHint = (!f.idEditorial && f.editorialWo)
+      ? '<br><small class="text-muted">WO: ' + h(f.editorialWo) + '</small>'
+      : '';
+    var bodegaEncontrada = BODEGAS.find(function (b) { return b.id === String(f.idBodega); });
+    var bodegaHtml = bodegaEncontrada
+      ? h(bodegaEncontrada.nombre)
+      : '<small class="text-muted">' + (f.idWo ? 'Consultando WO...' : 'Sin dato') + '</small>';
     tr.innerHTML =
       '<td><span class="ln-badge-nuevo">Nuevo</span></td>' +
       '<td>' + h(f.isbn) + '</td>' +
       '<td><input type="text" class="ln-crear-input ln-input-mini" data-campo="libro" value="' + h(f.libro) + '" placeholder="Título"></td>' +
       '<td><select class="ln-crear-input ln-select-mini" data-campo="idMateria">' + opcionesMateria(f.idMateria) + '</select></td>' +
+      '<td><select class="ln-crear-input ln-select-mini" data-campo="idEditorial">' + opcionesEditorial(f.idEditorial) + '</select>' + editorialHint + '</td>' +
       '<td><select class="ln-crear-input ln-select-mini" data-campo="idGrado">' + opcionesGrado(f.idGrado) + '</select></td>' +
+      '<td>' + bodegaHtml + '</td>' +
       '<td><input type="number" step="any" class="ln-crear-input ln-input-mini" data-campo="precio" value="' + h(f.precio) + '" placeholder="Precio"></td>' +
       '<td><select class="ln-crear-input ln-select-mini" data-campo="presupuesto">' +
         '<option value=""' + (f.presupuesto === '' ? ' selected' : '') + '>Seleccione</option>' +
@@ -1389,6 +1476,7 @@ $(document).ready(function () {
       .map(function (f) {
         return {
           isbn: f.isbn, libro: f.libro, id_materia: f.idMateria, id_grado: f.idGrado,
+          id_editorial: f.idEditorial, tipo: f.idBodega,
           precio: f.precio, presupuesto: f.presupuesto, id_wo: f.idWo,
         };
       });

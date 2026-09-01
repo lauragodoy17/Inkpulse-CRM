@@ -37,10 +37,14 @@ if (!$filas && !$nuevas) {
 $stmtLibro = $bdd->prepare("SELECT id FROM libros WHERE id = ?");
 $stmtMateria = $bdd->prepare("SELECT id FROM materias WHERE id = ?");
 $stmtGrado = $bdd->prepare("SELECT id FROM grados WHERE id = ?");
+$stmtEditorial = $bdd->prepare("SELECT id FROM editoriales WHERE id = ?");
 $stmtIsbnExiste = $bdd->prepare("SELECT id FROM libros WHERE TRIM(isbn) = TRIM(?)");
 $stmtActualizar = $bdd->prepare("UPDATE libros SET precio = ?, id_materia = ?, presupuesto = ?, updated_at = NOW() WHERE id = ?");
-$stmtCrear = $bdd->prepare("INSERT INTO libros (isbn, id_materia, id_grado, libro, precio, presupuesto, etiqueta, pri_sec, columna, editorial, serie, id_wo)
-        VALUES (?, ?, ?, ?, ?, ?, '', 0, 0, 0, 0, ?)");
+// libros.tipo: bodega de World Office a la que pertenece (mismo dominio que usa
+// php/clasificar_libros_bodega.php: 0 Ninguna, 1 General, 4 Muestras General,
+// 3 Ambas). Se elige a mano en la tabla de creación; si no se elige, queda en 0.
+$stmtCrear = $bdd->prepare("INSERT INTO libros (isbn, id_materia, id_grado, libro, precio, presupuesto, etiqueta, pri_sec, columna, editorial, serie, id_wo, tipo)
+        VALUES (?, ?, ?, ?, ?, ?, '', 0, 0, ?, 0, ?, ?)");
 
 $actualizados = [];
 $creados = [];
@@ -78,11 +82,13 @@ foreach ($nuevas as $n) {
     $libro = trim((string)($n['libro'] ?? ''));
     $idMateria = isset($n['id_materia']) ? (int)$n['id_materia'] : 0;
     $idGrado = isset($n['id_grado']) ? (int)$n['id_grado'] : 0;
+    $idEditorial = isset($n['id_editorial']) ? (int)$n['id_editorial'] : 0;
+    $tipo = isset($n['tipo']) && in_array((string)$n['tipo'], ['0', '1', '3', '4'], true) ? (int)$n['tipo'] : 0;
     $precio = isset($n['precio']) && $n['precio'] !== '' ? (float)$n['precio'] : null;
     $presupuesto = isset($n['presupuesto']) && $n['presupuesto'] !== '' ? (int)$n['presupuesto'] : null;
     $idWo = !empty($n['id_wo']) ? (int)$n['id_wo'] : 0;
 
-    if ($isbn === '' || $libro === '' || !$idMateria || !$idGrado || $precio === null || $presupuesto === null) {
+    if ($isbn === '' || $libro === '' || !$idMateria || !$idGrado || !$idEditorial || $precio === null || $presupuesto === null) {
         $omitidos[] = ['isbn' => $isbn ?: null, 'motivo' => 'Datos incompletos'];
         continue;
     }
@@ -105,8 +111,16 @@ foreach ($nuevas as $n) {
         continue;
     }
 
-    $stmtCrear->execute([$isbn, $idMateria, $idGrado, $libro, $precio, $presupuesto, $idWo]);
-    $creados[] = ['isbn' => $isbn, 'idLibro' => (int)$bdd->lastInsertId(), 'libro' => $libro];
+    $stmtEditorial->execute([$idEditorial]);
+    if (!$stmtEditorial->fetchColumn()) {
+        $omitidos[] = ['isbn' => $isbn, 'motivo' => 'La editorial ya no existe (id ' . $idEditorial . ')'];
+        continue;
+    }
+
+    $stmtCrear->execute([$isbn, $idMateria, $idGrado, $libro, $precio, $presupuesto, $idEditorial, $idWo, $tipo]);
+    $nuevoId = (int)$bdd->lastInsertId();
+
+    $creados[] = ['isbn' => $isbn, 'idLibro' => $nuevoId, 'libro' => $libro];
 }
 
 echo json_encode([
