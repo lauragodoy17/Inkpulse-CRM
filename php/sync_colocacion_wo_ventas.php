@@ -1,8 +1,9 @@
 <?php
 /**
  * /php/sync_colocacion_wo_ventas.php
- * Sincroniza por lotes las devoluciones de venta (DREM) y las facturas de
- * punto de venta (POS) de World Office hacia la misma caché local
+ * Sincroniza por lotes las devoluciones de venta (DREM), las notas crédito de
+ * venta (NCV, agregado 2026-09-02) y las facturas de punto de venta (POS) de
+ * World Office hacia la misma caché local
  * `wo_documentos_colocacion` que usa php/sync_colocacion_wo.php para REM/FV,
  * cruzando cada documento contra un colegio de Calendario B mediante el
  * campo `concepto` (ver includes/matching_colegios.php).
@@ -13,10 +14,12 @@
  * falta pedir detalle+renglones por documento, así que este sync es de una
  * sola llamada por página en vez de dos por documento.
  *
- * DREM se resta del total colocado (reemplaza la fuente anterior, que era
- * `devoluciones_v`/`libros_devol_v` del propio CRM — decisión del usuario
+ * DREM y NCV se restan del total colocado (reemplazan la fuente anterior, que
+ * era `devoluciones_v`/`libros_devol_v` del propio CRM — decisión del usuario
  * 2026-08-26: World Office es ahora la única fuente de devoluciones para
- * este reporte). POS se suma, igual que REM/FV. La mayoría de los
+ * este reporte; NCV se agregó el 2026-09-02 a pedido del usuario, mismo host
+ * y mismo endpoint `/ventas/filtrarPaginado`, solo cambia el filtro
+ * `documentoTipo.codigoDocumento`). POS se suma, igual que REM/FV. La mayoría de los
  * documentos POS son cierres de caja genéricos sin colegio asociado
  * ("CORTE EDUCADORES", tercero "Consumidor Final") — quedan sin cruzar y
  * simplemente no aportan a ningún colegio, igual que cualquier REM/FV sin
@@ -35,7 +38,8 @@ require_once("../includes/matching_colegios.php");
 require_once("../conexion/bdd.php");
 header('Content-Type: application/json');
 
-$tipoDocumento = ($_GET['tipoDocumento'] ?? '') === 'POS' ? 'POS' : 'DREM';
+$tiposValidos = ['DREM', 'NCV', 'POS'];
+$tipoDocumento = in_array($_GET['tipoDocumento'] ?? '', $tiposValidos, true) ? $_GET['tipoDocumento'] : 'DREM';
 $pagina        = isset($_GET['pagina']) ? max(0, (int)$_GET['pagina']) : 0;
 $porPagina     = isset($_GET['porPagina']) ? max(1, min(50, (int)$_GET['porPagina'])) : 20;
 
@@ -48,11 +52,17 @@ try {
 $id_periodo = (int)$bdd->query("SELECT id FROM periodos WHERE id_calendario = 2 ORDER BY id DESC LIMIT 1")->fetchColumn();
 
 $inicio = microtime(true);
-$colegiosPrecargados = cargar_colegios_calendario_b($bdd);
+$colegiosPrecargados = cargar_todos_los_colegios($bdd);
+$nombresDuplicados = cargar_nombres_colegio_duplicados($bdd);
+$clientesRecursos = cargar_clientes_recursos($bdd, $id_periodo);
 
-$respuestaLista = $tipoDocumento === 'POS'
-    ? listar_facturas_pos_wo($pagina, $porPagina)
-    : listar_devoluciones_venta_wo($pagina, $porPagina);
+if ($tipoDocumento === 'POS') {
+    $respuestaLista = listar_facturas_pos_wo($pagina, $porPagina);
+} elseif ($tipoDocumento === 'NCV') {
+    $respuestaLista = listar_notas_credito_venta_wo($pagina, $porPagina);
+} else {
+    $respuestaLista = listar_devoluciones_venta_wo($pagina, $porPagina);
+}
 
 if (($respuestaLista['status'] ?? 'error') !== 'OK') {
     echo json_encode(['success' => false, 'message' => 'Error consultando World Office: ' . ($respuestaLista['mensaje_interno'] ?? 'desconocido')]);
@@ -98,7 +108,10 @@ foreach ($documentos as $d) {
 
     $concepto = $d['concepto'] ?? '';
     $colegioExtraido = extraer_colegio_de_concepto($concepto);
-    $idColegio = emparejar_colegio($colegioExtraido, $colegiosPrecargados);
+    $idColegio = emparejar_colegio($colegioExtraido, $colegiosPrecargados, $nombresDuplicados);
+    if ($idColegio && !cliente_coincide_con_recursos($idColegio, $d['terceroExterno'] ?? null, $clientesRecursos)) {
+        $idColegio = null;
+    }
     if ($idColegio) $emparejados++; else $sinCruzar++;
 
     // Este microservicio trae la fecha como "dd/mm/yyyy", a diferencia de las llamadas por

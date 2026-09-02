@@ -24,6 +24,9 @@ if ($q === '') {
     exit;
 }
 
-$stmt = $bdd->prepare("SELECT id, colegio FROM colegios WHERE colegio LIKE ? ORDER BY colegio ASC LIMIT 30");
-$stmt->execute(['%' . $q . '%']);
+// Busca por nombre O por código DANE — el DANE también se muestra en cada resultado (ver
+// reporte_colocacion.php) para distinguir colegios homónimos entre zonas/calendarios (ver
+// memory/project_colocacion_modulo.md, bugs #2/#3 de cruce por nombre duplicado).
+$stmt = $bdd->prepare("SELECT id, colegio, dane FROM colegios WHERE colegio LIKE ? OR dane LIKE ? ORDER BY colegio ASC LIMIT 30");
+$stmt->execute(['%' . $q . '%', '%' . $q . '%']);
 echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));

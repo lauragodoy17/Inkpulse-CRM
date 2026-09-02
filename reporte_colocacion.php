@@ -7,6 +7,17 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
     exit;
 }
 $es_admin = $tipo_sesion === 1;
+
+// El export "por usuario" (antes en reporte_colocacion_usuario.php, ahora fusionado acá para que
+// tipo=1 tenga un único archivo de Colocación — ver memory/project_colocacion_modulo.md) solo lo
+// necesita el admin: tipo=2 sigue usando reporte_colocacion_usuario.php sin cambios.
+if ($es_admin) {
+    require_once("conexion/bdd.php");
+    require_once("includes/colocacion_datos.php");
+    $periodosColocacion = obtener_periodos_colocacion($bdd);
+    $sqlUsuariosColocacion = "SELECT id, CONCAT(nombres, ' ', apellidos) as promotor FROM usuarios WHERE (tipo=3 || tipo=6 || tipo=1 || tipo=10) AND act=1";
+    $usuariosColocacion = $bdd->query($sqlUsuariosColocacion)->fetchAll(PDO::FETCH_ASSOC);
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -120,11 +131,11 @@ $es_admin = $tipo_sesion === 1;
         </div>
         <div class="col-section-body">
           <p class="col-aviso">
-            Trae las remisiones (REM, prefijo CEUR), facturas de venta (FV), devoluciones de venta (DREM)
-            y facturas de punto de venta (POS) de World Office y las cruza con el colegio según el campo
-            "concepto" de cada documento. Las devoluciones (DREM) restan del total colocado; REM, FV y POS
-            suman. Los Abonos (Recibo de Caja) no se sincronizan: World Office no expone ningún valor
-            monetario para ese tipo de documento.
+            Trae las remisiones (REM, prefijo CEUR), facturas de venta (FV), devoluciones de venta (DREM),
+            notas crédito de venta (NCV) y facturas de punto de venta (POS) de World Office y las cruza con
+            el colegio según el campo "concepto" de cada documento. Las devoluciones (DREM) y notas crédito
+            (NCV) restan del total colocado; REM, FV y POS suman. Los Abonos (Recibo de Caja) no se
+            sincronizan: World Office no expone ningún valor monetario para ese tipo de documento.
           </p>
 
           <button type="button" class="col-btn" id="btn-iniciar"><i class="bi bi-arrow-repeat"></i> Actualizar desde World Office</button>
@@ -144,10 +155,44 @@ $es_admin = $tipo_sesion === 1;
       </div>
       <?php endif; ?>
 
+      <?php if ($es_admin): ?>
+      <div class="col-section">
+        <div class="col-section-head">
+          <div class="col-num">2</div>
+          <p class="col-section-title">Exportar por usuario</p>
+        </div>
+        <div class="col-section-body">
+          <form action="php/colocacion_excel_usuario.php" method="POST" style="display:flex; gap:16px; flex-wrap:wrap; align-items:end;">
+            <div>
+              <label class="d-block" style="font-size:.75rem; color:#64748b; margin-bottom:4px;">Usuario <small style="color:red;">*</small></label>
+              <select name="usuario" class="form-control form-control-sm custom-select2" required style="min-width:260px;">
+                <option value="">Seleccionar</option>
+                <option value="0">Todos</option>
+                <?php foreach ($usuariosColocacion as $u): ?>
+                  <option value="<?= $u['id'] ?>"><?= htmlspecialchars($u['promotor']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div>
+              <label class="d-block" style="font-size:.75rem; color:#64748b; margin-bottom:4px;">Periodo <small style="color:red;">*</small></label>
+              <select name="periodo" class="form-control form-control-sm" required style="min-width:180px;">
+                <?php foreach ($periodosColocacion as $p): ?>
+                  <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['periodo']) ?> (Calendario <?= htmlspecialchars($p['calendario']) ?>)</option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div>
+              <button class="col-btn" style="padding:8px 18px;"><i class="bi bi-download"></i> Exportar Excel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <?php endif; ?>
+
       <div class="col-section">
         <div class="col-section-head" style="justify-content: space-between;">
           <div style="display:flex; align-items:center; gap:14px;">
-            <div class="col-num"><?= $es_admin ? '2' : '1' ?></div>
+            <div class="col-num"><?= $es_admin ? '3' : '1' ?></div>
             <p class="col-section-title">Reporte de colocación<span id="col-periodo-txt"></span></p>
           </div>
           <a href="php/colocacion_excel.php" id="link-excel-colocacion" class="col-btn" style="padding:8px 18px;">
@@ -395,7 +440,7 @@ $es_admin = $tipo_sesion === 1;
           // los (potencialmente miles de) <select> del panel — eso colgaba el navegador
           // (12M+ <option> en el DOM con documentos sin cruzar del orden de 3.000).
           $('.sincruzar-select').select2({
-            placeholder: 'Escribe para buscar un colegio...',
+            placeholder: 'Escribe para buscar un colegio por nombre o DANE...',
             allowClear: true,
             width: '100%',
             minimumInputLength: 2,
@@ -405,7 +450,9 @@ $es_admin = $tipo_sesion === 1;
               delay: 250,
               data: function (params) { return { q: params.term }; },
               processResults: function (data) {
-                return { results: (data || []).map(function (c) { return { id: c.id, text: c.colegio }; }) };
+                return { results: (data || []).map(function (c) {
+                  return { id: c.id, text: c.colegio + (c.dane ? ' — DANE: ' + c.dane : '') };
+                }) };
               }
             },
             language: {
@@ -468,12 +515,13 @@ $es_admin = $tipo_sesion === 1;
 
   // ── Sección 1: sincronización con World Office (solo admin) ──
   // REM/FV vienen de listarDocumentoSalidaAlmacen (api.worldoffice.cloud, ver
-  // php/sync_colocacion_wo.php); DREM/POS vienen del microservicio de ventas
+  // php/sync_colocacion_wo.php); DREM/NCV/POS vienen del microservicio de ventas
   // (ver php/sync_colocacion_wo_ventas.php) — mismo token, endpoint distinto.
   var TIPOS = [
     { codigo: 'REM',  endpoint: 'php/sync_colocacion_wo.php',        etiqueta: 'Remisiones (CEUR)' },
     { codigo: 'FV',   endpoint: 'php/sync_colocacion_wo.php',        etiqueta: 'Facturas de venta' },
     { codigo: 'DREM', endpoint: 'php/sync_colocacion_wo_ventas.php', etiqueta: 'Devoluciones de venta' },
+    { codigo: 'NCV',  endpoint: 'php/sync_colocacion_wo_ventas.php', etiqueta: 'Notas crédito de venta' },
     { codigo: 'POS',  endpoint: 'php/sync_colocacion_wo_ventas.php', etiqueta: 'Facturas POS' },
   ];
   var tipoIdx = 0;

@@ -22,7 +22,7 @@ function obtener_periodos_colocacion(PDO $bdd) {
         ORDER BY CAST(p.periodo AS UNSIGNED) DESC, p.id_calendario ASC")->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function obtener_datos_colocacion(PDO $bdd, $id_periodo = null) {
+function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope = null) {
     // ── Periodo: el pedido por filtro, o Calendario B más reciente por defecto (comportamiento
     // histórico de este reporte, que nació como "Colocación Calendario B") ──
     if ($id_periodo !== null) {
@@ -37,7 +37,17 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null) {
     $nombre_calendario = (string)($periodoRow['calendario'] ?? 'B');
 
     // ── Colegios del calendario correspondiente al periodo seleccionado ──
-    $colegios = $bdd->query("SELECT id, colegio, cod_zona, sub_zona, responsable FROM colegios WHERE id_calendario = $id_calendario ORDER BY colegio ASC")->fetchAll(PDO::FETCH_ASSOC);
+    // $cod_zona_scope (opcional): restringe el reporte a los colegios de la zona propia de un
+    // usuario (asesor/distribuidor), igual criterio de "alcance por zona propia" que ya usa el
+    // "else" de php/valoriza_global_excel.php — para php/colocacion_excel_usuario.php, donde
+    // cada usuario descarga solo lo suyo.
+    if ($cod_zona_scope !== null && $cod_zona_scope !== '') {
+        $stmtColegios = $bdd->prepare("SELECT id, colegio, cod_zona, sub_zona, responsable FROM colegios WHERE id_calendario = ? AND (cod_zona = ? OR zona_madre = ?) ORDER BY colegio ASC");
+        $stmtColegios->execute([$id_calendario, $cod_zona_scope, $cod_zona_scope]);
+        $colegios = $stmtColegios->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $colegios = $bdd->query("SELECT id, colegio, cod_zona, sub_zona, responsable FROM colegios WHERE id_calendario = $id_calendario ORDER BY colegio ASC")->fetchAll(PDO::FETCH_ASSOC);
+    }
     $idsColegios = array_column($colegios, 'id');
     if (empty($idsColegios)) {
         return ['periodo' => $nombre_periodo, 'id_calendario' => $id_calendario, 'calendario' => $nombre_calendario, 'filas' => [], 'sinCruzar' => []];
@@ -138,11 +148,11 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null) {
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) $clientePorColegioRecursos[$r['id_colegio']] = $r['cliente'];
 
     // ── Documentos de World Office ya sincronizados (ver php/sync_colocacion_wo.php para REM/FV
-    // y php/sync_colocacion_wo_ventas.php para DREM/POS). FV y POS suman al total colocado, REM
-    // también (como movimientos individuales, igual que antes), y DREM (devoluciones de venta)
-    // resta — reemplaza la fuente anterior basada en `devoluciones_v`/`libros_devol_v` del CRM,
-    // decisión del usuario 2026-08-26: World Office es ahora la única fuente de devoluciones
-    // para este reporte. ──
+    // y php/sync_colocacion_wo_ventas.php para DREM/NCV/POS). FV y POS suman al total colocado,
+    // REM también (como movimientos individuales, igual que antes), y DREM + NCV (devoluciones de
+    // venta y notas crédito de venta) restan — reemplazan la fuente anterior basada en
+    // `devoluciones_v`/`libros_devol_v` del CRM, decisión del usuario 2026-08-26: World Office es
+    // ahora la única fuente de devoluciones para este reporte (NCV agregada 2026-09-02). ──
     $stmt = $bdd->prepare("SELECT id_colegio, tipo_documento, fecha, numero, valor_neto, tercero_externo_nombre
         FROM wo_documentos_colocacion WHERE id_periodo = $id_periodo AND id_colegio IN ($inPlaceholders) ORDER BY fecha ASC");
     $stmt->execute($idsColegios);
@@ -158,6 +168,7 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null) {
                 $facturaPorColegio[$idc] = ($facturaPorColegio[$idc] ?? 0) + (float)$r['valor_neto'];
                 break;
             case 'DREM':
+            case 'NCV':
                 $devolucionesPorColegio[$idc] = ($devolucionesPorColegio[$idc] ?? 0) + (float)$r['valor_neto'];
                 break;
             case 'POS':

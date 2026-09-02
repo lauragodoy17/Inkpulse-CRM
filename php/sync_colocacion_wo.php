@@ -79,7 +79,9 @@ if ($tipoDocumento === 'REM') {
     $filtros[] = crear_filtro_api('prefijo.nombre', 'CEUR', 0, 0);
 }
 
-$colegiosPrecargados = cargar_colegios_calendario_b($bdd);
+$colegiosPrecargados = cargar_todos_los_colegios($bdd);
+$nombresDuplicados = cargar_nombres_colegio_duplicados($bdd);
+$clientesRecursos = cargar_clientes_recursos($bdd, $id_periodo);
 
 $respuestaLista = listar_documentos_salida_almacen($filtros, $pagina, $porPagina);
 if (($respuestaLista['status'] ?? 'error') !== 'OK') {
@@ -123,7 +125,11 @@ foreach ($documentos as $doc) {
 
     $concepto = $d['concepto'] ?? '';
     $colegioExtraido = extraer_colegio_de_concepto($concepto);
-    $idColegio = emparejar_colegio($colegioExtraido, $colegiosPrecargados);
+    $idColegio = emparejar_colegio($colegioExtraido, $colegiosPrecargados, $nombresDuplicados);
+    $terceroExternoNombre = $d['terceroExterno']['nombreCompleto'] ?? null;
+    if ($idColegio && !cliente_coincide_con_recursos($idColegio, $terceroExternoNombre, $clientesRecursos)) {
+        $idColegio = null;
+    }
     if ($idColegio) $emparejados++; else $sinCruzar++;
 
     $renglones = obtener_renglones_documento($idWo, 0, 100);
@@ -145,7 +151,7 @@ foreach ($documentos as $doc) {
         $d['fecha'] ?? date('Y-m-d'),
         $concepto,
         $d['terceroExterno']['id'] ?? null,
-        $d['terceroExterno']['nombreCompleto'] ?? null,
+        $terceroExternoNombre,
         $idColegio,
         $colegioExtraido,
         $valorNeto,

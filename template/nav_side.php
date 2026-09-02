@@ -15,7 +15,7 @@ $atenciones_active   = $current_page === 'lista_atenciones.php';
 $ops_active          = in_array($current_page, ['solicitar_op.php','lista_op.php','clientes_op.php']);
 $opds_active         = in_array($current_page, ['solicitar_orden_pd.php','ver_opds.php','reporte_opd.php']);
 $oe_active           = in_array($current_page, ['solicitar_orden_externa.php','ver_ordenes_externas.php','oe_solicitada.php']);
-$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_seguimiento_gerencia.php']);
+$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php']);
 $libros_active       = $current_page === 'libros.php';
 $libros_bodega_active = $current_page === 'libros_bodega.php';
 $usuarios_active     = $current_page === 'usuarios.php';
@@ -650,6 +650,9 @@ $periodos_active     = $current_page === 'periodos.php';
 										<li class="menu-subgroup-label">Ventas</li>
 										<li><a href="reporte_valoriza.php">Valorización libro a libro</a></li>
 										<li><a href="reporte_valoriza_global.php">Valorización global</a></li>
+										<?php if ($_SESSION["tipo"] != 1) { ?>
+											<li><a href="reporte_colocacion_usuario.php">Colocación</a></li>
+										<?php } ?>
 										<?php if ($_SESSION["tipo"] != 10) { ?>
 											<li><a href="reporte_cant_adop.php">Cantidad adopciones</a></li>
 											<li><a href="reporte_trabajadores.php">Contactos</a></li>
