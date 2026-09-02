@@ -163,19 +163,23 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
     $clientePorColegioWo = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $idc = $r['id_colegio'];
+        // Cada movimiento guarda 'tipo' + 'numero' (además de fecha/valor) para que pantalla y
+        // Excel puedan mostrar qué documento concreto (ej. "POS #12503") aportó ese valor —
+        // pedido explícito del usuario 2026-09-02, antes solo se mostraba fecha+valor.
+        $mov = ['tipo' => $r['tipo_documento'], 'fecha' => $r['fecha'], 'numero' => $r['numero'], 'valor' => (float)$r['valor_neto']];
         switch ($r['tipo_documento']) {
             case 'FV':
-                $facturaPorColegio[$idc] = ($facturaPorColegio[$idc] ?? 0) + (float)$r['valor_neto'];
+                $facturaPorColegio[$idc][] = $mov;
                 break;
             case 'DREM':
             case 'NCV':
-                $devolucionesPorColegio[$idc] = ($devolucionesPorColegio[$idc] ?? 0) + (float)$r['valor_neto'];
+                $devolucionesPorColegio[$idc][] = $mov;
                 break;
             case 'POS':
-                $colocacionPosPorColegio[$idc][] = ['fecha' => $r['fecha'], 'numero' => $r['numero'], 'valor' => (float)$r['valor_neto']];
+                $colocacionPosPorColegio[$idc][] = $mov;
                 break;
             default: // REM
-                $colocacionWoPorColegio[$idc][] = ['fecha' => $r['fecha'], 'numero' => $r['numero'], 'valor' => (float)$r['valor_neto']];
+                $colocacionWoPorColegio[$idc][] = $mov;
         }
         if (!isset($clientePorColegioWo[$idc]) && !empty($r['tercero_externo_nombre'])) {
             $clientePorColegioWo[$idc] = $r['tercero_externo_nombre'];
@@ -203,13 +207,15 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
             $cliente = $clienteWo ?? $clienteRecursos ?? '';
         }
 
-        $facturaVenta = $facturaPorColegio[$id] ?? 0;
         $abonos = 0; // World Office no expone valor para Recibo de Caja.
+        $movimientosFv = $facturaPorColegio[$id] ?? [];
+        $facturaVenta = array_sum(array_column($movimientosFv, 'valor'));
         $movimientosWo = $colocacionWoPorColegio[$id] ?? [];
         $totalColocacionWo = array_sum(array_column($movimientosWo, 'valor'));
         $movimientosPos = $colocacionPosPorColegio[$id] ?? [];
         $totalColocacionPos = array_sum(array_column($movimientosPos, 'valor'));
-        $devoluciones = $devolucionesPorColegio[$id] ?? 0;
+        $movimientosDevoluciones = $devolucionesPorColegio[$id] ?? [];
+        $devoluciones = array_sum(array_column($movimientosDevoluciones, 'valor'));
 
         $filas[] = [
             'id_colegio' => (int)$id,
@@ -223,11 +229,16 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
             'descuento_promedio' => $descuentoPromedioPorColegio[$id] ?? 0,
             'numero_adopcion' => $numeroAdopcionPorColegio[$id] ?? null,
             'cliente' => $cliente,
+            // 'factura_venta'/'devoluciones' siguen siendo el total escalar (usado para subtotales
+            // por Cliente/Empresa en el Excel, igual que antes); '*_mov' es el detalle por
+            // documento (tipo/número/fecha/valor), igual patrón que 'colocacion_wo'/'colocacion_pos'.
             'factura_venta' => $facturaVenta,
+            'factura_venta_mov' => $movimientosFv,
             'abonos' => $abonos,
             'colocacion_wo' => $movimientosWo,
             'colocacion_pos' => $movimientosPos,
             'devoluciones' => $devoluciones,
+            'devoluciones_mov' => $movimientosDevoluciones,
             'total_colocado' => $facturaVenta + $abonos + $totalColocacionWo + $totalColocacionPos - $devoluciones,
         ];
     }

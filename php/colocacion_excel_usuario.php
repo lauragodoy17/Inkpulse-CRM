@@ -73,30 +73,55 @@ usort($filas, function ($a, $b) {
 
 // ── Columnas dinámicas de Fecha/Valor: cuántos pares hacen falta según el colegio con más
 // movimientos (mismo criterio que php/colocacion_excel.php) ──
+// Factura de Venta y Devoluciones ahora también traen su detalle por documento (tipo+número),
+// igual patrón que REM-CEUR/POS — agregado 2026-09-02 a pedido del usuario. El total escalar
+// ('factura_venta'/'devoluciones') se sigue usando para la fila de "Total general" al pie.
 $maxMovimientosWo = 0;
 $maxMovimientosPos = 0;
+$maxMovimientosFv = 0;
+$maxMovimientosDev = 0;
 foreach ($filas as $f) {
     $maxMovimientosWo = max($maxMovimientosWo, count($f['colocacion_wo']));
     $maxMovimientosPos = max($maxMovimientosPos, count($f['colocacion_pos']));
+    $maxMovimientosFv = max($maxMovimientosFv, count($f['factura_venta_mov']));
+    $maxMovimientosDev = max($maxMovimientosDev, count($f['devoluciones_mov']));
 }
 $maxMovimientosWo = max($maxMovimientosWo, 1);
 $maxMovimientosPos = max($maxMovimientosPos, 1);
+$maxMovimientosFv = max($maxMovimientosFv, 1);
+$maxMovimientosDev = max($maxMovimientosDev, 1);
 
 $encabezados = ['Empresa', 'Colegio', 'Presupuesto Registrado en CRM', 'Adopciones CRM', 'Atenciones a Clientes', 'Población General', 'Compradores Activos', 'Descuento Promedio', 'Número de la Adopción', 'Cliente', 'Factura de Venta', 'Abonos'];
+$colInicioWo = count($encabezados) + 1;
 for ($i = 1; $i <= $maxMovimientosWo; $i++) {
+    $encabezados[] = "Colocación World Office (REM-CEUR) - Documento $i";
     $encabezados[] = "Colocación World Office (REM-CEUR) - Fecha $i";
     $encabezados[] = "Colocación World Office (REM-CEUR) - Valor $i";
 }
 $colInicioPos = count($encabezados) + 1;
 for ($i = 1; $i <= $maxMovimientosPos; $i++) {
+    $encabezados[] = "Facturas POS - Documento $i";
     $encabezados[] = "Facturas POS - Fecha $i";
     $encabezados[] = "Facturas POS - Valor $i";
 }
+$colInicioFvDet = count($encabezados) + 1;
+for ($i = 1; $i <= $maxMovimientosFv; $i++) {
+    $encabezados[] = "Factura de Venta - Documento $i";
+    $encabezados[] = "Factura de Venta - Fecha $i";
+    $encabezados[] = "Factura de Venta - Valor $i";
+}
+$colDevoluciones = count($encabezados) + 1;
 $encabezados[] = 'Devoluciones';
+$colInicioDevDet = count($encabezados) + 1;
+for ($i = 1; $i <= $maxMovimientosDev; $i++) {
+    $encabezados[] = "Devoluciones - Documento $i";
+    $encabezados[] = "Devoluciones - Fecha $i";
+    $encabezados[] = "Devoluciones - Valor $i";
+}
 $encabezados[] = 'Total Colocado';
+$colTotal = count($encabezados);
 
 $totalColumnas = count($encabezados);
-$colDevoluciones = $totalColumnas - 1;
 $colDevolucionesLetra = Coordinate::stringFromColumnIndex($colDevoluciones);
 $ultimaColumna = Coordinate::stringFromColumnIndex($totalColumnas);
 
@@ -149,10 +174,12 @@ $hoja->freezePane('A' . ($filaEncabezado + 1));
 // Valor N de REM y de POS, devoluciones y el total al final. Descuento Promedio (col 8) tiene su
 // propio formato (no es moneda), aplicado más abajo.
 $columnasDinero = [3, 4, 5, 11, 12];
-for ($i = 0; $i < $maxMovimientosWo; $i++) $columnasDinero[] = 14 + ($i * 2);
-for ($i = 0; $i < $maxMovimientosPos; $i++) $columnasDinero[] = $colInicioPos + 1 + ($i * 2);
+for ($i = 0; $i < $maxMovimientosWo; $i++) $columnasDinero[] = $colInicioWo + 2 + ($i * 3);
+for ($i = 0; $i < $maxMovimientosPos; $i++) $columnasDinero[] = $colInicioPos + 2 + ($i * 3);
+for ($i = 0; $i < $maxMovimientosFv; $i++) $columnasDinero[] = $colInicioFvDet + 2 + ($i * 3);
 $columnasDinero[] = $colDevoluciones;
-$columnasDinero[] = $totalColumnas;
+for ($i = 0; $i < $maxMovimientosDev; $i++) $columnasDinero[] = $colInicioDevDet + 2 + ($i * 3);
+$columnasDinero[] = $colTotal;
 
 $fila = $filaEncabezado + 1;
 $totales = array_fill(0, $totalColumnas + 1, 0);
@@ -171,21 +198,39 @@ foreach ($filas as $f) {
     $hoja->setCellValue("K{$fila}", $f['factura_venta']);
     $hoja->setCellValue("L{$fila}", $f['abonos']);
 
-    $colIdx = 13;
+    $colIdx = $colInicioWo;
     foreach ($f['colocacion_wo'] as $mov) {
-        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx) . $fila, $mov['fecha']);
-        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 1) . $fila, $mov['valor']);
-        $colIdx += 2;
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx) . $fila, $mov['tipo'] . ' #' . $mov['numero']);
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 1) . $fila, $mov['fecha']);
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 2) . $fila, $mov['valor']);
+        $colIdx += 3;
     }
 
     $colIdx = $colInicioPos;
     foreach ($f['colocacion_pos'] as $mov) {
-        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx) . $fila, $mov['fecha']);
-        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 1) . $fila, $mov['valor']);
-        $colIdx += 2;
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx) . $fila, $mov['tipo'] . ' #' . $mov['numero']);
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 1) . $fila, $mov['fecha']);
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 2) . $fila, $mov['valor']);
+        $colIdx += 3;
+    }
+
+    $colIdx = $colInicioFvDet;
+    foreach ($f['factura_venta_mov'] as $mov) {
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx) . $fila, $mov['tipo'] . ' #' . $mov['numero']);
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 1) . $fila, $mov['fecha']);
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 2) . $fila, $mov['valor']);
+        $colIdx += 3;
     }
 
     $hoja->setCellValue("{$colDevolucionesLetra}{$fila}", $f['devoluciones']);
+    $colIdx = $colInicioDevDet;
+    foreach ($f['devoluciones_mov'] as $mov) {
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx) . $fila, $mov['tipo'] . ' #' . $mov['numero']);
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 1) . $fila, $mov['fecha']);
+        $hoja->setCellValue(Coordinate::stringFromColumnIndex($colIdx + 2) . $fila, $mov['valor']);
+        $colIdx += 3;
+    }
+
     $hoja->setCellValue("{$ultimaColumna}{$fila}", $f['total_colocado']);
 
     $totales[3] += $f['presupuesto_crm'];
@@ -195,15 +240,25 @@ foreach ($filas as $f) {
     $totales[12] += $f['abonos'];
     $totales[$colDevoluciones] += $f['devoluciones'];
     $totales[$totalColumnas] += $f['total_colocado'];
-    $colIdx = 13;
+    $colIdx = $colInicioWo;
     foreach ($f['colocacion_wo'] as $mov) {
-        $totales[$colIdx + 1] += $mov['valor'];
-        $colIdx += 2;
+        $totales[$colIdx + 2] += $mov['valor'];
+        $colIdx += 3;
     }
     $colIdx = $colInicioPos;
     foreach ($f['colocacion_pos'] as $mov) {
-        $totales[$colIdx + 1] += $mov['valor'];
-        $colIdx += 2;
+        $totales[$colIdx + 2] += $mov['valor'];
+        $colIdx += 3;
+    }
+    $colIdx = $colInicioFvDet;
+    foreach ($f['factura_venta_mov'] as $mov) {
+        $totales[$colIdx + 2] += $mov['valor'];
+        $colIdx += 3;
+    }
+    $colIdx = $colInicioDevDet;
+    foreach ($f['devoluciones_mov'] as $mov) {
+        $totales[$colIdx + 2] += $mov['valor'];
+        $colIdx += 3;
     }
 
     $fila++;

@@ -84,7 +84,7 @@ $stmtUpsert = $bdd->prepare("
         tercero_externo_id = VALUES(tercero_externo_id), tercero_externo_nombre = VALUES(tercero_externo_nombre),
         id_colegio = IF(asignado_manual = 1, id_colegio, VALUES(id_colegio)),
         colegio_extraido = VALUES(colegio_extraido), valor_neto = VALUES(valor_neto),
-        id_periodo = VALUES(id_periodo), updated_at = NOW()
+        id_periodo = IF(asignado_manual = 1, id_periodo, VALUES(id_periodo)), updated_at = NOW()
 ");
 
 $procesados = [];

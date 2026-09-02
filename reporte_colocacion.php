@@ -285,6 +285,21 @@ if ($es_admin) {
     v = parseFloat(v) || 0;
     return '$ ' + Math.round(v).toLocaleString('es-CO');
   }
+  // Render compartido para columnas de movimientos individuales (Factura de Venta, Colocación
+  // World Office, Facturas POS, Devoluciones) — cada movimiento muestra tipo + número de
+  // documento (ej. "POS #12503") junto a fecha y valor, a pedido del usuario 2026-09-02.
+  function renderMovs(movs, negativo) {
+    movs = movs || [];
+    if (!movs.length) return '—';
+    var total = movs.reduce(function (s, m) { return s + (parseFloat(m.valor) || 0); }, 0);
+    var signo = negativo ? '- ' : '';
+    var detalle = movs.map(function (m) {
+      return '<span>' + h(m.tipo) + ' #' + h(m.numero) + ' · ' + h(m.fecha) + ' · ' + signo + money(m.valor) + '</span>';
+    }).join('');
+    var resumen = movs.length + ' mov. · ' + signo + money(total);
+    if (negativo && total) resumen = '<span style="color:#dc2626">' + resumen + '</span>';
+    return '<div>' + resumen + '</div><div class="col-wo-detalle">' + detalle + '</div>';
+  }
 
   // ── Sección 2/1: tabla del reporte (siempre visible) ──
   var tabla = $('#tabla-colocacion').DataTable({
@@ -302,39 +317,11 @@ if ($es_admin) {
       { data: 'descuento_promedio', className: 'col-money', render: function (d) { return (parseFloat(d) || 0).toFixed(2) + '%'; } },
       { data: 'numero_adopcion', className: 'col-money', render: function (d) { return d ? h(d) : '—'; } },
       { data: 'cliente', render: function (d) { return h(d); } },
-      { data: 'factura_venta', className: 'col-money', render: function (d) { return money(d); } },
+      { data: 'factura_venta_mov', className: 'col-money', render: function (movs) { return renderMovs(movs, false); } },
       { data: 'abonos', className: 'col-money', render: function (d) { return money(d); } },
-      {
-        data: 'colocacion_wo', className: 'col-money',
-        render: function (movs) {
-          movs = movs || [];
-          if (!movs.length) return '—';
-          var total = movs.reduce(function (s, m) { return s + (parseFloat(m.valor) || 0); }, 0);
-          var detalle = movs.map(function (m) {
-            return '<span>' + h(m.fecha) + ' · ' + money(m.valor) + '</span>';
-          }).join('');
-          return '<div>' + movs.length + ' mov. · ' + money(total) + '</div><div class="col-wo-detalle">' + detalle + '</div>';
-        }
-      },
-      {
-        data: 'colocacion_pos', className: 'col-money',
-        render: function (movs) {
-          movs = movs || [];
-          if (!movs.length) return '—';
-          var total = movs.reduce(function (s, m) { return s + (parseFloat(m.valor) || 0); }, 0);
-          var detalle = movs.map(function (m) {
-            return '<span>' + h(m.fecha) + ' · ' + money(m.valor) + '</span>';
-          }).join('');
-          return '<div>' + movs.length + ' mov. · ' + money(total) + '</div><div class="col-wo-detalle">' + detalle + '</div>';
-        }
-      },
-      {
-        data: 'devoluciones', className: 'col-money',
-        render: function (d) {
-          d = parseFloat(d) || 0;
-          return d ? '<span style="color:#dc2626">- ' + money(d) + '</span>' : '—';
-        }
-      },
+      { data: 'colocacion_wo', className: 'col-money', render: function (movs) { return renderMovs(movs, false); } },
+      { data: 'colocacion_pos', className: 'col-money', render: function (movs) { return renderMovs(movs, false); } },
+      { data: 'devoluciones_mov', className: 'col-money', render: function (movs) { return renderMovs(movs, true); } },
       { data: 'total_colocado', className: 'col-money', render: function (d) { return '<strong>' + money(d) + '</strong>'; } },
     ],
     language: {
@@ -352,6 +339,13 @@ if ($es_admin) {
       var sum = function (col) {
         return api.column(col, { search: 'applied' }).data().reduce(function (a, b) { return a + (parseFloat(b) || 0); }, 0);
       };
+      // Factura de Venta (10) y Devoluciones (14) ahora traen un arreglo de movimientos en vez de
+      // un total escalar — sumar el 'valor' de cada movimiento en vez de parseFloat directo.
+      var sumMovs = function (col) {
+        return api.column(col, { search: 'applied' }).data().reduce(function (a, movs) {
+          return a + (movs || []).reduce(function (s, m) { return s + (parseFloat(m.valor) || 0); }, 0);
+        }, 0);
+      };
       // Totales al pie, respetando el filtro/búsqueda activa de DataTables.
       var $tfoot = $(api.table().footer());
       if (!$tfoot.length) {
@@ -363,7 +357,7 @@ if ($es_admin) {
           '</tr></tfoot>');
       }
       var $celdas = $(api.table().container()).find('tfoot td.col-money');
-      var valores = [sum(2), sum(3), sum(4), sum(5), sum(6), sum(10), sum(11), sum(14), sum(15)];
+      var valores = [sum(2), sum(3), sum(4), sum(5), sum(6), sumMovs(10), sum(11), sumMovs(14), sum(15)];
       var idxDevoluciones = 7;
       $celdas.each(function (i) {
         if (i === idxDevoluciones) {
@@ -395,6 +389,22 @@ if ($es_admin) {
     $('#link-excel-colocacion').attr('href', href);
   }
 
+  // Solo refresca la tabla principal (para reflejar los nuevos valores tras asignar un colegio a
+  // un documento sin cruzar) sin tocar el panel "sin cruzar" ni reiniciar la paginación — evitar
+  // reconstruir TODO el panel (que reinicializa select2 en cada fila restante y da sensación de
+  // "recargar la página") cada vez que se asigna un solo documento.
+  function refrescarSoloTabla() {
+    var idPeriodo = $('#filtro-periodo').val();
+    var params = idPeriodo ? { id_periodo: idPeriodo } : {};
+    $.getJSON('php/colocacion_tabla.php', params, function (resp) {
+      if (!resp.success) return;
+      tabla.clear().rows.add(resp.filas || []).draw(false);
+      var filas = resp.filas || [];
+      poblarFiltro($('#filtro-empresa').data('todos', 'Todas'), filas.map(function (f) { return f.empresa; }));
+      poblarFiltro($('#filtro-cliente').data('todos', 'Todos'), filas.map(function (f) { return f.cliente; }));
+    });
+  }
+
   function cargarTabla() {
     var idPeriodo = $('#filtro-periodo').val();
     var params = idPeriodo ? { id_periodo: idPeriodo } : {};
@@ -422,7 +432,7 @@ if ($es_admin) {
       var sinCruzar = resp.sinCruzar || [];
       if (sinCruzar.length) {
         $lista.html(sinCruzar.map(function (d) {
-          return '<div class="col-sincruzar-item" data-id-wo="' + h(d.id_wo) + '">' +
+          return '<div class="col-sincruzar-item" data-id-wo="' + h(d.id_wo) + '" data-tipo="' + h(d.tipo_documento) + '">' +
             '<strong>' + h(d.tipo_documento) + ' ' + h(d.numero) + '</strong> — ' + h(d.fecha) +
             '<div class="concepto">' + h(d.concepto) + '</div>' +
             (esAdmin ? (
@@ -488,6 +498,7 @@ if ($es_admin) {
     var $select = $item.find('.sincruzar-select');
     var $resultado = $item.find('.resultado');
     var idWo = $item.data('id-wo');
+    var tipoDocumento = $item.data('tipo');
     var idColegio = $select.val();
     if (!idColegio) {
       $resultado.attr('class', 'err').text('Selecciona un colegio.');
@@ -495,11 +506,21 @@ if ($es_admin) {
     }
     $btn.prop('disabled', true);
     $resultado.attr('class', '').text('Guardando...');
-    $.post('php/colocacion_asignar_colegio.php', { id_wo: idWo, id_colegio: idColegio })
+    $.post('php/colocacion_asignar_colegio.php', { id_wo: idWo, tipo_documento: tipoDocumento, id_colegio: idColegio })
       .done(function (resp) {
         if (resp && resp.success) {
           $resultado.attr('class', 'ok').text('Asignado.');
-          cargarTabla();
+          if ($select.hasClass('select2-hidden-accessible')) $select.select2('destroy');
+          $item.fadeOut(200, function () {
+            $item.remove();
+            if (!$('#lista-sin-cruzar .col-sincruzar-item').length) $('#panel-sin-cruzar').hide();
+          });
+          var $sc = $('#col-sincruzar'), $em = $('#col-emparejados');
+          var numSc = (parseInt($sc.text().replace(/\D/g, ''), 10) || 0) - 1;
+          var numEm = (parseInt($em.text().replace(/\D/g, ''), 10) || 0) + 1;
+          $sc.text(Math.max(0, numSc).toLocaleString('es-CO'));
+          $em.text(numEm.toLocaleString('es-CO'));
+          refrescarSoloTabla();
         } else {
           $btn.prop('disabled', false);
           $resultado.attr('class', 'err').text((resp && resp.message) || 'Error al asignar.');
