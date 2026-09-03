@@ -23,7 +23,23 @@
  * este recálculo, el documento queda "cruzado" en la base de datos pero invisible en cualquier
  * período que se filtre — confirmado con un caso real (Santísimo Sacramento, colegio de Calendario
  * A, asignado bajo el período de Calendario B, invisible al filtrar 2027).
+ *
+ * 2026-09-03: el "período activo" de un calendario NO es simplemente el más reciente creado en la
+ * tabla `periodos` — no existe ninguna columna/bandera de "activo", así que tomar `ORDER BY id
+ * DESC LIMIT 1` asume que el último período creado es el vigente. Eso es cierto hoy para
+ * Calendario B (2026B es el más reciente Y el vigente), pero para Calendario A ya existe el
+ * período 2027 creado de antemano (planeación futura) mientras 2026 sigue siendo el vigente real
+ * — confirmado por el usuario tras encontrar 267 documentos asignados manualmente a colegios de
+ * Calendario A que habían quedado etiquetados con 2027 en vez de 2026 (corregidos por SQL directo
+ * el mismo día). Por pedido explícito del usuario, Calendario A queda fijo en el período "2026"
+ * (constante `PERIODO_ACTIVO_CALENDARIO_A` abajo) en vez de "el más reciente"; Calendario B sigue
+ * usando `ORDER BY id DESC LIMIT 1` porque ahí sí coincide con el vigente. Si en el futuro se crea
+ * un período de Calendario A posterior a 2026 que SÍ sea el vigente, hay que actualizar esa
+ * constante a mano — no hay forma de derivarlo automáticamente sin una bandera de "activo" en la
+ * tabla `periodos`.
  */
+
+const PERIODO_ACTIVO_CALENDARIO_A = '2026';
 require_once("aut.php");
 
 if (($_SESSION["tipo"] ?? null) != 1) {
@@ -52,8 +68,13 @@ if ($id_calendario_colegio === false) {
     exit;
 }
 
-$stmt = $bdd->prepare("SELECT id FROM periodos WHERE id_calendario = ? ORDER BY id DESC LIMIT 1");
-$stmt->execute([$id_calendario_colegio]);
+if ((int)$id_calendario_colegio === 1) {
+    $stmt = $bdd->prepare("SELECT id FROM periodos WHERE id_calendario = 1 AND periodo = ?");
+    $stmt->execute([PERIODO_ACTIVO_CALENDARIO_A]);
+} else {
+    $stmt = $bdd->prepare("SELECT id FROM periodos WHERE id_calendario = ? ORDER BY id DESC LIMIT 1");
+    $stmt->execute([$id_calendario_colegio]);
+}
 $id_periodo_colegio = $stmt->fetchColumn();
 if ($id_periodo_colegio === false) {
     echo json_encode(['success' => false, 'message' => 'El colegio no tiene un período activo en su calendario']);
