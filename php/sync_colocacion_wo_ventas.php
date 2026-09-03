@@ -2,26 +2,34 @@
 /**
  * /php/sync_colocacion_wo_ventas.php
  * Sincroniza por lotes las devoluciones de venta (DREM), las notas crédito de
- * venta (NCV, agregado 2026-09-02) y las facturas de punto de venta (POS) de
- * World Office hacia la misma caché local
- * `wo_documentos_colocacion` que usa php/sync_colocacion_wo.php para REM/FV,
- * cruzando cada documento contra un colegio de Calendario B mediante el
- * campo `concepto` (ver includes/matching_colegios.php).
+ * venta (NCV, agregado 2026-09-02), las facturas de punto de venta (POS) y los
+ * recibos de caja (RC, agregado 2026-09-02) de World Office hacia la misma
+ * caché local `wo_documentos_colocacion` que usa php/sync_colocacion_wo.php
+ * para REM/FV, cruzando cada documento contra un colegio de Calendario B
+ * mediante el campo `concepto` (ver includes/matching_colegios.php).
  *
- * A diferencia de sync_colocacion_wo.php, acá el valor neto (valorTotal) ya
- * viene en la propia lista paginada de /ventas/filtrarPaginado o
- * /puntodeventa/filtrarPaginado (ver includes/api_wo_ventas.php) — no hace
- * falta pedir detalle+renglones por documento, así que este sync es de una
- * sola llamada por página en vez de dos por documento.
+ * A diferencia de sync_colocacion_wo.php, acá el valor neto ya viene en la
+ * propia lista paginada (ver includes/api_wo_ventas.php) — no hace falta
+ * pedir detalle+renglones por documento, así que este sync es de una sola
+ * llamada por página en vez de dos por documento. DREM/NCV/POS traen
+ * `valorTotal`; RC trae `valorCredito`/`valorDebito` en su lugar (es partida
+ * doble, ambos iguales) — ver el `if` de más abajo.
  *
  * DREM y NCV se restan del total colocado (reemplazan la fuente anterior, que
  * era `devoluciones_v`/`libros_devol_v` del propio CRM — decisión del usuario
  * 2026-08-26: World Office es ahora la única fuente de devoluciones para
  * este reporte; NCV se agregó el 2026-09-02 a pedido del usuario, mismo host
  * y mismo endpoint `/ventas/filtrarPaginado`, solo cambia el filtro
- * `documentoTipo.codigoDocumento`). POS se suma, igual que REM/FV. La mayoría de los
- * documentos POS son cierres de caja genéricos sin colegio asociado
- * ("CORTE EDUCADORES", tercero "Consumidor Final") — quedan sin cruzar y
+ * `documentoTipo.codigoDocumento`). POS y RC se suman, igual que REM/FV.
+ * RC usa un endpoint propio en este mismo host, `/contabilidad/filtrarPaginado`
+ * — encontrado 2026-09-02 después de que el usuario mostrara que World Office
+ * SÍ muestra valor para Recibos de Caja en su propia interfaz, contradiciendo
+ * la conclusión anterior ("World Office no expone valor para RC"), que solo
+ * era válida para el endpoint `/inventarios/listarDocumentoSalidaAlmacen`
+ * (usado para REM/FV) — ese sigue sin tener valor para RC, pero este otro sí.
+ * La mayoría de los documentos POS/RC son cierres de caja o consignaciones
+ * genéricas sin colegio asociado ("CORTE EDUCADORES"/"CONSIGNACION VENTAS...",
+ * tercero "Consumidor Final" u otro genérico) — quedan sin cruzar y
  * simplemente no aportan a ningún colegio, igual que cualquier REM/FV sin
  * cruzar; no se descartan del sync, sí de la agregación por colegio.
  */
@@ -38,7 +46,7 @@ require_once("../includes/matching_colegios.php");
 require_once("../conexion/bdd.php");
 header('Content-Type: application/json');
 
-$tiposValidos = ['DREM', 'NCV', 'POS'];
+$tiposValidos = ['DREM', 'NCV', 'POS', 'RC'];
 $tipoDocumento = in_array($_GET['tipoDocumento'] ?? '', $tiposValidos, true) ? $_GET['tipoDocumento'] : 'DREM';
 $pagina        = isset($_GET['pagina']) ? max(0, (int)$_GET['pagina']) : 0;
 $porPagina     = isset($_GET['porPagina']) ? max(1, min(50, (int)$_GET['porPagina'])) : 20;
@@ -60,6 +68,8 @@ if ($tipoDocumento === 'POS') {
     $respuestaLista = listar_facturas_pos_wo($pagina, $porPagina);
 } elseif ($tipoDocumento === 'NCV') {
     $respuestaLista = listar_notas_credito_venta_wo($pagina, $porPagina);
+} elseif ($tipoDocumento === 'RC') {
+    $respuestaLista = listar_recibos_caja_wo($pagina, $porPagina);
 } else {
     $respuestaLista = listar_devoluciones_venta_wo($pagina, $porPagina);
 }
@@ -119,7 +129,10 @@ foreach ($documentos as $d) {
     $fechaWo = DateTime::createFromFormat('d/m/Y', (string)($d['fecha'] ?? ''));
     $fechaSql = $fechaWo ? $fechaWo->format('Y-m-d') : date('Y-m-d');
 
-    $valorNeto = (float)($d['valorTotal'] ?? 0);
+    // RC (partida doble) no trae 'valorTotal' — trae valorCredito/valorDebito, iguales entre sí.
+    $valorNeto = $tipoDocumento === 'RC'
+        ? (float)($d['valorCredito'] ?? $d['valorDebito'] ?? 0)
+        : (float)($d['valorTotal'] ?? 0);
 
     $stmtUpsert->execute([
         $idWo,

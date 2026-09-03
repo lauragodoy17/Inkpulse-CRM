@@ -132,10 +132,9 @@ if ($es_admin) {
         <div class="col-section-body">
           <p class="col-aviso">
             Trae las remisiones (REM, prefijo CEUR), facturas de venta (FV), devoluciones de venta (DREM),
-            notas crédito de venta (NCV) y facturas de punto de venta (POS) de World Office y las cruza con
-            el colegio según el campo "concepto" de cada documento. Las devoluciones (DREM) y notas crédito
-            (NCV) restan del total colocado; REM, FV y POS suman. Los Abonos (Recibo de Caja) no se
-            sincronizan: World Office no expone ningún valor monetario para ese tipo de documento.
+            notas crédito de venta (NCV), facturas de punto de venta (POS) y recibos de caja (RC) de World
+            Office y las cruza con el colegio según el campo "concepto" de cada documento. Las devoluciones
+            (DREM) y notas crédito (NCV) restan del total colocado; REM, FV, POS y RC (Abonos) suman.
           </p>
 
           <button type="button" class="col-btn" id="btn-iniciar"><i class="bi bi-arrow-repeat"></i> Actualizar desde World Office</button>
@@ -318,7 +317,7 @@ if ($es_admin) {
       { data: 'numero_adopcion', className: 'col-money', render: function (d) { return d ? h(d) : '—'; } },
       { data: 'cliente', render: function (d) { return h(d); } },
       { data: 'factura_venta_mov', className: 'col-money', render: function (movs) { return renderMovs(movs, false); } },
-      { data: 'abonos', className: 'col-money', render: function (d) { return money(d); } },
+      { data: 'abonos_mov', className: 'col-money', render: function (movs) { return renderMovs(movs, false); } },
       { data: 'colocacion_wo', className: 'col-money', render: function (movs) { return renderMovs(movs, false); } },
       { data: 'colocacion_pos', className: 'col-money', render: function (movs) { return renderMovs(movs, false); } },
       { data: 'devoluciones_mov', className: 'col-money', render: function (movs) { return renderMovs(movs, true); } },
@@ -357,7 +356,7 @@ if ($es_admin) {
           '</tr></tfoot>');
       }
       var $celdas = $(api.table().container()).find('tfoot td.col-money');
-      var valores = [sum(2), sum(3), sum(4), sum(5), sum(6), sumMovs(10), sum(11), sumMovs(14), sum(15)];
+      var valores = [sum(2), sum(3), sum(4), sum(5), sum(6), sumMovs(10), sumMovs(11), sumMovs(14), sum(15)];
       var idxDevoluciones = 7;
       $celdas.each(function (i) {
         if (i === idxDevoluciones) {
@@ -536,7 +535,7 @@ if ($es_admin) {
 
   // ── Sección 1: sincronización con World Office (solo admin) ──
   // REM/FV vienen de listarDocumentoSalidaAlmacen (api.worldoffice.cloud, ver
-  // php/sync_colocacion_wo.php); DREM/NCV/POS vienen del microservicio de ventas
+  // php/sync_colocacion_wo.php); DREM/NCV/POS/RC vienen del microservicio de ventas
   // (ver php/sync_colocacion_wo_ventas.php) — mismo token, endpoint distinto.
   var TIPOS = [
     { codigo: 'REM',  endpoint: 'php/sync_colocacion_wo.php',        etiqueta: 'Remisiones (CEUR)' },
@@ -544,6 +543,7 @@ if ($es_admin) {
     { codigo: 'DREM', endpoint: 'php/sync_colocacion_wo_ventas.php', etiqueta: 'Devoluciones de venta' },
     { codigo: 'NCV',  endpoint: 'php/sync_colocacion_wo_ventas.php', etiqueta: 'Notas crédito de venta' },
     { codigo: 'POS',  endpoint: 'php/sync_colocacion_wo_ventas.php', etiqueta: 'Facturas POS' },
+    { codigo: 'RC',   endpoint: 'php/sync_colocacion_wo_ventas.php', etiqueta: 'Recibos de caja (Abonos)' },
   ];
   var tipoIdx = 0;
   var corriendo = false;

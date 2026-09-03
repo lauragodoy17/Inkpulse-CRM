@@ -2,8 +2,17 @@
 /**
  * /includes/api_wo_ventas.php
  * Devoluciones de venta (documentoTipo "DREM"), notas crédito de venta
- * (documentoTipo "NCV") y facturas de punto de venta (documentoTipo "POS")
- * de World Office. Viven en un microservicio aparte
+ * (documentoTipo "NCV"), facturas de punto de venta (documentoTipo "POS") y
+ * recibos de caja (documentoTipo "RC", agregado 2026-09-02) de World Office.
+ * RC vive en un endpoint propio dentro de este mismo host —
+ * `/contabilidad/filtrarPaginado`, distinto de `/ventas/` y `/puntodeventa/` —
+ * encontrado por prueba directa después de que `/inventarios/listarDocumentoSalidaAlmacen`
+ * (ver includes/prueba_post2.php) confirmara que ESE endpoint no expone ningún
+ * valor para RC (0 renglones, sin campo de total en el detalle) — la conclusión
+ * anterior de "World Office no expone valor para RC" era válida solo para ese
+ * endpoint, no para toda la API. Trae `valorCredito`/`valorDebito` (iguales
+ * entre sí, con `diferencia` siempre en 0 en los casos probados — un Recibo de
+ * Caja es partida doble) en vez de `valorTotal`. Viven en un microservicio aparte
  * (wo-backend-prodinst1-...azurewebsites.net), NO en api.worldoffice.cloud
  * (el host que usa el resto de este proyecto vía hacer_peticion_api()), pero
  * SÍ aceptan el mismo token permanente guardado en `apis_externas` — a
@@ -83,6 +92,23 @@ function listar_notas_credito_venta_wo($pagina = 0, $registrosPorPagina = 20) {
         "registroInicial" => (int)$pagina * (int)$registrosPorPagina,
     ];
     return hacer_peticion_api_ventas('/ventas/filtrarPaginado', $cuerpo);
+}
+
+function listar_recibos_caja_wo($pagina = 0, $registrosPorPagina = 20) {
+    $cuerpo = [
+        "columnaOrdenar" => "fecha,id",
+        "pagina" => (int)$pagina,
+        "registrosPorPagina" => (int)$registrosPorPagina,
+        "orden" => "DESC",
+        "filtros" => [[
+            "atributo" => "documentoTipo.codigoDocumento", "valor" => "RC", "valor2" => null,
+            "tipoFiltro" => 0, "tipoDato" => 0, "nombreColumna" => null, "clase" => null,
+            "operador" => 1, "subGrupo" => "filtro",
+        ]],
+        "canal" => 0,
+        "registroInicial" => (int)$pagina * (int)$registrosPorPagina,
+    ];
+    return hacer_peticion_api_ventas('/contabilidad/filtrarPaginado', $cuerpo);
 }
 
 function listar_facturas_pos_wo($pagina = 0, $registrosPorPagina = 20) {

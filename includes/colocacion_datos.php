@@ -148,11 +148,15 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) $clientePorColegioRecursos[$r['id_colegio']] = $r['cliente'];
 
     // ── Documentos de World Office ya sincronizados (ver php/sync_colocacion_wo.php para REM/FV
-    // y php/sync_colocacion_wo_ventas.php para DREM/NCV/POS). FV y POS suman al total colocado,
-    // REM también (como movimientos individuales, igual que antes), y DREM + NCV (devoluciones de
-    // venta y notas crédito de venta) restan — reemplazan la fuente anterior basada en
-    // `devoluciones_v`/`libros_devol_v` del CRM, decisión del usuario 2026-08-26: World Office es
-    // ahora la única fuente de devoluciones para este reporte (NCV agregada 2026-09-02). ──
+    // y php/sync_colocacion_wo_ventas.php para DREM/NCV/POS/RC). FV, POS y RC (Abonos) suman al
+    // total colocado, REM también (como movimientos individuales, igual que antes), y DREM + NCV
+    // (devoluciones de venta y notas crédito de venta) restan — reemplazan la fuente anterior
+    // basada en `devoluciones_v`/`libros_devol_v` del CRM, decisión del usuario 2026-08-26: World
+    // Office es ahora la única fuente de devoluciones para este reporte (NCV agregada 2026-09-02).
+    // RC (Abonos) agregado 2026-09-02: hasta entonces Abonos estaba fijo en 0 porque el endpoint
+    // usado para REM/FV no expone ningún valor para Recibo de Caja — sí lo expone otro endpoint
+    // (`/contabilidad/filtrarPaginado`, ver includes/api_wo_ventas.php), encontrado después de que
+    // el usuario mostrara que World Office sí trae valor para RC en su propia interfaz. ──
     $stmt = $bdd->prepare("SELECT id_colegio, tipo_documento, fecha, numero, valor_neto, tercero_externo_nombre
         FROM wo_documentos_colocacion WHERE id_periodo = $id_periodo AND id_colegio IN ($inPlaceholders) ORDER BY fecha ASC");
     $stmt->execute($idsColegios);
@@ -160,6 +164,7 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
     $colocacionWoPorColegio = [];
     $colocacionPosPorColegio = [];
     $devolucionesPorColegio = [];
+    $abonosPorColegio = [];
     $clientePorColegioWo = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $idc = $r['id_colegio'];
@@ -177,6 +182,9 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
                 break;
             case 'POS':
                 $colocacionPosPorColegio[$idc][] = $mov;
+                break;
+            case 'RC':
+                $abonosPorColegio[$idc][] = $mov;
                 break;
             default: // REM
                 $colocacionWoPorColegio[$idc][] = $mov;
@@ -207,7 +215,8 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
             $cliente = $clienteWo ?? $clienteRecursos ?? '';
         }
 
-        $abonos = 0; // World Office no expone valor para Recibo de Caja.
+        $movimientosAbonos = $abonosPorColegio[$id] ?? [];
+        $abonos = array_sum(array_column($movimientosAbonos, 'valor'));
         $movimientosFv = $facturaPorColegio[$id] ?? [];
         $facturaVenta = array_sum(array_column($movimientosFv, 'valor'));
         $movimientosWo = $colocacionWoPorColegio[$id] ?? [];
@@ -235,6 +244,7 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
             'factura_venta' => $facturaVenta,
             'factura_venta_mov' => $movimientosFv,
             'abonos' => $abonos,
+            'abonos_mov' => $movimientosAbonos,
             'colocacion_wo' => $movimientosWo,
             'colocacion_pos' => $movimientosPos,
             'devoluciones' => $devoluciones,
