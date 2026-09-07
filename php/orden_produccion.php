@@ -20,15 +20,17 @@ if (!empty($_FILES['archivo']['name'])) {
 
 // Insertar orden
 $observaciones = str_replace(['"', "'"], '', $_POST["observaciones"] ?? '');
+$descripcion_otro = $_POST["descrip"] === '3' ? str_replace(['"', "'"], '', $_POST["descrip_otro"] ?? '') : '';
 
-$sql_p2 = "INSERT INTO ordenes_produccion(usuario,solicitante,cliente,descripcion,observaciones,adjunto,fecha_ent_s,año)
-            VALUES(?,?,?,?,?,?,?,?)";
+$sql_p2 = "INSERT INTO ordenes_produccion(usuario,solicitante,cliente,descripcion,descripcion_otro,observaciones,adjunto,fecha_ent_s,año)
+            VALUES(?,?,?,?,?,?,?,?,?)";
 $query_p2 = $bdd->prepare($sql_p2);
 $ok = $query_p2->execute([
     $_SESSION["id"],
     $_POST["solicitante"] ?? '',
     $_POST["cliente"]     ?? '',
     $_POST["descrip"]     ?? '',
+    $descripcion_otro,
     $observaciones,
     $nombre_archivo,
     $_POST["fecha_ent_s"] ?? '',

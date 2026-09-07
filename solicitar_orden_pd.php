@@ -76,7 +76,12 @@
             <div class="col-md-3 col-sm-6">
               <div class="form-group">
                 <label for="solicitante">Solicitante <span class="req">*</span></label>
-                <input type="text" class="form-control" name="solicitante" id="solicitante" required>
+                <select class="form-control" name="solicitante" id="solicitante" style="width:100%" required>
+                  <option value="">Seleccionar</option>
+                  <option value="Wilmer Suárez">Wilmer Suárez</option>
+                  <option value="Liliana Toledo">Liliana Toledo</option>
+                  <option value="Carlos Puentes">Carlos Puentes</option>
+                </select>
               </div>
             </div>
             <div class="col-md-4 col-sm-6">
@@ -102,6 +107,12 @@
                   <option value="2">Guía</option>
                   <option value="3">Otro</option>
                 </select>
+              </div>
+            </div>
+            <div class="col-md-4 col-sm-6 d-none" id="descrip_otro_wrap">
+              <div class="form-group">
+                <label for="descrip_otro">Especifique descripción <span class="req">*</span></label>
+                <input type="text" class="form-control" name="descrip_otro" id="descrip_otro">
               </div>
             </div>
           </div>
@@ -136,7 +147,7 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label for="titulo">Título <span class="req">*</span></label>
-                    <input type="text" class="form-control" name="titulo" id="titulo">
+                    <select class="form-control" name="titulo" id="titulo" style="width:100%"></select>
                   </div>
                 </div>
                 <div class="col-md-4">
@@ -161,7 +172,7 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label for="titulo<?= $i ?>">Título <span class="req">*</span></label>
-                    <input type="text" class="form-control" name="titulo" id="titulo<?= $i ?>">
+                    <select class="form-control" name="titulo" id="titulo<?= $i ?>" style="width:100%"></select>
                   </div>
                 </div>
                 <div class="col-md-4">
@@ -216,6 +227,45 @@
     width: '100%',
     language: { noResults: function () { return 'Sin resultados'; } }
   });
+
+  $('#solicitante').select2({
+    placeholder: 'Seleccionar solicitante',
+    allowClear: true,
+    width: '100%',
+    language: { noResults: function () { return 'Sin resultados'; } }
+  });
+
+  $('#descrip').on('change', function () {
+    var esOtro = $(this).val() === '3';
+    $('#descrip_otro_wrap').toggleClass('d-none', !esOtro);
+    $('#descrip_otro').prop('required', esOtro);
+    if (!esOtro) $('#descrip_otro').val('');
+  });
+
+  function initTituloSelect($el) {
+    $el.select2({
+      placeholder: 'Escriba para buscar un libro...',
+      allowClear: true,
+      width: '100%',
+      minimumInputLength: 2,
+      tags: true,
+      language: {
+        noResults: function () { return 'Sin resultados'; },
+        searching: function () { return 'Buscando...'; },
+        inputTooShort: function () { return 'Escriba al menos 2 letras para buscar'; }
+      },
+      ajax: {
+        url: 'php/buscar_libros_opd.php',
+        dataType: 'json',
+        delay: 300,
+        data: function (params) { return { q: params.term }; },
+        processResults: function (data) { return { results: data }; },
+        cache: true
+      }
+    });
+  }
+
+  initTituloSelect($('#titulo'));
 </script>
 <script>
   function syncLibro(idx) {
@@ -225,7 +275,8 @@
     $('#libro_e' + suffix).val(titulo + '/' + cant);
   }
 
-  $('#cantidad, #titulo').on('keyup', function () { syncLibro(0); });
+  $('#cantidad').on('keyup', function () { syncLibro(0); });
+  $('#titulo').on('change', function () { syncLibro(0); });
 
   var m = 1;
 
@@ -233,7 +284,9 @@
     if (m >= 99) { $(this).addClass('d-none'); return; }
     $('#agg_l' + m).removeClass('d-none');
     (function (idx) {
-      $('#cantidad' + idx + ', #titulo' + idx).on('keyup', function () { syncLibro(idx); });
+      initTituloSelect($('#titulo' + idx));
+      $('#cantidad' + idx).on('keyup', function () { syncLibro(idx); });
+      $('#titulo'   + idx).on('change', function () { syncLibro(idx); });
     })(m);
     m++;
   });
@@ -241,7 +294,7 @@
   $(document).on('click', '.btn-remove-mat', function () {
     var idx = $(this).data('idx');
     $('#agg_l' + idx).addClass('d-none');
-    $('#titulo'   + idx).val('');
+    $('#titulo'   + idx).val(null).trigger('change');
     $('#cantidad' + idx).val('');
     $('#libro_e'  + idx).val('');
   });

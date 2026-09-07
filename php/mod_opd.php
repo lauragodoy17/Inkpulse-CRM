@@ -33,15 +33,16 @@ foreach ($_POST['libro_e'] ?? [] as $libro_raw) {
     if (!$ok) { $error = "Error al insertar un material nuevo."; break; }
 }
 
-// Actualizar cantidad por libro
+// Actualizar cantidad y título por libro
 if (!$error) {
     foreach ($_POST['lib_p'] ?? [] as $val) {
         if (trim($val) === '') continue;
-        $parts = explode("/", $val, 2);
-        $lib   = $parts[0] ?? '';
-        $cant  = $parts[1] ?? '';
+        $parts  = explode("/", $val, 3);
+        $lib    = $parts[0] ?? '';
+        $cant   = $parts[1] ?? '';
+        $titulo = str_replace(['"', "'"], '', $parts[2] ?? '');
         if (trim($lib) === '') continue;
-        $ok = $bdd->prepare("UPDATE libros_opd SET cantidad = ? WHERE id = ?")->execute([$cant, $lib]);
+        $ok = $bdd->prepare("UPDATE libros_opd SET cantidad = ?, libro = ? WHERE id = ?")->execute([$cant, $titulo, $lib]);
         if (!$ok) { $error = "Error al actualizar cantidad de un material."; break; }
     }
 }
@@ -76,11 +77,12 @@ if (!$error) {
 // Actualizar datos generales de la OPD
 if (!$error) {
     $ok = $bdd->prepare(
-        "UPDATE ordenes_produccion SET observaciones = ?, cliente = ?, fecha_ent_s = ? WHERE id = ?"
+        "UPDATE ordenes_produccion SET observaciones = ?, cliente = ?, fecha_ent_s = ?, solicitante = ? WHERE id = ?"
     )->execute([
         $_POST['observaciones'] ?? '',
         $_POST['persona']       ?? '',
         $_POST['fecha_ent_s']   ?? '',
+        $_POST['solicitante']   ?? '',
         $opd
     ]);
     if (!$ok) { $error = "Error al actualizar los datos de la orden."; }

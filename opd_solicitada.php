@@ -5,7 +5,7 @@ require_once("conexion/bdd.php");
 $opd = intval($_GET['opd'] ?? 0);
 
 $req_pedido = $bdd->prepare(
-    "SELECT o.observaciones, o.fecha, o.descripcion, o.conse, o.año,
+    "SELECT o.observaciones, o.fecha, o.descripcion, o.descripcion_otro, o.conse, o.año,
             c.cliente, o.cliente as cid, o.adjunto, u.nombres, u.apellidos,
             o.fecha_ent_s, o.estado, o.solicitante, o.fecha_cumplida, o.fecha_ent_s
      FROM ordenes_produccion o
@@ -32,8 +32,13 @@ $impresoras = $req_imp->fetchAll();
 $req_cli = $bdd->query("SELECT id, cliente FROM clientes ORDER BY cliente");
 $clientes = $req_cli->fetchAll();
 
+$solicitantes_fijos = ['Wilmer Suárez', 'Liliana Toledo', 'Carlos Puentes'];
+$solicitante_actual = $pedido['solicitante'];
+
 $desc_map    = [1 => 'Libro estudiante', 2 => 'Guía', 3 => 'Otro'];
-$descripcion = $desc_map[$pedido['descripcion']] ?? 'Otro';
+$descripcion = $pedido['descripcion'] == 3
+    ? ($pedido['descripcion_otro'] !== '' ? $pedido['descripcion_otro'] : 'Otro')
+    : ($desc_map[$pedido['descripcion']] ?? 'Otro');
 $cumplida    = $pedido['estado'] == 4;
 $en_proceso  = $pedido['estado'] == 2;
 
@@ -332,6 +337,24 @@ $ent1 = $ent2 = $ent3 = [];
                 </div>
               </div>
             </div>
+            <div class="col-md-3 col-sm-6">
+              <div class="form-group">
+                <div class="edit-row-label">Solicitante <span class="req">*</span></div>
+                <select class="form-control" name="solicitante" id="solicitante" style="width:100%" required>
+                  <option value="">Seleccionar</option>
+                  <?php foreach ($solicitantes_fijos as $s): ?>
+                  <option value="<?= htmlspecialchars($s) ?>" <?= $s === $solicitante_actual ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($s) ?>
+                  </option>
+                  <?php endforeach; ?>
+                  <?php if ($solicitante_actual !== '' && !in_array($solicitante_actual, $solicitantes_fijos, true)): ?>
+                  <option value="<?= htmlspecialchars($solicitante_actual) ?>" selected>
+                    <?= htmlspecialchars($solicitante_actual) ?>
+                  </option>
+                  <?php endif; ?>
+                </select>
+              </div>
+            </div>
             <div class="col-md-4 col-sm-6">
               <div class="form-group">
                 <div class="edit-row-label">Cliente <span class="req">*</span></div>
@@ -350,6 +373,7 @@ $ent1 = $ent2 = $ent3 = [];
         <?php else: ?>
           <input type="hidden" name="fecha_ent_s" value="<?= htmlspecialchars($pedido['fecha_ent_s']) ?>">
           <input type="hidden" name="persona"     value="<?= htmlspecialchars($pedido['cid']) ?>">
+          <input type="hidden" name="solicitante" value="<?= htmlspecialchars($solicitante_actual) ?>">
         <?php endif; ?>
 
         <!-- Tabla de materiales -->
@@ -402,7 +426,15 @@ $ent1 = $ent2 = $ent3 = [];
                 ?>
                 <tr id="<?= $lid ?>">
                   <td><?= $i ?></td>
-                  <td><?= htmlspecialchars($libro['libro']) ?></td>
+                  <td>
+                    <?php if ($_SESSION['tipo'] != 8): ?>
+                      <select class="form-control libro-select" style="min-width:220px" id="libtitulo<?= $lid ?>" name="libtitulo">
+                        <option value="<?= htmlspecialchars($libro['libro']) ?>" selected><?= htmlspecialchars($libro['libro']) ?></option>
+                      </select>
+                    <?php else: ?>
+                      <?= htmlspecialchars($libro['libro']) ?>
+                    <?php endif; ?>
+                  </td>
                   <td>
                     <?php if ($_SESSION['tipo'] != 8): ?>
                       <input type="number" class="form-control dc" min="0" max="5000" id="cantidad<?= $lid ?>" name="cantidad" value="<?= $libro['cantidad'] ?>">
@@ -436,7 +468,7 @@ $ent1 = $ent2 = $ent3 = [];
                   <?php endif; ?>
 
                   <input type="hidden" name="lpid[]"        value="<?= $lid ?>" id="lpid<?= $lid ?>">
-                  <input type="hidden" name="lib_p[]"       id="l<?= $lid ?>"           value="<?= $lid ?>/<?= $libro['cantidad'] ?>">
+                  <input type="hidden" name="lib_p[]"       id="l<?= $lid ?>"           value="<?= $lid ?>/<?= $libro['cantidad'] ?>/<?= htmlspecialchars($libro['libro']) ?>">
                   <input type="hidden" name="i_click[]"     id="i_click<?= $lid ?>"     value="<?= $lid ?>/<?= $libro['click'] ?>">
                   <input type="hidden" name="i_impresora[]" id="i_impresora<?= $lid ?>" value="<?= $lid ?>/<?= $libro['impresora'] ?>/<?= $libro['valor_click'] ?>">
                   <input type="hidden" name="entrega1[]"    id="ent1<?= $lid ?>">
@@ -549,6 +581,49 @@ $(document).ready(function () {
     language: { noResults: function () { return 'Sin resultados'; } }
   });
 
+  $('#solicitante').select2({
+    placeholder: 'Seleccionar solicitante',
+    allowClear: true,
+    width: '100%',
+    language: { noResults: function () { return 'Sin resultados'; } }
+  });
+
+  function initTituloSelect($el) {
+    $el.select2({
+      placeholder: 'Escriba para buscar un libro...',
+      allowClear: true,
+      width: '100%',
+      minimumInputLength: 2,
+      tags: true,
+      language: {
+        noResults: function () { return 'Sin resultados'; },
+        searching: function () { return 'Buscando...'; },
+        inputTooShort: function () { return 'Escriba al menos 2 letras para buscar'; }
+      },
+      ajax: {
+        url: 'php/buscar_libros_opd.php',
+        dataType: 'json',
+        delay: 300,
+        data: function (params) { return { q: params.term }; },
+        processResults: function (data) { return { results: data }; },
+        cache: true
+      }
+    });
+  }
+
+  $('.libro-select').each(function () { initTituloSelect($(this)); });
+
+  function updateLibP(lid) {
+    var cant   = $('#cantidad' + lid).val();
+    var titulo = $('#libtitulo' + lid).val();
+    $('#l' + lid).val(lid + '/' + cant + '/' + titulo);
+  }
+
+  $(document).on('change', 'select[id^="libtitulo"]', function () {
+    var lid = this.id.slice('libtitulo'.length);
+    updateLibP(lid);
+  });
+
   $('#entregar').on('click', function () { $('#form_pedido').attr('action', 'php/entregar_opd.php').submit(); });
   $('#cumplida').on('click', function () { $('#form_pedido').attr('action', 'php/cumplir_opd.php').submit(); });
   $('#modificar').on('click', function () { $('#form_pedido').submit(); });
@@ -564,7 +639,7 @@ $(document).ready(function () {
   // Actualizar hidden inputs al modificar campos de la tabla
   $(document).on('keyup', 'input[id^="cantidad"]', function () {
     var lid = this.id.slice('cantidad'.length);
-    $('#l' + lid).val(lid + '/' + $(this).val());
+    updateLibP(lid);
   });
   $(document).on('keyup', 'input[id^="click"]', function () {
     var lid = this.id.slice('click'.length);
