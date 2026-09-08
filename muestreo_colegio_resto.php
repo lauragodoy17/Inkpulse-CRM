@@ -7,6 +7,8 @@
     if (isset($_GET["id_pedido"])) {
       if ($_GET["tp"] == 3)      echo '<title>Inkpulse - Muestreo aprobado</title>';
       elseif ($_GET["tp"] == 4)  echo '<title>Inkpulse - Muestreo despachado</title>';
+      elseif ($_GET["tp"] == 6)  echo '<title>Inkpulse - Muestreo procesando</title>';
+      elseif ($_GET["tp"] == 7)  echo '<title>Inkpulse - Muestreo en facturación</title>';
       else                       echo '<title>Inkpulse - Muestreo anulado</title>';
     } else {
       echo '<title>Inkpulse - Muestras entregadas</title>';
@@ -177,6 +179,8 @@
           if (isset($_GET["id_pedido"])) {
             if ($_GET["tp"] == 3)     { $titulo = 'Muestreo aprobado';   $bc = 'Aprobado';   $icon = 'bi-check-circle-fill'; $icon_color = '#15803d'; }
             elseif ($_GET["tp"] == 4) { $titulo = 'Muestreo despachado'; $bc = 'Despachado'; $icon = 'bi-truck';             $icon_color = '#1d4ed8'; }
+            elseif ($_GET["tp"] == 6) { $titulo = 'Muestreo procesando'; $bc = 'Procesando'; $icon = 'bi-shuffle';             $icon_color = '#1d4ed8'; }
+            elseif ($_GET["tp"] == 7) { $titulo = 'Muestreo en facturación'; $bc = 'Facturación'; $icon = 'bi-file-earmark-text';             $icon_color = '#1d4ed8'; }
             else                      { $titulo = 'Muestreo anulado';    $bc = 'Anulado';    $icon = 'bi-x-circle-fill';     $icon_color = '#dc2626'; }
           } else {
             $titulo = 'Muestras entregadas'; $bc = 'Entregadas'; $icon = 'bi-box-seam'; $icon_color = '#4361ee';
@@ -450,6 +454,14 @@
                 <i class="bi bi-file-earmark-plus"></i> Solicitar OP
               </a>
             <?php endif; ?>
+            <button type="button" id="procesar" class="mc-btn btn-info">
+                <i class="bi bi-shuffle"></i> Procesar
+            </button>
+          <?php elseif (isset($_GET["id_pedido"]) && $_GET["tp"] == 6): ?>
+            <button type="button" id="facturacion" class="mc-btn btn-warning">
+                <i class="bi bi-file-earmark-text"></i> Facturación
+            </button>
+          <?php elseif (isset($_GET["id_pedido"]) && $_GET["tp"] == 7): ?>
             <button type="button" id="entregar" class="mc-btn mc-btn-green">
               <i class="bi bi-truck"></i> Despachar
             </button>
@@ -475,6 +487,28 @@
         btnOk: 'Sí, despachar'
       }, function(){
         window.location = "php/accion_muestreo.php?entregado=<?= $_GET['id_pedido'] ?? '' ?>&factura=" + factura;
+      });
+    });
+
+    $("#procesar").click(function(){
+      inkConfirm({
+        title: '¿Procesar este muestreo?',
+        text:  'El muestreo pasará al estado Procesando.',
+        type:  'info',
+        btnOk: 'Sí, Procesar'
+      }, function(){
+        window.location = "php/accion_muestreo.php?procesar=<?= $_GET['id_pedido'] ?? '' ?>";
+      });
+    });
+
+    $("#facturacion").click(function(){
+      inkConfirm({
+        title: '¿Pasar a facturación este muestreo?',
+        text:  'El muestreo pasará a facturación.',
+        type:  'info',
+        btnOk: 'Sí, pasar a facturación'
+      }, function(){
+        window.location = "php/accion_muestreo.php?facturacion=<?= $_GET['id_pedido'] ?? '' ?>";
       });
     });
     window.addEventListener('beforeprint', function () {

@@ -362,6 +362,12 @@ $periodos_active     = $current_page === 'periodos.php';
 											<a href="lista_muestreo.php?tp=3" id="">Aprobados</a>
 										</li>
 										<li>
+											<a href="lista_muestreo.php?tp=6" id="">Procesando</a>
+										</li>
+										<li>
+											<a href="lista_muestreo.php?tp=7" id="">En facturación</a>
+										</li>
+										<li>
 											<a href="lista_muestreo.php?tp=4" id="">Despachados</a>
 										</li>
 										<li>
@@ -415,6 +421,8 @@ $periodos_active     = $current_page === 'periodos.php';
 										<li>
 											<a href="lista_pedidos.php?tp=2" >Pendientes</a>
 											<a href="lista_pedidos.php?tp=3" >Aprobados</a>
+											<a href="lista_pedidos.php?tp=6" >Procesando</a>
+											<a href="lista_pedidos.php?tp=7" >En facturacioón</a>
 											<a href="lista_pedidos.php?tp=4" >Entregados</a>
 											<a href="agrupar_pedidos.php" >Agrupar pedidos</a>
 											<a href="lista_pedidos.php?tp=5" >Anulados</a>
@@ -478,6 +486,8 @@ $periodos_active     = $current_page === 'periodos.php';
 										<li>
 											<a href="lista_pedidos_sa.php?tp=2" >Pendientes</a>
 											<a href="lista_pedidos_sa.php?tp=3" >Aprobados</a>
+											<a href="lista_pedidos_sa.php?tp=6" >Procesando</a>
+											<a href="lista_pedidos_sa.php?tp=7" >En facturación</a>
 											<a href="lista_pedidos_sa.php?tp=4" >Entregados</a>
 											<a href="lista_pedidos_sa.php?tp=5" >Anulados</a>
 										</li>
