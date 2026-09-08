@@ -5,7 +5,7 @@
  * existencia real por debajo del umbral en la bodega General de World Office.
  * Usado tanto por ajax/stock_bajo_pedidos.php (alertas en las listas/detalle)
  * como por php/pedido.php y php/pedido_sa.php (aviso por correo al crear un
- * pedido con stock bajo).
+ * pedido con stock bajos).
  */
 require_once("api_wo_inventario.php");
 
