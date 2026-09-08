@@ -84,7 +84,7 @@ foreach ($libros_raw as $lb) {
   ]);
 }
 
-$show_stock = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1);
+$show_stock       = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1 || $_SESSION['id']==25);
 $is_admin  = ($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2);
 $is_viewer = ($_SESSION['id'] == 21);
 $can_edit  = ($is_admin || $is_viewer || ($pedido['verify'] ?? 1) == 0);

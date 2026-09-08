@@ -13,7 +13,7 @@ require_once("../includes/stock_bajo.php");
 
 header('Content-Type: application/json; charset=utf-8');
 
-if (($_SESSION['tipo'] ?? null) != 1) {
+if (($_SESSION['tipo'] ?? null) != 1 && ($_SESSION['id'] ?? null) != 25) {
     echo json_encode([]);
     exit;
 }

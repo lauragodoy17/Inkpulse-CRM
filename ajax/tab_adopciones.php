@@ -1709,7 +1709,7 @@
                           echo '<div class="row g-3 align-items-start">';
 
                           // Canal de venta
-                          echo '<div class="col-sm-3">
+                          echo '<div class="col-sm-4">
                                   <span class="form-label-sm">
                                     <i class="bi bi-shop"></i> Canal de venta <span style="color:#dc2626">*</span>
                                   </span>
@@ -1727,7 +1727,7 @@
                           echo '</select></div>';
 
                           // Cliente
-                          echo '<div class="col-sm-3">
+                          echo '<div class="col-sm-4">
                                   <span class="form-label-sm">
                                     <i class="bi bi-person-vcard"></i> Cliente <span style="color:#dc2626">*</span>
                                   </span>
@@ -1745,6 +1745,7 @@
                               }
                           }
                           echo '</select></div>';
+
                           echo '<script>
                             $(function () {
                               $("#cliente_adop").select2({ 
@@ -1776,8 +1777,32 @@
                             });
                           </script>';
 
-                          // Documento(s) de adopción (máx. 3, solo para tipos 1, 3, 10)
+                           
+
+                          // Documento(s) de adopción (máx. 3) y tipo de adopción solo para tipos 1, 3, 10
                           if (in_array($_SESSION['tipo'], [1, 2, 3, 10])) {
+
+                            echo '<div class="col-sm-4">
+                                  <span class="form-label-sm">
+                                    <i class="bi bi-person-vcard"></i> Tipo de adopción <span style="color:#dc2626">*</span>
+                                  </span>
+                                  <select name="tipo_adop" id="tipo_adop" class="form-control" required>
+                                    <option value="">Seleccione...</option>';
+                                      $sql = "SELECT id, tipo FROM tipos_adopciones";
+                                      $req = $bdd->prepare($sql); $req->execute();
+                                      $tipos_adop = $req->fetchAll();
+
+                                      foreach ($tipos_adop as $tipo_adop) {
+                                         
+                                          $sel = ($count > 0 && $recursos["tipo_adop"] == $tipo_adop["id"]) ? ' SELECTED' : '';
+                                          echo '<option value="'.$tipo_adop["id"].'"'.$sel.'>'.$tipo_adop["tipo"].'</option>';
+                                      }
+
+                              
+                            echo '</select></div>
+
+                            </div>
+                            <br><div class="row">';
                               $archivos_existentes = [];
                               if ($count > 0) {
                                   foreach (['archivo', 'archivo2', 'archivo3'] as $campo_arch) {

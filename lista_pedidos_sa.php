@@ -3,7 +3,7 @@ require_once("php/aut.php");
 require_once("conexion/bdd.php");
 
 $tp = intval($_GET['tp'] ?? 2);
-$show_stock = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1);
+$show_stock = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1 || $_SESSION['id']==25);
 
 $status_cfg = [
   2 => ['label'=>'Pendientes',  'badge'=>'lm-badge-yellow', 'icon'=>'bi-hourglass-split'],
@@ -132,7 +132,7 @@ $total = intval($req->fetchColumn());
       <div class="filter-toolbar">
         <div class="ft-search">
           <i class="bi bi-search ft-search-icon"></i>
-          <input type="text" id="lps-search" placeholder="Buscar por # de pedido, colegio o distribuidor...">
+          <input type="text" id="lps-search" placeholder="Buscar por colegio o distribuidor...">
         </div>
         <div class="ft-date-wrap">
           <span class="ft-date-label">Desde</span>

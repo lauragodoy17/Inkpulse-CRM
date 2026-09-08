@@ -4,7 +4,7 @@ require_once("conexion/bdd.php");
 require_once("includes/lista_pedidos_query.php");
 
 $tp = intval($_GET['tp'] ?? 2);
-$show_stock = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1);
+$show_stock = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1 || $_SESSION['id']==25);
 
 $status_cfg = [
   2 => ['label'=>'Pendientes',  'badge'=>'lm-badge-yellow', 'icon'=>'bi-hourglass-split'],
@@ -138,7 +138,7 @@ sort($responsables_uniq);
       <div class="filter-toolbar">
         <div class="ft-search">
           <i class="bi bi-search ft-search-icon"></i>
-          <input type="text" id="lp-search" placeholder="Buscar por # de pedido, colegio, responsable, empresa...">
+          <input type="text" id="lp-search" placeholder="Buscar por colegio, responsable, empresa...">
         </div>
         <?php if (!empty($responsables_uniq)): ?>
         <select class="ft-select" id="lp-responsable">

@@ -135,7 +135,7 @@ foreach ($libros_raw as $lb) {
   ]);
 }
 
-$show_stock       = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1);
+$show_stock       = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1 || $_SESSION['id']==25);
 $show_plataforma  = (intval($pedido['tipo'] ?? 0) == 3 || ($pedido['codzona'] ?? '') == '5656');
 $show_tipo_pedido = (intval($pedido['tipo'] ?? 0) == 3 || ($pedido['codzona'] ?? '') == '5656' || intval($pedido['tipo'] ?? 0) == 10);
 $can_act = ($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2 || $_SESSION['id'] == 21 || $_SESSION['tipo'] == 10);
