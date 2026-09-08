@@ -199,9 +199,9 @@ $estilo_negrita = array(
 		$conta++;
 	}
 
-	$total_v = array_sum($total_venta ?? []);
-    $total_c=array_sum($total_cantidad ?? []);
-    $total_c_aprob=array_sum($total_cantidad_aprob ?? []);
+	$total_v=array_sum($total_venta);
+    $total_c=array_sum($total_cantidad);
+    $total_c_aprob=array_sum($total_cantidad_aprob);
 
     $objSpreadsheet->getActiveSheet()->getStyle('I'.$conta.':N'.$conta)->applyFromArray($estilo_negrita);
 

@@ -121,7 +121,7 @@
 
 	
 
-	$sql_p2 = "INSERT INTO pedidos2(codigo,id_periodo,colegio,id_usuario,fecha_r,observaciones,archivo,fac_rem,estado) VALUES('".$cod_pedido."','".$gp_periodo["id"]."','".$_POST["colegio"]."','".$_SESSION["id"]."','".$_POST["fecha_r"]."','".$_POST["observaciones"]."','".$nombre_archivo."','".$_POST["fac_rem"]."','1')";
+	$sql_p2 = "INSERT INTO pedidos2(codigo,id_periodo,colegio,id_usuario,fecha_r,observaciones,archivo,fac_rem,estado) VALUES('".$cod_pedido."','7','".$_POST["colegio"]."','".$_SESSION["id"]."','".$_POST["fecha_r"]."','".$_POST["observaciones"]."','".$nombre_archivo."','".$_POST["fac_rem"]."','1')";
 
 				
 				

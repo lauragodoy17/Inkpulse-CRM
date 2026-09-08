@@ -8,20 +8,16 @@ $show_stock = ($tp == 2 || $tp == 3) && (($_SESSION['tipo'] ?? null) == 1 || $_S
 $status_cfg = [
   2 => ['label'=>'Pendientes',  'badge'=>'lm-badge-yellow', 'icon'=>'bi-hourglass-split'],
   3 => ['label'=>'Aprobados',   'badge'=>'lm-badge-green',  'icon'=>'bi-check-circle-fill'],
-  4 => ['label'=>'Enviado',    'badge'=>'lm-badge-green',    'icon'=>'bi-truck'],
+  4 => ['label'=>'Entregados',  'badge'=>'lm-badge-blue',   'icon'=>'bi-truck'],
   5 => ['label'=>'Anulados',    'badge'=>'lm-badge-red',    'icon'=>'bi-x-circle-fill'],
-  6 => ['label'=>'Procesando',  'badge'=>'lm-badge-blue',   'icon'=>'bi-shuffle'],
-  7 => ['label'=>'Facturación',    'badge'=>'lm-badge-yellow',    'icon'=>'bi-file-earmark-text'],
 ];
 $st = $status_cfg[$tp] ?? $status_cfg[2];
 
 $st_accent = [
-  2 => ['hdr'=>'#BBB50E', 'even'=>'#F3E017', 'hover'=>'#F0F25C', 'accent'=>'#ABAA05'],
+  2 => ['hdr'=>'#92400e', 'even'=>'#fffbeb', 'hover'=>'#fef3c7', 'accent'=>'#b45309'],
   3 => ['hdr'=>'#166534', 'even'=>'#f0fdf4', 'hover'=>'#dcfce7', 'accent'=>'#16a34a'],
-  4 => ['hdr'=>'#4ADC4E', 'even'=>'#F0FDF4', 'hover'=>'#DCFCEA', 'accent'=>'#2CC713'],
+  4 => ['hdr'=>'#1e40af', 'even'=>'#eff6ff', 'hover'=>'#dbeafe', 'accent'=>'#2563eb'],
   5 => ['hdr'=>'#991b1b', 'even'=>'#fff1f2', 'hover'=>'#fee2e2', 'accent'=>'#b91c1c'],
-  6 => ['hdr'=>'#1e40af', 'even'=>'#eff6ff', 'hover'=>'#dbeafe', 'accent'=>'#2563eb'],
-  7 => ['hdr'=>'#92400e', 'even'=>'#fffbeb', 'hover'=>'#fef3c7', 'accent'=>'#b45309'],
 ];
 $ac = $st_accent[$tp] ?? $st_accent[2];
 

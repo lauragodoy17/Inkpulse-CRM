@@ -24,10 +24,6 @@ if ($tp == 2) {
   $where_estado = "p.estado='2'";
 } elseif ($tp == 4) {
   $where_estado = "p.estado='4'";
-} elseif ($tp == 6) {
-  $where_estado = "p.estado='5'";
-} elseif ($tp == 7) {
-  $where_estado = "p.estado='6'";
 } else {
   $where_estado = "p.estado='3'";
 }

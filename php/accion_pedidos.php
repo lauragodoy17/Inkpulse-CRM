@@ -31,26 +31,9 @@ try {
         $bdd->prepare("UPDATE pedidos SET estado = '4' WHERE id = ?")->execute([$id]);
         $titulo   = '¡Pedido entregado!';
         $mensaje  = "El pedido #$id fue marcado como entregado.";
-        $redirect = '../lista_pedidos.php?tp=7';
-
-    } elseif (isset($_GET['procesar'])) {
-
-        $id = intval($_GET['procesar']);
-        $bdd->prepare("UPDATE pedidos SET estado = '5' WHERE id = ?")->execute([$id]);
-        $titulo   = '¡Pedido Procesando!';
-        $mensaje  = "El pedido #$id fue marcado como procesando.";
         $redirect = '../lista_pedidos.php?tp=3';
 
-    } elseif (isset($_GET['facturacion'])) {
-
-        $id = intval($_GET['facturacion']);
-        $bdd->prepare("UPDATE pedidos SET estado = '6' WHERE id = ?")->execute([$id]);
-        $titulo   = '¡Pedido enviado a factuación!';
-        $mensaje  = "El pedido #$id fue enviado a facturación.";
-        $redirect = '../lista_pedidos.php?tp=6';
-
-        
-    }else {
+    } else {
         $error = 'Acción no reconocida.';
     }
 } catch (Exception $e) {
