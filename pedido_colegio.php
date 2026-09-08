@@ -8,8 +8,10 @@ $tp        = intval($_GET['tp'] ?? 2);
 $tp_cfg = [
   2 => ['label'=>'Pendiente',  'badge'=>'yellow', 'icon'=>'bi-hourglass-split',   'accent'=>'#b45309'],
   3 => ['label'=>'Aprobado',   'badge'=>'green',  'icon'=>'bi-check-circle-fill', 'accent'=>'#16a34a'],
-  4 => ['label'=>'Entregado',  'badge'=>'blue',   'icon'=>'bi-truck',             'accent'=>'#2563eb'],
+  4 => ['label'=>'Entregado',  'badge'=>'green',   'icon'=>'bi-truck',             'accent'=>'#2563eb'],
   5 => ['label'=>'Anulado',    'badge'=>'red',    'icon'=>'bi-x-circle-fill',     'accent'=>'#b91c1c'],
+  6 => ['label'=>'Procesando',    'badge'=>'blue',    'icon'=>'bi-shuffle',     'accent'=>'#b91c1c'],
+  7 => ['label'=>'Facturación',    'badge'=>'yellow',    'icon'=>'bi-file-earmark-text',     'accent'=>'#b91c1c'],
 ];
 $ac = $tp_cfg[$tp] ?? $tp_cfg[2];
 
@@ -561,11 +563,19 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
               <button type="button" id="rechazar" class="mc-btn mc-btn-red">
                 <i class="bi bi-x-circle"></i> Anular
               </button>
-              <button type="button" id="entregar" class="mc-btn mc-btn-green">
-                <i class="bi bi-truck"></i> Entregar
+              <button type="button" id="procesar" class="mc-btn btn-info">
+                <i class="bi bi-shuffle"></i> Procesar
               </button>
               <button type="button" id="modificar" class="mc-btn mc-btn-blue">
                 <i class="bi bi-pencil"></i> Guardar cambios
+              </button>
+            <?php elseif (intval($pedido['eid'] ?? 0) == 5): ?>
+              <button type="button" id="facturacion" class="mc-btn btn-warning">
+                <i class="bi bi-file-earmark-text"></i> Facturación
+              </button>
+            <?php elseif (intval($pedido['eid'] ?? 0) == 6): ?>
+              <button type="button" id="entregar" class="mc-btn mc-btn-green">
+                <i class="bi bi-truck"></i> Entregar
               </button>
             <?php endif; ?>
           <?php endif; ?>
@@ -645,6 +655,12 @@ $('#rechazar').on('click', function () {
 });
 $('#entregar').on('click', function () {
   window.location = 'php/accion_pedidos.php?entregado=<?= $id_pedido ?>';
+});
+$('#procesar').on('click', function () {
+  window.location = 'php/accion_pedidos.php?procesar=<?= $id_pedido ?>';
+});
+$('#facturacion').on('click', function () {
+  window.location = 'php/accion_pedidos.php?facturacion=<?= $id_pedido ?>';
 });
 $('#modificar').on('click', function () {
   $('#form_pedido').attr('action', 'php/mod_pedido.php').submit();
