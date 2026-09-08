@@ -40,7 +40,7 @@ $usuario = intval($_POST['usuario'] ?? 0);
 $periodo = intval($_POST['periodo'] ?? 0);
 // Detallado (por colegio, con Empresa/Zona/Asesor) solo existe para "pedidos"
 // (con adopción) — a pedido explícito del usuario 2026-09-08, "sin adopción"
-// siempre usa la variante general.
+// siempre usa la variante generall.
 $detallado = $origen === 'pedidos' && ($_POST['detalle'] ?? '0') === '1';
 
 if (!$periodo) {
