@@ -2,6 +2,8 @@
 	require_once("../php/aut.php");
 	include("../conexion/bdd.php");
 	require_once("registrar_historial.php");
+	require_once(__DIR__ . "/../includes/paquetes_colegio.php");
+	crear_tablas_paquetes($bdd);
 
 	$id_usuario_h = intval($_SESSION["id"] ?? 0);
 
@@ -602,6 +604,22 @@
 				
 	}
 	
+	// Selección manual de títulos que van al paquete (solo tiene efecto real con
+	// Tipo de adopción = Ambos; ver includes/paquetes_colegio.php). Un título que ya
+	// estaba adoptado antes de este guardado respeta lo que el usuario marcó/desmarcó
+	// en el panel "Selecciona los títulos para el paquete"; uno recién adoptado en
+	// este mismo guardado (no tuvo panel para elegir) entra incluido por defecto.
+	$en_paquete_marcados = array_map('intval', $_POST['en_paquete'] ?? []);
+	$req_en_paquete = $bdd->prepare("UPDATE presupuestos SET en_paquete=? WHERE id=?");
+	foreach (($defs2 ?? []) as $id_p) {
+		$id_p = (int)$id_p;
+		$ya_estaba_antes = in_array($id_p, $defs ?? []);
+		$en_paquete_val = $ya_estaba_antes ? (in_array($id_p, $en_paquete_marcados) ? 1 : 0) : 1;
+		$req_en_paquete->execute([$en_paquete_val, $id_p]);
+	}
+
+	recalcular_paquetes_colegio($bdd, $_POST["id_colegio"], $_POST["periodo"]);
+
 	header('Location: ../colegio.php?codigo='.$_POST["codigo"].'&periodo='.$_POST["periodo"].'&tab=adopciones');
 
 ?>

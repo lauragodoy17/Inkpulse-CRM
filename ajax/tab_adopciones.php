@@ -975,11 +975,11 @@
                                         
                                     if ($presup["tasa_compra"] !=0.00 || $presup["tasa_compra_d"] !=0.00) {
                                         if ($presup["definido"] ==1) {
-                                            echo "<td><input type='checkbox' name='definir[]' class='definir' checked value='".$libro2["id"]."/'".$presup["id"]."></td>";
+                                            echo "<td><input type='checkbox' name='definir[]' class='definir' data-id-presupuesto='".$presup["id"]."' checked value='".$libro2["id"]."/'".$presup["id"]."></td>";
                                         }
                                       else {
 
-                                          echo "<td><input type='checkbox' name='definir[]' class='definir' value='".$libro2["id"]."/1".$presup["id"]."'></td>";
+                                          echo "<td><input type='checkbox' name='definir[]' class='definir' data-id-presupuesto='".$presup["id"]."' value='".$libro2["id"]."/1".$presup["id"]."'></td>";
 
                                       }
                                   }else {
@@ -1344,11 +1344,11 @@
 
                                           if ($presup["tasa_compra"] !=0.00 || $presup["tasa_compra_d"] !=0.00) {
                                             if ($presup["definido"] ==1) {
-                                              echo "<td><input type='checkbox' name='definir[]' class='definir' checked value='".$libro_p["id"]."/".$presup["id"]."'></td>";
+                                              echo "<td><input type='checkbox' name='definir[]' class='definir' data-id-presupuesto='".$presup["id"]."' checked value='".$libro_p["id"]."/".$presup["id"]."'></td>";
                                             }
                                             else {
 
-                                              echo "<td><input type='checkbox' name='definir[]' class='definir' value='".$libro_p["id"]."/".$presup["id"]."'></td>";
+                                              echo "<td><input type='checkbox' name='definir[]' class='definir' data-id-presupuesto='".$presup["id"]."' value='".$libro_p["id"]."/".$presup["id"]."'></td>";
 
                                             }
                                           }else {
@@ -1779,28 +1779,37 @@
 
                            
 
-                          // Documento(s) de adopción (máx. 3) y tipo de adopción solo para tipos 1, 3, 10
+                          // Documento(s) de adopción (máx. 3) solo para tipos 1, 3, 10. El campo
+                          // "Tipo de adopción" en sí (y todo el módulo de paquetes) es más
+                          // restrictivo: solo Administrador (tipo=1) o Héctor Morales (id=69) —
+                          // ver puede_usar_tipo_adopcion() — para que quede oculto a todos los
+                          // demás, incluidos los promotores tipo=3.
+                          require_once(__DIR__ . "/../includes/paquetes_colegio.php");
                           if (in_array($_SESSION['tipo'], [1, 2, 3, 10])) {
 
-                            echo '<div class="col-sm-4">
-                                  <span class="form-label-sm">
-                                    <i class="bi bi-person-vcard"></i> Tipo de adopción <span style="color:#dc2626">*</span>
-                                  </span>
-                                  <select name="tipo_adop" id="tipo_adop" class="form-control" required>
-                                    <option value="">Seleccione...</option>';
-                                      $sql = "SELECT id, tipo FROM tipos_adopciones";
-                                      $req = $bdd->prepare($sql); $req->execute();
-                                      $tipos_adop = $req->fetchAll();
+                            if (puede_usar_tipo_adopcion()) {
+                              echo '<div class="col-sm-4">
+                                    <span class="form-label-sm">
+                                      <i class="bi bi-person-vcard"></i> Tipo de adopción <span style="color:#dc2626">*</span>
+                                    </span>
+                                    <select name="tipo_adop" id="tipo_adop" class="form-control" required>
+                                      <option value="">Seleccione...</option>';
+                                        $sql = "SELECT id, tipo FROM tipos_adopciones";
+                                        $req = $bdd->prepare($sql); $req->execute();
+                                        $tipos_adop = $req->fetchAll();
 
-                                      foreach ($tipos_adop as $tipo_adop) {
-                                         
-                                          $sel = ($count > 0 && $recursos["tipo_adop"] == $tipo_adop["id"]) ? ' SELECTED' : '';
-                                          echo '<option value="'.$tipo_adop["id"].'"'.$sel.'>'.$tipo_adop["tipo"].'</option>';
-                                      }
+                                        foreach ($tipos_adop as $tipo_adop) {
 
-                              
-                            echo '</select></div>
+                                            $sel = ($count > 0 && $recursos["tipo_adop"] == $tipo_adop["id"]) ? ' SELECTED' : '';
+                                            echo '<option value="'.$tipo_adop["id"].'"'.$sel.'>'.$tipo_adop["tipo"].'</option>';
+                                        }
 
+                              echo '</select></div>';
+                            } else {
+                              echo '<div class="col-sm-4"></div>';
+                            }
+
+                            echo '
                             </div>
                             <br><div class="row">';
                               $archivos_existentes = [];
@@ -1870,9 +1879,174 @@
                           echo '</div>';
 
                           echo '</div>'; // .adop-footer-form
+
+                          require_once(__DIR__ . "/../includes/paquetes_colegio.php");
+                          crear_tablas_paquetes($bdd);
+
+                          $tipo_adop_actual = ($count > 0) ? (int)$recursos["tipo_adop"] : 0;
+
+                          // Selección manual de títulos para el paquete: solo tiene efecto con
+                          // Tipo de adopción "Ambos" (id 3) — con "Paquetes" solo, todo lo
+                          // adoptado entra al paquete sin necesidad de elegir. Todo este bloque
+                          // (selección + previsualización) es exclusivo de Administrador/Héctor
+                          // Morales — ver puede_usar_tipo_adopcion().
+                          $grupos_seleccion = puede_usar_tipo_adopcion() ? titulos_adoptados_por_grado($bdd, $_GET['colegio'], $gp_periodo['id']) : [];
+                          if ($grupos_seleccion) {
+                              $grados_map_sel = [];
+                              foreach ($bdd->query("SELECT id, grado FROM grados") as $g_sel) $grados_map_sel[(int)$g_sel['id']] = $g_sel['grado'];
+                              ksort($grupos_seleccion);
+                      ?>
+                      <div class="adop-footer-form" id="panel-seleccion-paquete" style="margin-top:22px;<?= ($tipo_adop_actual === 3) ? '' : ' display:none;' ?>">
+                        <span class="form-label-sm"><i class="bi bi-ui-checks"></i> Selecciona los títulos que van al paquete</span>
+                        <p class="text-muted" style="font-size:.82rem;margin-top:-4px;">
+                          Con Tipo de adopción "Ambos", elige por curso cuáles títulos adoptados hacen parte del
+                          paquete; los que no marques se venden sueltos y no entran a ningún paquete.
+                        </p>
+                        <?php foreach ($grupos_seleccion as $id_grado_sel => $g_sel): ?>
+                        <div style="margin-bottom:14px;">
+                          <strong style="font-size:.85rem;color:#1e293b;"><?= htmlspecialchars($grados_map_sel[$id_grado_sel] ?? ('Grado ' . $id_grado_sel)) ?></strong>
+                          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
+                            <?php foreach ($g_sel['titulos'] as $t_sel): ?>
+                            <label style="display:flex;align-items:center;gap:5px;font-size:.81rem;font-weight:400;color:#374151;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;cursor:pointer;">
+                              <input type="checkbox" name="en_paquete[]" value="<?= (int)$t_sel['id_presupuesto'] ?>" <?= $t_sel['en_paquete'] ? 'checked' : '' ?>>
+                              <?= htmlspecialchars($t_sel['libro']) ?>
+                            </label>
+                            <?php endforeach; ?>
+                          </div>
+                        </div>
+                        <?php endforeach; ?>
+                      </div>
+
+                      <div id="panel-previsualizar-paquete" style="margin-top:16px;<?= in_array($tipo_adop_actual, [2, 3], true) ? '' : ' display:none;' ?>">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-previsualizar-paquete">
+                          <i class="bi bi-eye"></i> Previsualizar paquetes
+                        </button>
+                        <div id="resultado-preview-paquete" style="margin-top:14px;"></div>
+                        <?php if ($show_guardar): ?>
+                        <button type="submit" form="form_definicion" class="btn btn-success btn-sm miBoton" style="margin-top:14px;">
+                          <i class="bi bi-floppy"></i> Guardar cambios
+                        </button>
+                        <?php endif; ?>
+                      </div>
+
+                      <script>
+                        $('#tipo_adop').on('change', function(){
+                          var val = $(this).val();
+                          $('#panel-seleccion-paquete').toggle(val == '3');
+                          $('#panel-previsualizar-paquete').toggle(val == '2' || val == '3');
+                          $('#resultado-preview-paquete').empty();
+                        });
+
+                        function escHtmlPaquete(s) {
+                          return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+                            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+                          });
+                        }
+
+                        function formatCopPaquete(v) {
+                          return '$' + Number(v).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        }
+
+                        function renderPreviewPaquetes(paquetes) {
+                          var cont = $('#resultado-preview-paquete');
+                          if (!paquetes || !paquetes.length) {
+                            cont.html('<p class="text-muted" style="font-size:.85rem;"><i class="bi bi-info-circle"></i> Con la selección actual no se arma ningún paquete.</p>');
+                            return;
+                          }
+                          var html = '<div class="table-responsive"><table class="table table-sm" style="font-size:.84rem;">' +
+                            '<thead><tr><th>Paquete</th><th>Código</th><th>Títulos incluidos</th><th>Precio neto (sumatoria)</th><th>Precio redondeado</th><th>Precio del paquete</th></tr></thead><tbody>';
+                          paquetes.forEach(function(p){
+                            var titulos = (p.titulos || []).map(function(t){ return escHtmlPaquete(t.libro); }).join(', ');
+                            var redondeado;
+                            if (p.id_paquete) {
+                              // Paquete ya guardado: se puede definir/editar el precio redondeado al vuelo.
+                              var valorInput = (p.precio_redondeado !== null && p.precio_redondeado !== undefined) ? Number(p.precio_redondeado).toFixed(2) : '';
+                              redondeado = '<span class="precio-padre-wrap"><span class="pp-signo">$</span>' +
+                                '<input type="text" class="precio-padre-inp precio-paquete-inp" data-id-paquete="' + p.id_paquete + '" ' +
+                                'value="' + escHtmlPaquete(valorInput) + '" placeholder="Sin definir"></span>';
+                            } else {
+                              // Todavía no existe el paquete en BD (cambios sin guardar) — no hay dónde guardar el redondeado aún.
+                              redondeado = '<span class="text-muted" title="Guarda los cambios para poder definir un precio redondeado">Guarda primero</span>';
+                            }
+                            html += '<tr>' +
+                              '<td><strong>' + escHtmlPaquete(p.paquete) + '</strong></td>' +
+                              '<td>' + escHtmlPaquete(p.codigo) + '</td>' +
+                              '<td>' + titulos + ' <span class="text-muted">(' + p.cantidad_titulos + ')</span></td>' +
+                              '<td>' + formatCopPaquete(p.precio_neto_sumado) + '</td>' +
+                              '<td>' + redondeado + '</td>' +
+                              '<td class="venta" id="precio-final-paq' + (p.id_paquete || ('g' + p.id_grado)) + '">' + formatCopPaquete(p.precio_final) + '</td>' +
+                              '</tr>';
+                          });
+                          html += '</tbody></table></div><p class="text-muted" style="font-size:.78rem;"><i class="bi bi-info-circle"></i> Vista previa con la selección actual. Usa "Guardar cambios" para que quede guardada.</p>';
+                          cont.html(html);
+                        }
+
+                        // Delegado porque la tabla se inserta dinámicamente (no existe al cargar la página).
+                        $(document).on('change', '.precio-paquete-inp', function(){
+                          var input = $(this);
+                          var idPaquete = input.data('id-paquete');
+                          var valor = input.val().trim();
+
+                          $.ajax({
+                            url: "ajax/guardar_precio_paquete.php",
+                            type: "POST",
+                            data: { id_paquete: idPaquete, precio_redondeado: valor },
+                            dataType: "json",
+                            success: function(resp){
+                              if (resp && resp.ok) {
+                                $('#precio-final-paq' + idPaquete).text(formatCopPaquete(resp.precio_final));
+                              } else {
+                                alert('No se pudo guardar el precio del paquete.');
+                              }
+                            },
+                            error: function(){ alert('No se pudo guardar el precio del paquete.'); }
+                          });
+                        });
+
+                        $('#btn-previsualizar-paquete').on('click', function(){
+                          var definidos = [];
+                          $('.definir:checked').each(function(){
+                            var idp = $(this).data('id-presupuesto');
+                            if (idp) definidos.push(idp);
+                          });
+                          var enPaquete = [];
+                          $('input[name="en_paquete[]"]:checked').each(function(){
+                            enPaquete.push($(this).val());
+                          });
+
+                          var btn = $(this);
+                          btn.prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> Cargando...');
+
+                          $.ajax({
+                            url: 'ajax/previsualizar_paquetes.php',
+                            type: 'POST',
+                            data: {
+                              id_colegio: <?= (int)$_GET['colegio'] ?>,
+                              periodo: <?= (int)$gp_periodo['id'] ?>,
+                              tipo_adop: $('#tipo_adop').val(),
+                              definidos: definidos,
+                              en_paquete: enPaquete
+                            },
+                            dataType: 'json',
+                            success: function(resp){
+                              btn.prop('disabled', false).html('<i class="bi bi-eye"></i> Previsualizar paquetes');
+                              if (!resp || !resp.ok) { alert('No se pudo previsualizar los paquetes.'); return; }
+                              renderPreviewPaquetes(resp.paquetes);
+                            },
+                            error: function(){
+                              btn.prop('disabled', false).html('<i class="bi bi-eye"></i> Previsualizar paquetes');
+                              alert('No se pudo previsualizar los paquetes.');
+                            }
+                          });
+                        });
+                      </script>
+                      <?php
+                          }
+
                           echo '</form>';
                        ?>
-  
+
+
 </div>
 <script>var librosYaEnAdop = <?= json_encode($ids_exist_adop) ?>;</script>
 <script src="../vendors/scripts/core.js"></script>

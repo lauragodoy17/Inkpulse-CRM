@@ -24,6 +24,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
@@ -1483,6 +1484,130 @@ $objSpreadsheet->getActiveSheet()->getRowDimension(10)->setRowHeight(20);
 foreach (range('A', 'Z') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
+
+// ── Hoja adicional: Paquetes por grado (solo si el colegio tiene paquetes
+// guardados, es decir Tipo de adopción = Paquetes o Ambos) ──────────────────
+require_once(__DIR__ . "/../includes/paquetes_colegio.php");
+crear_tablas_paquetes($bdd);
+
+$sql_paq_excel = "SELECT id, paquete, codigo, cantidad_titulos, precio_neto_sumado, precio_redondeado, precio_final
+                   FROM paquetes_colegio WHERE id_colegio=? AND id_periodo=? ORDER BY id_grado ASC";
+$req_paq_excel = $bdd->prepare($sql_paq_excel);
+$req_paq_excel->execute([$_GET["cole"], $_GET["periodo"]]);
+$paquetes_excel = $req_paq_excel->fetchAll(PDO::FETCH_ASSOC);
+
+if ($paquetes_excel) {
+	$req_lib_paq_excel = $bdd->prepare("SELECT l.libro FROM paquetes_colegio_libros pl JOIN libros l ON l.id=pl.id_libro WHERE pl.id_paquete=? ORDER BY l.libro ASC");
+
+	$hojaPaq = $objSpreadsheet->createSheet(1);
+	$hojaPaq->setTitle("Paquetes por grado");
+	$hojaPaq->getPageSetup()->setOrientation(PageSetup::ORIENTATION_LANDSCAPE);
+	$hojaPaq->getPageSetup()->setPaperSize(PageSetup::PAPERSIZE_LETTER);
+	$hojaPaq->getPageSetup()->setFitToPage(true);
+	$hojaPaq->getPageSetup()->setFitToWidth(1);
+	$hojaPaq->getPageSetup()->setFitToHeight(0);
+
+	$hojaPaq->mergeCells('A1:F1');
+	$hojaPaq->getStyle('A1')->applyFromArray($estilo_negrita);
+	$hojaPaq->getStyle('A1')->applyFromArray($estilo_centrar);
+	$hojaPaq->SetCellValue('A1', 'PAQUETES POR GRADO - ' . $cole['colegio']);
+
+	$encabezados_paq = ['Paquete', 'Código', 'Títulos incluidos', 'Precio neto (sumatoria)', 'Precio redondeado', 'Precio del paquete'];
+	$col_paq = 'A';
+	foreach ($encabezados_paq as $enc) {
+		$hojaPaq->SetCellValue($col_paq . '3', $enc);
+		$hojaPaq->getStyle($col_paq . '3')->applyFromArray($estilo_negrita);
+		$hojaPaq->getStyle($col_paq . '3')->applyFromArray($estilo_centrar);
+		$hojaPaq->getStyle($col_paq . '3')->applyFromArray($estilo_borde);
+		$col_paq++;
+	}
+
+	$fila_paq = 4;
+	foreach ($paquetes_excel as $paq) {
+		$req_lib_paq_excel->execute([$paq['id']]);
+		$titulos_paq = implode(', ', array_column($req_lib_paq_excel->fetchAll(PDO::FETCH_ASSOC), 'libro'));
+
+		$hojaPaq->SetCellValue('A' . $fila_paq, $paq['paquete']);
+		// El código es un entero de 18 dígitos (DANE+curso+año) — más largo que los
+		// ~15-16 dígitos que un double puede representar exactamente. Si se guarda
+		// como número, Excel redondea los últimos dígitos (el año) a ceros al
+		// mostrarlo con formato numérico. Se fuerza como texto explícito para que
+		// nunca se reinterprete como número, sin importar el formato que le den después.
+		$hojaPaq->setCellValueExplicit('B' . $fila_paq, $paq['codigo'], DataType::TYPE_STRING);
+		$hojaPaq->getStyle('B' . $fila_paq)->getNumberFormat()->setFormatCode('@');
+		$hojaPaq->SetCellValue('C' . $fila_paq, $titulos_paq . ' (' . $paq['cantidad_titulos'] . ')');
+		$hojaPaq->SetCellValue('D' . $fila_paq, (float)$paq['precio_neto_sumado']);
+		$hojaPaq->SetCellValue('E' . $fila_paq, $paq['precio_redondeado'] !== null ? (float)$paq['precio_redondeado'] : '');
+		$hojaPaq->SetCellValue('F' . $fila_paq, (float)$paq['precio_final']);
+
+		foreach (['A', 'B', 'C', 'D', 'E', 'F'] as $c) $hojaPaq->getStyle($c . $fila_paq)->applyFromArray($estilo_borde);
+
+		$fila_paq++;
+	}
+
+	$hojaPaq->getStyle('A1:F' . ($fila_paq - 1))->applyFromArray($estilo_fuente);
+	foreach (range('A', 'F') as $columnID) {
+		$hojaPaq->getColumnDimension($columnID)->setAutoSize(true);
+	}
+	// Mismo formato de moneda (separador de miles + símbolo $) que usa la hoja
+	// "Presupuesto en excel" general.
+	$hojaPaq->getStyle('D4:F' . ($fila_paq - 1))
+		->getNumberFormat()
+		->setFormatCode('_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)');
+
+	// ── Hoja adicional: Libros sueltos (títulos adoptados que no quedaron en
+	// ningún paquete — solo tiene sentido junto con la hoja de paquetes de arriba) ──
+	$sueltos_excel = titulos_sueltos($bdd, $_GET["cole"], $_GET["periodo"]);
+
+	if ($sueltos_excel) {
+		$hojaSueltos = $objSpreadsheet->createSheet(2);
+		$hojaSueltos->setTitle("Libros sueltos");
+		$hojaSueltos->getPageSetup()->setOrientation(PageSetup::ORIENTATION_LANDSCAPE);
+		$hojaSueltos->getPageSetup()->setPaperSize(PageSetup::PAPERSIZE_LETTER);
+		$hojaSueltos->getPageSetup()->setFitToPage(true);
+		$hojaSueltos->getPageSetup()->setFitToWidth(1);
+		$hojaSueltos->getPageSetup()->setFitToHeight(0);
+
+		$hojaSueltos->mergeCells('A1:D1');
+		$hojaSueltos->getStyle('A1')->applyFromArray($estilo_negrita);
+		$hojaSueltos->getStyle('A1')->applyFromArray($estilo_centrar);
+		$hojaSueltos->SetCellValue('A1', 'LIBROS SUELTOS - ' . $cole['colegio']);
+
+		$encabezados_sueltos = ['Grado', 'Título', 'Precio neto', 'Precio venta padre'];
+		$col_sueltos = 'A';
+		foreach ($encabezados_sueltos as $enc) {
+			$hojaSueltos->SetCellValue($col_sueltos . '3', $enc);
+			$hojaSueltos->getStyle($col_sueltos . '3')->applyFromArray($estilo_negrita);
+			$hojaSueltos->getStyle($col_sueltos . '3')->applyFromArray($estilo_centrar);
+			$hojaSueltos->getStyle($col_sueltos . '3')->applyFromArray($estilo_borde);
+			$col_sueltos++;
+		}
+
+		$fila_sueltos = 4;
+		foreach ($sueltos_excel as $suelto) {
+			$hojaSueltos->SetCellValue('A' . $fila_sueltos, $suelto['grado']);
+			$hojaSueltos->SetCellValue('B' . $fila_sueltos, $suelto['libro']);
+			$hojaSueltos->SetCellValue('C' . $fila_sueltos, (float)$suelto['precio_neto']);
+			$hojaSueltos->SetCellValue('D' . $fila_sueltos, (float)$suelto['precio_venta_padre']);
+
+			foreach (['A', 'B', 'C', 'D'] as $c) $hojaSueltos->getStyle($c . $fila_sueltos)->applyFromArray($estilo_borde);
+
+			$fila_sueltos++;
+		}
+
+		$hojaSueltos->getStyle('A1:D' . ($fila_sueltos - 1))->applyFromArray($estilo_fuente);
+		foreach (range('A', 'D') as $columnID) {
+			$hojaSueltos->getColumnDimension($columnID)->setAutoSize(true);
+		}
+		// Mismo formato de moneda (separador de miles + símbolo $) que usa la hoja
+		// "Presupuesto en excel" general.
+		$hojaSueltos->getStyle('C4:D' . ($fila_sueltos - 1))
+			->getNumberFormat()
+			->setFormatCode('_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)');
+	}
+}
+
+$objSpreadsheet->setActiveSheetIndex(0);
 
 $objWriter = new Xlsx($objSpreadsheet); //Escribir archivo
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
