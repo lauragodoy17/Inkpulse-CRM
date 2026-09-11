@@ -163,6 +163,7 @@ $total = intval($req->fetchColumn());
                 <th>Fecha</th>
                 <th>Distribuidor</th>
                 <th>Colegio</th>
+                <th>Tipo</th>
                 <?php if ($show_stock): ?><th>Stock</th><?php endif; ?>
                 <th>Acciones</th>
               </tr>
@@ -197,6 +198,7 @@ $(document).ready(function () {
     { data: 'fecha_d' },
     { data: 'promotor' },
     { data: 'colegio' },
+    { data: 'tipo' },
   ];
   if (SHOW_STOCK) {
     columns.push({ data: null, orderable: false, className: 'lps-stock-cell', render: function () { return '—'; } });
@@ -270,7 +272,7 @@ $(document).ready(function () {
       data: { origen: 'pedidos2', ids: ids },
       dataType: 'json'
     }).done(function (data) {
-      $(table.column(4).nodes()).each(function (i) {
+      $(table.column(5).nodes()).each(function (i) {
         var libros = data[filas[i].id];
         var $celda = $(this);
         if (libros && libros.length) {

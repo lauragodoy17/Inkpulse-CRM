@@ -2,7 +2,7 @@
 require_once("php/aut.php");
 require_once("conexion/bdd.php");
 
-$sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha,
+$sql = "SELECT p.id, p.tipo as ptipo, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha,
                c.colegio, e.estado AS estado_nombre, p.estado AS estado_id,
                c.sub_zona, c.responsable
         FROM muestreos p
@@ -158,6 +158,7 @@ $estado_badge = [
                 <th>Zona</th>
                 <th>Responsable</th>
                 <th>Colegio</th>
+                <th>Tipo</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
@@ -180,6 +181,14 @@ $estado_badge = [
                 $e_id     = intval($p['estado_id']);
                 $e_cls    = $estado_badge[$e_id] ?? 'eb-1';
                 $e_nombre = htmlspecialchars($p['estado_nombre'] ?? '');
+
+                if ($p["ptipo"]==1){
+                  $p["ptipo"]="Docente";
+                } elseif ($p["ptipo"]==2) {
+                    $p["ptipo"]="Estudiante";
+                }else{
+                  $p["ptipo"]="";
+                }
               ?>
               <tr data-date="<?= $fecha_r ?>" data-estado="<?= htmlspecialchars($p['estado_nombre'] ?? '') ?>">
                 <td><?= $p['id'] ?></td>
@@ -188,6 +197,7 @@ $estado_badge = [
                 <td><?= $n_zona ?></td>
                 <td><?= $resp ?></td>
                 <td><?= htmlspecialchars($p['colegio']) ?></td>
+                <td><?= htmlspecialchars($p['ptipo']) ?></td>
                 <td><span class="estado-badge <?= $e_cls ?>"><?= $e_nombre ?></span></td>
                 <td>
                   <a href="muestreo_colegio_estado.php?id_pedido=<?= $p['id'] ?>" class="lm-btn-ver">

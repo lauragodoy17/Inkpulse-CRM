@@ -18,13 +18,29 @@ $ac = $tp_cfg[$tp] ?? $tp_cfg[2];
 // Pedido
 $stmt = $bdd->prepare(
   "SELECT pe.fecha, pe.observaciones, pe.fecha_r, pe.colegio, pe.archivo, pe.codigo,
-          pe.estado, pe.fac_rem, pe.verify, u.nombres, u.apellidos
+          pe.estado, pe.fac_rem, pe.verify, pe.tipo as ptipo, pe.tipo_muestras, u.nombres, u.apellidos
    FROM pedidos2 pe
    JOIN usuarios u ON u.id=pe.id_usuario
    WHERE pe.id=?"
 );
 $stmt->execute([$id_pedido]);
 $pedido = $stmt->fetch();
+
+if ($pedido["ptipo"]==1){
+  $pedido["ptipo"]="Venta";
+} elseif ($pedido["ptipo"]==2) {
+  $pedido["ptipo"]="Muestras";
+
+  if ($pedido["tipo_muestras"] ==1) {
+    $pedido["tipo_muestras"]="Docente";
+  }else{
+    $pedido["tipo_muestras"]="Estudiante";
+  }
+
+
+}else{
+  $pedido["ptipo"]="";
+}
 
 // Libros
 $stmt2 = $bdd->prepare(
@@ -316,6 +332,22 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
           </div>
         </div>
         <div class="mc-card">
+          <div class="mc-card-icon teal"><i class="bi bi-journal"></i></div>
+          <div>
+            <p class="mc-card-label">Tipo</p>
+            <p class="mc-card-val"><?= htmlspecialchars($pedido["ptipo"] ?? '—') ?></p>
+          </div>
+        </div>
+        <?php if ($pedido["ptipo"]=="Muestras") { ?>
+          <div class="mc-card">
+            <div class="mc-card-icon teal"><i class="bi bi-journal"></i></div>
+            <div>
+              <p class="mc-card-label">Tipo de muestras</p>
+              <p class="mc-card-val"><?= htmlspecialchars($pedido["tipo_muestras"] ?? '—') ?></p>
+            </div>
+          </div>
+        <?php } ?>
+        <div class="mc-card">
           <div class="mc-card-icon orange"><i class="bi bi-calendar3"></i></div>
           <div>
             <p class="mc-card-label">Fecha</p>
@@ -325,7 +357,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
         <div class="mc-card">
           <div class="mc-card-icon purple"><i class="bi bi-person-fill"></i></div>
           <div>
-            <p class="mc-card-label">Distribuidor</p>
+            <p class="mc-card-label">Usuario</p>
             <p class="mc-card-val"><?= htmlspecialchars(trim(($pedido['nombres'] ?? '').' '.($pedido['apellidos'] ?? ''))) ?></p>
           </div>
         </div>

@@ -86,7 +86,7 @@ $materias = $req->fetchAll();
         </div>
       </div>
 
-      <form action="php/pedido_sa.php" method="POST" id="miFormulario" enctype="multipart/form-data">
+      <form action="php/pedido_sa_new.php" method="POST" id="miFormulario" enctype="multipart/form-data">
 
         <!-- Datos generales -->
         <div class="modern-card mb-3">
@@ -96,11 +96,39 @@ $materias = $req->fetchAll();
           <div class="px-4 py-3">
             <div class="row">
               <div class="col-md-4 col-sm-6 col-12">
+                <label for="cole" class="control-label">Tipo de pedido<small style="color:red;">*</small></label>
+                <select name="tipo_p" id="tipo_p" class="form-control custom-select2" required>
+                  <option value="">Seleccione</option>
+                  <option value="1">Venta</option>
+                  <option value="2">Muestras</option>
+                      
+                  </select>
+              </div>
+              <?php if ($_SESSION['tipo']!=6): ?>
+                <div class="col-md-4 col-sm-6 col-12 d-none" id="muestras">
+                  <label for="cole" class="control-label">Tipo de muestras<small style="color:red;">*</small></label>
+                  <select name="tipo" id="tipo" class="form-control custom-select2" required>
+                    <option value="">Seleccione</option>
+                    <option value="1">Docente</option>
+                    <option value="2">Estudiante</option>
+                        
+                    </select>
+                </div>
+              <?php else: ?>
+
+                <input type="hidden" name="tipo" id="tipo" value="1">
+
+              <?php endif; ?>
+
+              <div class="col-md-4 col-sm-6 col-12">
                 <div class="form-group">
                   <label for="colegio" class="control-label">Colegio <small style="color:red;">*</small></label>
                   <input type="text" class="form-control" name="colegio" id="colegio" required>
                 </div>
               </div>
+              
+            </div>
+            <div class="row">
               <div class="col-md-4 col-sm-6 col-12">
                 <div class="form-group">
                   <label for="fac_rem" class="control-label">Factura o Remisión <small style="color:red;">*</small></label>
@@ -242,9 +270,10 @@ $materias = $req->fetchAll();
           </button>
         </div>
 
-      </form>
-
+     
     </div>
+     </form>
+
     <?php include("template/footer.php"); ?>
   </div>
 </div>
@@ -254,13 +283,101 @@ $materias = $req->fetchAll();
 <script src="vendors/scripts/process.js"></script>
 <script src="vendors/scripts/layout-settings.js"></script>
 <script>
+
+  // ==========================================
+  // LÓGICA PARA EL SEGUNDO SELECT (#tipo_p) 
+  // ==========================================
+    
+  function validarTipoP(valorP) {
+    if (valorP == '1') {
+      $('#muestras').addClass('d-none');
+      $('#tipo').removeAttr('required');
+    } else if (valorP == '2') {
+        $('#muestras').removeClass('d-none');
+        $('#tipo').attr('required', true);
+    }
+
+    //Si tipo_p es igual a 2, asigna el valor 2 a #fac_rem
+    if (valorP == '2') {
+        $('#fac_rem').val('2');
+    }
+  }
+
+  var valorGuardadoP = sessionStorage.getItem('select_tipo_p_valor');
+  if (valorGuardadoP) {
+    $('#tipo_p').val(valorGuardadoP);
+      var cambios_p = 1; 
+      validarTipoP(valorGuardadoP);
+  } else {
+    var cambios_p = 0;
+    validarTipoP($('#tipo_p').val());
+  }
+
+  $('#tipo_p').on('change', function() {
+    var valorP = $(this).val();
+    cambios_p++;
+        
+    validarTipoP(valorP);
+        
+    if (valorP != '') {
+      sessionStorage.setItem('select_tipo_p_valor', valorP);
+    }
+        
+    if (valorP != '' && cambios_p > 1) {
+      location.reload();
+    }
+  });
+
+  // ==========================================
+  // LÓGICA PARA EL PRIMER SELECT (#tipo)
+  // ==========================================
+  var valorGuardado = sessionStorage.getItem('select_tipo_valor');
+  if (valorGuardado) {
+    $('#tipo').val(valorGuardado);
+    var cambios = 1; 
+  } else {
+    var cambios = 0;
+  }
+
+  $('#tipo').on('change', function() {
+    var valor = $(this).val();
+    cambios++;
+    if (valor != '' && cambios > 1) {
+      var valorActualP = $('#tipo_p').val();
+      if (valorActualP != '') {
+        sessionStorage.setItem('select_tipo_p_valor', valorActualP);
+      }
+
+      sessionStorage.setItem('select_tipo_valor', valor);
+      location.reload();
+    }
+  });
+
+
+    // ==========================================
+    // LIMPIEZA COMÚN (Para ambos select)
+    // ==========================================
+    $('form').on('submit', function() {
+        sessionStorage.removeItem('select_tipo_valor');
+        sessionStorage.removeItem('select_tipo_p_valor');
+    });
+
+    $('a').on('click', function() {
+        sessionStorage.removeItem('select_tipo_valor');
+        sessionStorage.removeItem('select_tipo_p_valor');
+    });
+
+
+
   $('#materia').on('change',function(){
     var valor = $(this).val();
-    var dataString = 'mat_gra='+valor;
+    var tipo_p = $("#tipo_p").val();
+    var tipo = $("#tipo").val();
+    var dataString = 'mat_gra='+valor+"/"+tipo_p+"/"+tipo;
     $.ajax({
-      url: "ajax/buscar_l_eureka_sp.php", type: "POST", data: dataString, dataType: "html",
+      url: "ajax/buscar_l_eureka_sp_sa.php", type: "POST", data: dataString, dataType: "html",
       success: function (resp) { $("#libro").html(resp); },
-      error: function (jqXHR,estado,error){ alert("error"); console.log(estado); console.log(error); }
+      error: function (jqXHR,estado,error){ alert("Verifica tipo de pedidos y tipo de muestras si corresponde"); console.log(estado); console.log(error); $("#materia").val("");}
     });
   });
 
@@ -275,7 +392,7 @@ $materias = $req->fetchAll();
       $.ajax({
         url: "ajax/buscar_pri_sec_desc.php", type: "POST", data: 'pri_sec='+libro, dataType: "html",
         success: function (resp) { $("#ls_pri_sec").html('').append(resp); },
-        error: function (jqXHR,estado,error){ alert("error"); }
+        error: function (jqXHR,estado,error){ alert("Verifica tipo de pedidos y tipo de muestras si corresponde"); }
       });
     } else {
       $('#libro_e').val(libro+'/'+cant+'/'+desc);
@@ -313,11 +430,15 @@ $materias = $req->fetchAll();
     <?php for ($i = 1; $i < 100; $i++): ?>
     $('#materia<?= $i ?>').on('change',function(){
       var valor = $(this).val();
+      var tipo_p = $("#tipo_p").val();
+      var tipo = $("#tipo").val();
+      var dataString = 'mat_gra='+valor+"/"+tipo_p+"/"+tipo;
       $.ajax({
-        url: "ajax/buscar_l_eureka_sp.php", type: "POST", data: 'mat_gra='+valor, dataType: "html",
+        url: "ajax/buscar_l_eureka_sp_sa.php", type: "POST", data: dataString, dataType: "html",
         success: function (resp) { $("#libro<?= $i ?>").html(resp); },
-        error: function (jqXHR,estado,error){ alert("error"); }
+        error: function (jqXHR,estado,error){ alert("Verifica tipo de pedidos y tipo de muestras si corresponde"); }
       });
+
     });
 
     $('#libro<?= $i ?>').on('change',function(){

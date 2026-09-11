@@ -71,7 +71,7 @@ $order_dir     = (strtolower($_POST['order'][0]['dir'] ?? 'desc') === 'asc') ? '
 $order_field   = $_POST['columns'][$order_col_idx]['data'] ?? 'id';
 $order_sql     = $order_map[$order_field] ?? 'p.id';
 
-$sql_data = "SELECT p.id, u.nombres, u.apellidos, p.fecha, p.colegio
+$sql_data = "SELECT p.id, u.nombres, u.apellidos, p.fecha, p.colegio, p.tipo as ptipo
              $from
              $where
              GROUP BY p.id
@@ -87,11 +87,21 @@ $rows = $req->fetchAll();
 
 $data = [];
 foreach ($rows as $p) {
+
+  if ($p['ptipo']==1){
+    $p['ptipo']="Venta";
+  } elseif ($p['ptipo']==2) {
+    $p['ptipo']="Muestras";
+  }else{
+      $p['ptipo']="";
+  }
+
   $data[] = [
     'id'        => $p['id'],
     'fecha_d'   => date('d/m/Y', strtotime($p['fecha'])),
     'promotor'  => htmlspecialchars(trim(($p['nombres'] ?? '') . ' ' . ($p['apellidos'] ?? ''))),
     'colegio'   => htmlspecialchars($p['colegio']),
+    'tipo'   => htmlspecialchars($p['ptipo']),
   ];
 }
 

@@ -3,7 +3,7 @@ require_once("php/aut.php");
 require_once("conexion/bdd.php");
 
 if ($_SESSION["tipo"] == 1) {
-  $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, e.estado, c.sub_zona, c.responsable, cal.calendario
+  $sql = "SELECT p.id, p.tipo as ptipo, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, e.estado, c.sub_zona, c.responsable, cal.calendario
           FROM muestreos_e p
           JOIN colegios c ON p.id_colegio=c.id
           JOIN zonas z ON z.codigo=c.cod_zona
@@ -13,7 +13,7 @@ if ($_SESSION["tipo"] == 1) {
           WHERE p.estado=1
           GROUP BY p.id";
 } else {
-  $sql = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, e.estado, c.sub_zona, c.responsable, cal.calendario
+  $sql = "SELECT p.id, p.tipo as ptipo, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, e.estado, c.sub_zona, c.responsable, cal.calendario
           FROM muestreos_e p
           JOIN colegios c ON p.id_colegio=c.id
           JOIN zonas z ON z.codigo=c.cod_zona
@@ -180,6 +180,7 @@ sort($zonas_uniq);
                 <th>Zona</th>
                 <th>Responsable</th>
                 <th>Colegio</th>
+                <th>Tipo</th>
                 <th>Calendario</th>
                 <th>Acciones</th>
               </tr>
@@ -201,6 +202,14 @@ sort($zonas_uniq);
                 }
                 $fecha_d = date('d/m/Y', strtotime($p['fecha']));
                 $fecha_r = substr($p['fecha'], 0, 10);
+
+                if ($p["ptipo"]==1){
+                  $p["ptipo"]="Docente";
+                } elseif ($p["ptipo"]==2) {
+                    $p["ptipo"]="Estudiante";
+                }else{
+                  $p["ptipo"]="";
+                }
               ?>
               <tr data-date="<?= $fecha_r ?>" data-zona="<?= htmlspecialchars($zona_d) ?>">
                 <td><?= $p['id'] ?></td>
@@ -209,6 +218,7 @@ sort($zonas_uniq);
                 <td><?= $n_zona ?></td>
                 <td><?= $resp ?></td>
                 <td><?= htmlspecialchars($p['colegio']) ?></td>
+                <td><?= htmlspecialchars($p['ptipo'] ?? '—') ?></td>
                 <td><?= htmlspecialchars($p['calendario'] ?? '—') ?></td>
                 <td style="white-space:nowrap">
                   <a href="muestreo_colegio_resto.php?id_muestras_e=<?= $p['id'] ?>" class="lm-btn-ver">

@@ -231,7 +231,7 @@
           </div>
           <!-- /Page Header -->
 
-          <form action="php/crear_muestreo.php" method="POST" enctype="multipart/form-data" id="miFormulario">
+          <form action="php/crear_muestreo_new.php" method="POST" enctype="multipart/form-data" id="miFormulario">
 
             <!-- ── Sección 1: Colegio ──────────────────────────── -->
             <?php if (!isset($_GET['colegio'])): ?>
@@ -239,11 +239,29 @@
               <div class="sm-section-head">
                 <span class="sm-step">1</span>
                 <span class="sm-sec-icon"><i class="bi bi-building"></i></span>
-                <span class="sm-section-title">Seleccione un colegio</span>
+                <span class="sm-section-title">Tipo de muestras y Colegio</span>
               </div>
               <div class="sm-section-body">
                 <div class="row">
-                  <div class="form-group col-md-5 col-sm-12 ocultar_oficina mb-0">
+
+                  <?php if ($_SESSION['tipo']!=6): ?>
+                  <div class="form-group col-md-5 col-sm-6 mb-0">
+                    <label for="cole" class="control-label">Tipo de muestras<small style="color:red;">*</small></label>
+                    <select name="tipo" id="tipo" class="form-control custom-select2" required>
+                      <option value="">Seleccione</option>
+                      <option value="1">Docente</option>
+                      <option value="2">Estudiante</option>
+                      
+                    </select>
+                  </div>
+
+                  <?php else: ?>
+
+                    <input type="hidden" name="tipo" id="tipo" value="1">
+
+                  <?php endif; ?>
+
+                  <div class="form-group col-md-5 col-sm-6 ocultar_oficina mb-0">
                     <label for="cole" class="control-label">Colegio <small style="color:red;">*</small></label>
                     <select name="cole" id="cole" class="form-control custom-select2" required>
                       <option value="">Selecciona un colegio</option>
@@ -264,6 +282,7 @@
                       ?>
                     </select>
                   </div>
+
                 </div>
               </div>
             </div>
@@ -429,14 +448,52 @@
     <script src="vendors/scripts/layout-settings.js"></script>
 
     <script>
+
+         // 1. Al cargar la página, verificamos si hay un valor en la sesión
+        var valorGuardado = sessionStorage.getItem('select_tipo_valor');
+        
+        if (valorGuardado) {
+            $('#tipo').val(valorGuardado);
+            var cambios = 1; 
+        } else {
+            var cambios = 0;
+        }
+
+        // 2. Evento change
+        $('#tipo').on('change', function() {
+            var valor = $(this).val();
+            cambios++;
+            
+            if (valor != '' && cambios > 1) {
+                sessionStorage.setItem('select_tipo_valor', valor);
+                location.reload();
+            }
+        });
+
+        // 3. SOLUCIÓN AL ENVIAR EL FORMULARIO: Limpiar al hacer submit
+        // Cambia 'form' por el ID o clase de tu formulario si es necesario (ej: '#miFormulario')
+        $('form').on('submit', function() {
+            sessionStorage.removeItem('select_tipo_valor');
+        });
+
+        // 4. SOLUCIÓN AL CAMBIAR DE URL: Limpiar si el usuario hace clic en un enlace a otra página
+        $('a').on('click', function() {
+            // Opcional: Podrías verificar si el enlace va a otra página antes de borrar,
+            // pero borrarlo al hacer clic asegura que la siguiente URL empiece limpia.
+            sessionStorage.removeItem('select_tipo_valor');
+        });
+
+
+
       $('#materia').on('change',function(){
       var valor = $(this).val();
+      var tipo = $("#tipo").val();
       //alert(valor);
-      var dataString = 'mat_gra='+valor;
+      var dataString = 'mat_gra='+valor+"/"+tipo;
 
       $.ajax({
 
-        url: "ajax/buscar_l_eureka_sp.php",
+        url: "ajax/buscar_l_eureka_sp_new.php",
         type: "POST",
         data: dataString,
         dataType: "html",
@@ -446,9 +503,10 @@
             //console.log(resp);
         },
         error: function (jqXHR,estado,error){
-            alert("error");
+            alert("Debes seleccionar tipo de muestras");
             console.log(estado);
             console.log(error);
+            $("#materia").val("");
         },
         complete: function (jqXHR,estado){
             console.log(estado);
@@ -529,12 +587,13 @@
 
       $('#materia<?php echo $i; ?>').on('change',function(){
           var valor = $(this).val();
+          var tipo = $("#tipo").val();
           //alert(valor);
-          var dataString = 'mat_gra='+valor;
+          var dataString = 'mat_gra='+valor+"/"+tipo;
 
           $.ajax({
 
-              url: "ajax/buscar_l_eureka_sp.php",
+              url: "ajax/buscar_l_eureka_sp_new.php",
               type: "POST",
               data: dataString,
               dataType: "html",

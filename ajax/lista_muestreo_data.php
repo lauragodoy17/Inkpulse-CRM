@@ -147,7 +147,7 @@ if ($tp == 1) {
   $order_field   = $_POST['columns'][$order_col_idx]['data'] ?? 'id';
   $order_sql     = $order_map[$order_field] ?? 'p.id';
 
-  $sql_data = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, c.colegio, c.sub_zona, c.responsable, cal.calendario, $select_calc
+  $sql_data = "SELECT p.id, z.zona, u.nombres, u.apellidos, u.tipo, p.fecha, p.tipo as ptipo, c.colegio, c.sub_zona, c.responsable, cal.calendario, $select_calc
                $from
                $where
                GROUP BY p.id
@@ -180,6 +180,14 @@ if ($tp == 1) {
       $n_zona    = $sub_zonas_map[$p['sub_zona']] ?? '—';
       $resp_v    = $p['responsable'] ?? '—';
     }
+
+    if ($p['ptipo']==1){
+      $p['ptipo']="Docente";
+    } elseif ($p['ptipo']==2) {
+      $p['ptipo']="Estudiante";
+    }else{
+      $p['ptipo']="";
+    }
     $data[] = [
       'id'          => $p['id'],
       'fecha_d'     => date('d/m/Y', strtotime($p['fecha'])),
@@ -188,6 +196,7 @@ if ($tp == 1) {
       'responsable' => htmlspecialchars($resp_v),
       'colegio'     => htmlspecialchars($p['colegio']),
       'calendario'  => htmlspecialchars($p['calendario'] ?? '—'),
+      'tipo'          => htmlspecialchars($p['ptipo']),
       'url_detalle' => $url_base . $p['id'],
     ];
   }

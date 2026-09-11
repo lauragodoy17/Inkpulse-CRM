@@ -224,6 +224,7 @@ if ($tp == 1) {
                 <th>Zona</th>
                 <th>Responsable</th>
                 <th>Colegio</th>
+                <th>Tipo</th>
                 <th>Calendario</th>
                 <th>Acciones</th>
               </tr>
@@ -275,6 +276,7 @@ $(document).ready(function () {
     { data: 'zona' },
     { data: 'responsable' },
     { data: 'colegio' },
+    { data: 'tipo' },
     { data: 'calendario' },
     {
       data: null, orderable: false,
