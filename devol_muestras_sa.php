@@ -128,27 +128,58 @@
           </div>
           <div class="sm-section-body">
             <div class="row">
-              <?php if ($_GET['tp'] == 2): ?>
-                <div class="col-md-5 col-12 mb-3">
-                  <label class="control-label">Proveedor <small style="color:red;">*</small></label>
-                  <select class="form-control custom-select2" name="persona" id="persona" style="width:100%;" required>
-                    <option value="">Seleccionar</option>
-                    <?php
-                      $sql = "SELECT * FROM proveedores";
-                      $req = $bdd->prepare($sql); $req->execute();
-                      foreach ($req->fetchAll() as $c)
-                        echo '<option value="'.$c["id"].'">'.$c["proveedor"].'</option>';
-                    ?>
-                  </select>
-                </div>
-              <?php endif; ?>
+              <?php if ($_GET['tp'] == 3): ?>
+              <div class="col-md-5 col-12 mb-3">
+                <label class="control-label">Cliente <small style="color:red;">*</small></label>
+                <select class="form-control custom-select2" name="cliente" id="cliente" style="width:100%;" required>
+                  <option value="">Seleccionar</option>
+                  <?php
+                    $sql = "SELECT * FROM clientes ORDER BY id DESC";
+                    $req = $bdd->prepare($sql); $req->execute();
+                    foreach ($req->fetchAll() as $c)
+                      echo '<option value="'.$c["id"].'">'.$c["cliente"].'</option>';
+                  ?>
+                </select>
+              </div>
+              <?php elseif ($_GET['tp'] == 2): ?>
+              <div class="col-md-5 col-12 mb-3">
+                <label class="control-label">Proveedor <small style="color:red;">*</small></label>
+                <select class="form-control custom-select2" name="persona" id="persona" style="width:100%;" required>
+                  <option value="">Seleccionar</option>
+                  <?php
+                    $sql = "SELECT * FROM proveedores";
+                    $req = $bdd->prepare($sql); $req->execute();
+                    foreach ($req->fetchAll() as $c)
+                      echo '<option value="'.$c["id"].'">'.$c["proveedor"].'</option>';
+                  ?>
+                </select>
+              </div>
+             
+              <?php elseif ($_GET['tp'] == 1): ?>
 
+              <?php if ($_SESSION['tipo']!=6): ?>
+              <div class="form-group col-md-5 col-sm-6 mb-0">
+                <label for="cole" class="control-label">Tipo de muestras<small style="color:red;">*</small></label>
+                <select name="tipo" id="tipo" class="form-control custom-select2" required>
+                  <option value="">Seleccione</option>
+                  <option value="1">Docente</option>
+                  <option value="2">Estudiante</option>
+                      
+                </select>
+              </div>
+              <?php else: ?>
+
+                <input type="hidden" name="tipo" id="tipo" value="1">
+
+              <?php endif; ?>
+            <?php endif; ?>
               <?php if ($_SESSION["tipo"] == 1 || $_SESSION["tipo"] == 2): ?>
               <div class="col-md-5 col-12 mb-3">
                 <label class="control-label">Soporte adjunto</label>
                 <input type="file" name="archivo" id="archivo" class="form-control" />
               </div>
               <?php endif; ?>
+
             </div>
           </div>
         </div>
@@ -171,7 +202,7 @@
                   <div class="form-group col-sm-4 col-12">
                     <label for="materia" class="control-label">Materia <small style="color:red;">*</small></label>
                     <select name="materia[]" id="materia" class="form-control">
-                      <option value="">Selecciona una materia</option>
+                      <option value="">Seleccione</option>
                       <?php
                         $sql = "SELECT id, materia FROM materias";
                         $req = $bdd->prepare($sql); $req->execute();
@@ -272,11 +303,62 @@
 <script src="vendors/scripts/layout-settings.js"></script>
 
 <script>
+  <?php if ($_GET['tp'] == 1): ?>
+  // 1. Al cargar la página, verificamos si hay un valor en la sesión
+  var valorGuardado = sessionStorage.getItem('select_tipo_valor');
+        
+  if (valorGuardado) {
+    $('#tipo').val(valorGuardado);
+      var cambios = 1; 
+  } else {
+    var cambios = 0;
+  }
+
+  // 2. Evento change
+  $('#tipo').on('change', function() {
+    var valor = $(this).val();
+    cambios++;
+            
+    if (valor != '' && cambios > 1) {
+      sessionStorage.setItem('select_tipo_valor', valor);
+      location.reload();
+    }
+  });
+
+  // 3. SOLUCIÓN AL ENVIAR EL FORMULARIO: Limpiar al hacer submit
+  // Cambia 'form' por el ID o clase de tu formulario si es necesario (ej: '#miFormulario')
+  $('form').on('submit', function() {
+    sessionStorage.removeItem('select_tipo_valor');
+  });
+
+  // 4. SOLUCIÓN AL CAMBIAR DE URL: Limpiar si el usuario hace clic en un enlace a otra página
+  $('a').on('click', function() {
+    // Opcional: Podrías verificar si el enlace va a otra página antes de borrar,
+    // pero borrarlo al hacer clic asegura que la siguiente URL empiece limpia.
+    sessionStorage.removeItem('select_tipo_valor');
+  });
+
+  $('#materia').on('change', function () {
+    $.ajax({ url:"ajax/buscar_l_eureka_sp_new.php", type:"POST", data:'mat_gra='+$(this).val()+"/"+$("#tipo").val(), dataType:"html",
+      success: function (resp) { $("#libro").html(resp); },
+      error: function (jqXHR,estado,error){
+            alert("Debes seleccionar tipo de muestras");
+            console.log(estado);
+            console.log(error);
+            $("#materia").val("");
+      }
+    });
+  });
+
+<?php else: ?>
   $('#materia').on('change', function () {
     $.ajax({ url:"ajax/buscar_l_eureka_sp.php", type:"POST", data:'mat_gra='+$(this).val(), dataType:"html",
       success: function (resp) { $("#libro").html(resp); }
     });
   });
+<?php endif; ?>
+
+  
 
   $('#libro').on('change', function () {
     var cant = $('#cantidad').val(), libro = $(this).val();
@@ -301,12 +383,22 @@
     m++;
 
     <?php for ($i = 1; $i < 100; $i++): ?>
-    $('#materia<?= $i ?>').on('change', function () {
-      $.ajax({ url:"ajax/buscar_l_eureka_sp.php", type:"POST", data:'mat_gra='+$(this).val(), dataType:"html",
-        success: function (resp) { $("#libro<?= $i ?>").html(resp); }
+
+    <?php if ($_GET['tp'] == 1): ?>
+      $('#materia<?= $i ?>').on('change', function () {
+        $.ajax({ url:"ajax/buscar_l_eureka_sp_new.php", type:"POST", data:'mat_gra='+$(this).val()+"/"+$("#tipo").val(), dataType:"html",
+          success: function (resp) { $("#libro<?= $i ?>").html(resp); }
+        });
       });
-    });
-    $('#libro<?= $i ?>').on('change', function () {
+    <?php else: ?>
+      $('#materia<?= $i ?>').on('change', function () {
+        $.ajax({ url:"ajax/buscar_l_eureka_sp.php", type:"POST", data:'mat_gra='+$(this).val(), dataType:"html",
+          success: function (resp) { $("#libro<?= $i ?>").html(resp); }
+        });
+      });
+
+    <?php endif; ?>
+        $('#libro<?= $i ?>').on('change', function () {
       var cant = $('#cantidad<?= $i ?>').val(), libro = $(this).val();
       var grado = $('#libro<?= $i ?> option:selected').attr('data-grado');
       if (grado == 15 || grado == 16) {

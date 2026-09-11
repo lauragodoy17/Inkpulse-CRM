@@ -17,13 +17,28 @@ $pedido_base = $req_pedido->fetch();
 
 // Full data
 if ($tipo == 1) {
-    $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.archivo,pe.codigo,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado LEFT JOIN clientes c ON pe.persona=c.id WHERE pe.id='".$pedido_base["id"]."'";
+    $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.archivo,pe.codigo, pe.tipo_muestras,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado LEFT JOIN clientes c ON pe.persona=c.id WHERE pe.id='".$pedido_base["id"]."'";
+
+    $req_pedido = $bdd->prepare($sql_pedido);
+    $req_pedido->execute();
+    $pedido = $req_pedido->fetch();
+
+    if ($pedido['tipo_muestras'] == 1) {
+      $pedido['tipo_muestras']= "Docente";
+    }elseif ($p['tipo_muestras'] == 2) {
+      $pedido['tipo_muestras']= "Estudiante";
+    }else{
+      $pedido['tipo_muestras']= "";
+    }
+
 } else {
     $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.archivo,pe.codigo,u.nombres, u.apellidos, e.id as eid,e.estado, c.proveedor as cliente, c.id as cid FROM devoluciones_prov pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado JOIN proveedores c ON pe.persona=c.id WHERE pe.id='".$pedido_base["id"]."'";
+
+    $req_pedido = $bdd->prepare($sql_pedido);
+    $req_pedido->execute();
+    $pedido = $req_pedido->fetch();
 }
-$req_pedido = $bdd->prepare($sql_pedido);
-$req_pedido->execute();
-$pedido = $req_pedido->fetch();
+
 
 // Libros
 if ($tipo == 1) {
@@ -285,6 +300,17 @@ if (isset($n_op['estado']) && $n_op['estado'] == 2) {
             <p class="mc-card-val"><?= htmlspecialchars($pedido['nombres'].' '.$pedido['apellidos']) ?></p>
           </div>
         </div>
+        <?php if ($tipo == 1): ?>
+
+          <div class="mc-card">
+            <div class="mc-card-icon teal"><i class="bi bi-journal"></i></div>
+            <div>
+              <p class="mc-card-label">Tipo</p>
+              <p class="mc-card-val"><?= htmlspecialchars($pedido["tipo_muestras"] ?? '—') ?></p>
+            </div>
+          </div>
+
+        <?php endif; ?>
         <div class="mc-card">
           <div class="mc-card-icon green"><i class="bi bi-person-lines-fill"></i></div>
           <div>

@@ -36,6 +36,53 @@ try {
         $ck->execute([$cod_pedido]);
     } while ($ck->fetch());
 
+
+    if ($tp == 1) {
+        // 1. Defines el mapa de relaciones [id_libro => cartilla]
+        $relaciones = [
+            4455 => 4083,
+            4458 => 4084,
+            4459 => 4085,
+            4460 => 4086,
+            4461 => 4087,
+            4462 => 4088,
+            4463 => 4089,
+            4464 => 4090,
+            4465 => 4091,
+            4456 => 4092,
+            4457 => 4093,
+            4444 => 4660,
+            4447 => 4659,
+            4448 => 4658,
+            4449 => 4657,
+            4450 => 4656,
+            4451 => 4637,
+            4452 => 4638,
+            4453 => 4639,
+            4454 => 4652,
+            4445 => 4651,
+            4446 => 4650,
+            4435 => 5038,
+            4436 => 5039,
+            4437 => 5040,
+            4438 => 4800,
+            4439 => 4632,
+            4440 => 4633,
+            4441 => 4634,
+            4442 => 4635,
+            4443 => 4636,
+            4466 => 4797,
+            4467 => 4623,
+            4468 => 4624,
+            4469 => 4625,
+            4470 => 4626,
+            4471 => 4627,
+            4472 => 4628,
+            4473 => 4629,
+            4474 => 4630,
+        ];
+    }
+
     // Insertar libros normales
     foreach ($_POST['libro_e'] ?? [] as $libro) {
         if (empty($libro) || strpos($libro, '/') === false) continue;
@@ -46,6 +93,24 @@ try {
         $tbl = ($tp == 3) ? 'libros_devol_v' : 'libros_devol';
         $bdd->prepare("INSERT INTO $tbl(cod_pedido, id_libro, cantidad) VALUES(?, ?, ?)")
             ->execute([$cod_pedido, $id_libro, $cantidad]);
+
+        if ($tp == 1) {
+            // 2. Obtienes el valor directamente o asignas un valor por defecto (null) si no existe
+            $cartilla = $relaciones[$id_libro] ?? null;
+
+            $sql_p = "INSERT INTO libros_devol(cod_pedido,id_libro,cantidad) VALUES('".$cod_pedido."','".$cartilla."','".$cantidad."')";
+
+            $query_p = $bdd->prepare( $sql_p );
+            if ($query_p == false) {
+                print_r($bdd->errorInfo());
+                die ('Erreur prepare');
+            }
+            $sth_p = $query_p->execute();
+            if ($sth_p == false) {
+                print_r($query_p->errorInfo());
+                die ('Erreur execute');
+            }
+        }
     }
 
     // Insertar libros primaria/secundaria
@@ -55,13 +120,32 @@ try {
         $tbl = ($tp == 3) ? 'libros_devol_v' : 'libros_devol';
         $bdd->prepare("INSERT INTO $tbl(cod_pedido, id_libro, cantidad) VALUES(?, ?, ?)")
             ->execute([$cod_pedido, $id_libro, $cantidad]);
+
+        if ($tp == 1) {
+            // 2. Obtienes el valor directamente o asignas un valor por defecto (null) si no existe
+            $cartilla = $relaciones[$id_libro] ?? null;
+
+            $sql_p = "INSERT INTO libros_devol(cod_pedido,id_libro,cantidad) VALUES('".$cod_pedido."','".$cartilla."','".$cantidad."')";
+
+            $query_p = $bdd->prepare( $sql_p );
+            if ($query_p == false) {
+                print_r($bdd->errorInfo());
+                die ('Erreur prepare');
+            }
+            $sth_p = $query_p->execute();
+            if ($sth_p == false) {
+                print_r($query_p->errorInfo());
+                die ('Erreur execute');
+            }
+        }
     }
 
     // Insertar encabezado
     $obs = str_replace(["'", '"'], '', $_POST['observaciones'] ?? '');
     if ($tp == 1) {
-        $bdd->prepare("INSERT INTO devoluciones(codigo, tipo, id_periodo, id_usuario, observaciones, archivo, estado) VALUES(?, '1', '1', ?, ?, ?, ?)")
-            ->execute([$cod_pedido, $_SESSION['id'], $obs, $nombre_archivo, $estado]);
+        $bdd->prepare("INSERT INTO devoluciones(codigo, tipo, id_periodo, id_usuario, observaciones, archivo, estado,tipo_muestras) VALUES(?, '1', '1', ?, ?, ?, ?,?)")
+            ->execute([$cod_pedido, $_SESSION['id'], $obs, $nombre_archivo, $estado, $_POST['tipo']]);
+
     } elseif ($tp == 2) {
         $bdd->prepare("INSERT INTO devoluciones_prov(codigo, tipo, id_periodo, persona, id_usuario, observaciones, archivo, estado) VALUES(?, '2', '1', ?, ?, ?, ?, ?)")
             ->execute([$cod_pedido, $_POST['persona'] ?? '', $_SESSION['id'], $obs, $nombre_archivo, $estado]);
