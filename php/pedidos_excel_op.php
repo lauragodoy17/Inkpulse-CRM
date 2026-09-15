@@ -52,26 +52,44 @@ $estilo_negrita = array(
     )
 );
 
+//poner imagen
+$drawing = new Drawing();
+$drawing->setName('test_img');
+$drawing->setDescription('test_img');
+$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
+$drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
+$drawing->setCoordinates('A1'); // Posición en la hoja
+$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
-	$fecha=date("Y-m-d");
-	//~ Ingreo de datos en la hojda de excel
+$objSpreadsheet->getActiveSheet()->mergeCells('C2:D2');
+$objSpreadsheet->getActiveSheet()->getStyle('E2')->applyFromArray($estilo_negrita);
+$objSpreadsheet->getActiveSheet()->getStyle('E2')->applyFromArray($estilo_centrar);
+$objSpreadsheet->getActiveSheet()->SetCellValue("E2", "Pedidos sin adopción - Libro a libro");
+	
+$fecha=date("Y-m-d H:i:s");
+$sql = "SELECT CONCAT(nombres, ' ', apellidos) as nombre_u FROM usuarios WHERE id='".$_SESSION['id']."'";
+$req = $bdd->prepare($sql);
+$req->execute();
+$usuario_desc = $req->fetch();
+
+$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "Fecha: $fecha");
+$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Rango: $_POST[desde] - $_POST[hasta]");
+$objSpreadsheet->getActiveSheet()->SetCellValue("G4", "Usuario: $usuario_desc[nombre_u]");
 
 	if ($_POST["usuario"]==0) {
 
 		/*$objSpreadsheet->getActiveSheet()->SetCellValue("B1", "Distribuidor");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("B2", "$usuario[nombre_c]");*/
-		$objSpreadsheet->getActiveSheet()->SetCellValue("D1", "Fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("D2", "$fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("A4", "# Pedido");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Usuario");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Estado");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "Colegio");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "OP");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("G4", "Atendida");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("H4", "Tipo de documento");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("I4", "Num. de documento");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("J4", "Observaciones");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("A6", "# Pedido");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Usuario");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("C6", "Fecha");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("D6", "Estado");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("E6", "Colegio");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("F6", "OP");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("G6", "Atendida");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("H6", "Tipo de documento");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("I6", "Num. de documento");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("J6", "Observaciones");
 
 	}else{
 
@@ -80,25 +98,23 @@ $estilo_negrita = array(
 		$req->execute();
 		$usuario = $req->fetch();
 
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B1", "Distribuidor");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B2", "$usuario[nombre_c]");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("D1", "Fecha");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Asesor o Distribuidor: $usuario[nombre_c]");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("D2", "$fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("A4", "# Pedido");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Estado");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Colegio");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "OP");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Atendida");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("G4", "Tipo de documento");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("H4", "Num. de documento");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("I4", "Observaciones");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("A6", "# Pedido");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Fecha");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("C6", "Estado");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("D6", "Colegio");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("E6", "OP");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("F6", "Atendida");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("G6", "Tipo de documento");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("H6", "Num. de documento");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("I6", "Observaciones");
 	}
 
 	
 
 
-	$objSpreadsheet->getActiveSheet()->getStyle('A4:J4')->applyFromArray([
+	$objSpreadsheet->getActiveSheet()->getStyle('A6:J6')->applyFromArray([
 	    'fill' => [
 	        'fillType' => Fill::FILL_SOLID,
 	        'startColor' => [
@@ -146,7 +162,7 @@ $estilo_negrita = array(
 	    }
 	}
 
-	$conta=5;
+	$conta=7;
 	foreach($libros as $libro) {
 
 		$estado = ['estado' => $estados_map[$libro["estado"]] ?? ''];
@@ -277,9 +293,9 @@ foreach (range('A', 'Z') as $columnID) {
 $objWriter = new Xlsx($objSpreadsheet); //Escribir archivo
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 if ($_POST["usuario"]==0) {
-	header('Content-Disposition: attachment; filename="pedidos_op.xlsx"');
+	header('Content-Disposition: attachment; filename="pedidos_con_adopcion_op.xlsx"');
 }else{
-	header('Content-Disposition: attachment; filename="pedidos_op_'.$usuario["nombre_c"].'.xlsx"');
+	header('Content-Disposition: attachment; filename="pedidos_con_adopcion_op_'.$usuario["nombre_c"].'.xlsx"');
 }
 
 header('Cache-Control: max-age=0');

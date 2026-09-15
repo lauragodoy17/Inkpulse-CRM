@@ -29,55 +29,8 @@
       </div>
 
       <p style="font-size:12px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px;">
-        Pedidos General — libro a libro
+        Pedidos — libro a libro
       </p>
-
-      <div class="sm-section">
-        <div class="sm-section-head">
-          <span class="sm-sec-icon"><i class="bi bi-x-circle"></i></span>
-          <span class="sm-section-title">Sin adopciones</span>
-        </div>
-        <div class="sm-section-body">
-          <form action="php/pedidos_sa_excel.php" method="POST">
-            <div class="row">
-              <div class="col-md-4 col-12 mb-3">
-                <label class="control-label">Usuario <small style="color:red;">*</small></label>
-                <select class="form-control custom-select2" name="usuario" id="usuario1" required>
-                  <option value="">Seleccionar</option>
-                  <option value="0">Todos</option>
-                  <?php
-                    $sql = "SELECT id, CONCAT(nombres, ' ', apellidos) as nombre_c FROM usuarios WHERE tipo!=3";
-                    $req = $bdd->prepare($sql); $req->execute();
-                    foreach ($req->fetchAll() as $d)
-                      echo '<option value="'.$d['id'].'">'.$d['nombre_c'].'</option>';
-                  ?>
-                </select>
-              </div>
-              <div class="col-md-3 col-12 mb-3">
-                <label class="control-label">Desde <small style="color:red;">*</small></label>
-                <div class="input-group">
-                  <input type="text" class="form-control date-picker" name="desde" data-date-format="yyyy-mm-dd" required autocomplete="off" placeholder="Seleccionar fecha" />
-                  <div class="input-group-append">
-                    <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
-                  </div>
-                </div>
-              </div>
-              <div class="col-md-3 col-12 mb-3">
-                <label class="control-label">Hasta <small style="color:red;">*</small></label>
-                <div class="input-group">
-                  <input type="text" class="form-control date-picker" name="hasta" data-date-format="yyyy-mm-dd" required autocomplete="off" placeholder="Seleccionar fecha" />
-                  <div class="input-group-append">
-                    <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="sm-footer">
-              <button class="btn btn-primary"><i class="bi bi-download"></i> Exportar Excel</button>
-            </div>
-          </form>
-        </div>
-      </div>
 
       <div class="sm-section">
         <div class="sm-section-head">
@@ -126,21 +79,17 @@
         </div>
       </div>
 
-      <p style="font-size:12px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; margin-top:6px;">
-        Pedidos aprobados con OP y su estado
-      </p>
-
       <div class="sm-section">
         <div class="sm-section-head">
-          <span class="sm-sec-icon orange"><i class="bi bi-x-circle"></i></span>
+          <span class="sm-sec-icon"><i class="bi bi-x-circle"></i></span>
           <span class="sm-section-title">Sin adopciones</span>
         </div>
         <div class="sm-section-body">
-          <form action="php/pedidos_sa_excel_op.php" method="POST">
+          <form action="php/pedidos_sa_excel.php" method="POST">
             <div class="row">
               <div class="col-md-4 col-12 mb-3">
                 <label class="control-label">Usuario <small style="color:red;">*</small></label>
-                <select class="form-control custom-select2" name="usuario" id="usuario3" required>
+                <select class="form-control custom-select2" name="usuario" id="usuario1" required>
                   <option value="">Seleccionar</option>
                   <option value="0">Todos</option>
                   <?php
@@ -177,6 +126,10 @@
         </div>
       </div>
 
+      <p style="font-size:12px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; margin-top:6px;">
+        Pedidos general con OP y su estado
+      </p>
+
       <div class="sm-section">
         <div class="sm-section-head">
           <span class="sm-sec-icon purple"><i class="bi bi-check-circle"></i></span>
@@ -192,6 +145,53 @@
                   <option value="0">Todos</option>
                   <?php
                     $sql = "SELECT id, CONCAT(nombres, ' ', apellidos) as nombre_c FROM usuarios";
+                    $req = $bdd->prepare($sql); $req->execute();
+                    foreach ($req->fetchAll() as $d)
+                      echo '<option value="'.$d['id'].'">'.$d['nombre_c'].'</option>';
+                  ?>
+                </select>
+              </div>
+              <div class="col-md-3 col-12 mb-3">
+                <label class="control-label">Desde <small style="color:red;">*</small></label>
+                <div class="input-group">
+                  <input type="text" class="form-control date-picker" name="desde" data-date-format="yyyy-mm-dd" required autocomplete="off" placeholder="Seleccionar fecha" />
+                  <div class="input-group-append">
+                    <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3 col-12 mb-3">
+                <label class="control-label">Hasta <small style="color:red;">*</small></label>
+                <div class="input-group">
+                  <input type="text" class="form-control date-picker" name="hasta" data-date-format="yyyy-mm-dd" required autocomplete="off" placeholder="Seleccionar fecha" />
+                  <div class="input-group-append">
+                    <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="sm-footer">
+              <button class="btn btn-primary"><i class="bi bi-download"></i> Exportar Excel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="sm-section">
+        <div class="sm-section-head">
+          <span class="sm-sec-icon orange"><i class="bi bi-x-circle"></i></span>
+          <span class="sm-section-title">Sin adopciones</span>
+        </div>
+        <div class="sm-section-body">
+          <form action="php/pedidos_sa_excel_op.php" method="POST">
+            <div class="row">
+              <div class="col-md-4 col-12 mb-3">
+                <label class="control-label">Usuario <small style="color:red;">*</small></label>
+                <select class="form-control custom-select2" name="usuario" id="usuario3" required>
+                  <option value="">Seleccionar</option>
+                  <option value="0">Todos</option>
+                  <?php
+                    $sql = "SELECT id, CONCAT(nombres, ' ', apellidos) as nombre_c FROM usuarios WHERE tipo!=3";
                     $req = $bdd->prepare($sql); $req->execute();
                     foreach ($req->fetchAll() as $d)
                       echo '<option value="'.$d['id'].'">'.$d['nombre_c'].'</option>';
