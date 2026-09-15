@@ -178,17 +178,21 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("G4", "Usuario: $usuario_desc[no
 			$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$libro[colegio]");
 
 			if ($num !=0) {
-				$op2 = $req2->fetch();
+				$op2 = isset($req2) ? $req2->fetch() : false;
 
-				$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$op2[op]");
-				if ($op2["estado"]==2) {
-					$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "Si");
-				}else{
-					$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "No");
+				if ($op2!=false) {
+
+					$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$op2[op]");
+					if ($op2["estado"]==2) {
+						$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "Si");
+					}else{
+						$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "No");
+					}
+					$objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "$op2[tipo]");
+					$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$op2[n_doc]");
 				}
-
-				$objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "$op2[tipo]");
-				$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$op2[n_doc]");
+				
+				
 			
 
 			}else{
