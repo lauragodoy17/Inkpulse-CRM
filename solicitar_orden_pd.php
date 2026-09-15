@@ -81,6 +81,7 @@
                   <option value="Wilmer Suárez">Wilmer Suárez</option>
                   <option value="Liliana Toledo">Liliana Toledo</option>
                   <option value="Carlos Puentes">Carlos Puentes</option>
+                  <option value="Jhon Vanegas">Jhon Vanegas</option>
                 </select>
               </div>
             </div>
