@@ -55,7 +55,7 @@
             <div class="row">
               <div class="col-md-4 col-12 mb-3">
                 <label class="control-label">Usuario <small style="color:red;">*</small></label>
-                <select name="usuario" id="usuario" class="form-control" required>
+                <select name="usuario" id="usuario" class="form-control custom-select2" required>
                   <option value="">Seleccionar</option>
                   <option value="0">Todos</option>
                   <?php

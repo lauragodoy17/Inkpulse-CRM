@@ -99,7 +99,6 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("G4", "Usuario: $usuario_desc[no
 		$usuario = $req->fetch();
 
 		$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Asesor o Distribuidor: $usuario[nombre_c]");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("D2", "$fecha");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("A6", "# Pedido");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Fecha");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("C6", "Estado");

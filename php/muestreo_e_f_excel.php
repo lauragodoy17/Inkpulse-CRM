@@ -51,25 +51,41 @@
 	    )
 	);
 
+//poner imagen
+$drawing = new Drawing();
+$drawing->setName('test_img');
+$drawing->setDescription('test_img');
+$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
+$drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
+$drawing->setCoordinates('A1'); // Posición en la hoja
+$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
-		
+$objSpreadsheet->getActiveSheet()->mergeCells('C2:D2');
+$objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_negrita);
+$objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_centrar);
+$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "Muestras solicitadas");
+	
+$fecha=date("Y-m-d H:i:s");
+$sql = "SELECT CONCAT(nombres, ' ', apellidos) as nombre_u FROM usuarios WHERE id='".$_SESSION['id']."'";
+$req = $bdd->prepare($sql);
+$req->execute();
+$usuario_desc = $req->fetch();
 
-	$fecha=date("Y-m-d");
-	//~ Ingreo de datos en la hojda de excel
+$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Fecha: $fecha");
+$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Rango: $_POST[desde] - $_POST[hasta]");
+$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Usuario: $usuario_desc[nombre_u]");
 
 	if ($_POST["usuario"]==0) {
 		
 		/*$objSpreadsheet->getActiveSheet()->SetCellValue("B1", "Usuario");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("B2", "$usuario[nombre_c]");*/
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C1", "Fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "$fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("A4", "#");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Usuario");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Colegio");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "Isbn");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Libro");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("G4", "Cantidad");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("A6", "#");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Usuario");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("C6", "Fecha");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("D6", "Colegio");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("E6", "Isbn");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("F6", "Libro");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("G6", "Cantidad");
 
 	}else{
 
@@ -78,16 +94,13 @@
 		$req->execute();
 		$usuario = $req->fetch();
 
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B1", "Usuario");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B2", "$usuario[nombre_c]");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C1", "Fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "$fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("A4", "#");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Colegio");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Isbn");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "Libro");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Cantidad");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Asesor o Distribuidor: $usuario[nombre_c]");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("A6", "#");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Fecha");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("C6", "Colegio");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("D6", "Isbn");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("E6", "Libro");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("F6", "Cantidad");
 	}
 
 	
@@ -97,14 +110,14 @@
 		'rgb' => '#251919'
 		)
 	);
-	$objSpreadsheet->getActiveSheet()->getStyle("A4:H4")->getFont()->getColor()->applyFromArray(
+	$objSpreadsheet->getActiveSheet()->getStyle("A6:H6")->getFont()->getColor()->applyFromArray(
 		array(
 		'rgb' => '#251919'
 		)
 	);
 
 
-    $objSpreadsheet->getActiveSheet()->getStyle('A4:H4')->applyFromArray([
+    $objSpreadsheet->getActiveSheet()->getStyle('A6:H6')->applyFromArray([
     'fill' => [
         'fillType' => Fill::FILL_SOLID,
         'startColor' => [
@@ -133,7 +146,7 @@
 	$req->execute();
 	$libros= $req->fetchAll();
 
-	$conta=5;
+	$conta=7;
 	foreach($libros as $libro) {
    
 
