@@ -12,6 +12,7 @@ $status_cfg = [
   5 => ['label'=>'Anulados',    'badge'=>'lm-badge-red',    'icon'=>'bi-x-circle-fill'],
   6 => ['label'=>'Procesando',  'badge'=>'lm-badge-blue',   'icon'=>'bi-shuffle'],
   7 => ['label'=>'Facturación',    'badge'=>'lm-badge-yellow',    'icon'=>'bi-file-earmark-text'],
+  8 => ['label'=>'En despacho', 'badge'=>'lm-badge-purple', 'icon'=>'bi-box-seam'],
 ];
 $st = $status_cfg[$tp] ?? $status_cfg[2];
 
@@ -22,8 +23,30 @@ $st_accent = [
   5 => ['hdr'=>'#991b1b', 'even'=>'#fff1f2', 'hover'=>'#fee2e2', 'accent'=>'#b91c1c'],
   6 => ['hdr'=>'#1e40af', 'even'=>'#eff6ff', 'hover'=>'#dbeafe', 'accent'=>'#2563eb'],
   7 => ['hdr'=>'#92400e', 'even'=>'#fffbeb', 'hover'=>'#fef3c7', 'accent'=>'#b45309'],
+  8 => ['hdr'=>'#6d28d9', 'even'=>'#f5f3ff', 'hover'=>'#ede9fe', 'accent'=>'#7c3aed'],
 ];
 $ac = $st_accent[$tp] ?? $st_accent[2];
+
+// Config de la barra de selección masiva por tp — mismo patrón que
+// lista_pedidos.php, para todo el tramo "desde Aprobado en adelante".
+$bulk_cfg = [
+  3 => ['label' => 'Pasar a Procesando y generar planilla', 'icon' => 'bi-shuffle',
+        'endpoint' => 'php/generar_planilla_procesamiento_sa.php', 'download' => true,
+        'confirm_title' => '¿Pasar a Procesando?',
+        'confirm_text'  => 'Se pasarán a estado "Procesando" y se descargará la planilla en PDF.'],
+  6 => ['label' => 'Pasar a Facturación', 'icon' => 'bi-file-earmark-text',
+        'endpoint' => 'php/generar_lote_facturacion_sa.php', 'download' => false,
+        'confirm_title' => '¿Pasar a Facturación?',
+        'confirm_text'  => 'Quedarán guardados para enviarlos luego por correo desde la lista de Facturación.'],
+  7 => ['label' => 'Pasar a En despacho', 'icon' => 'bi-box-seam',
+        'endpoint' => 'php/generar_lote_despacho_sa.php', 'download' => false,
+        'confirm_title' => '¿Pasar a En despacho?',
+        'confirm_text'  => 'Los pedidos seleccionados pasarán a estado "En despacho".'],
+  8 => ['label' => 'Marcar como Entregado', 'icon' => 'bi-truck',
+        'endpoint' => 'php/generar_lote_entrega_sa.php', 'download' => false,
+        'confirm_title' => '¿Marcar como Entregado?',
+        'confirm_text'  => 'Los pedidos seleccionados quedarán marcados como "Entregado".'],
+];
 
 // El listado real de filas ahora lo trae ajax/lista_pedidos_sa_data.php
 // (server-side DataTables). Aquí solo se necesita el total para la tarjeta.
@@ -33,12 +56,44 @@ if ($tp == 2) {
   $where_estado = "p.estado='2'";
 } elseif ($tp == 4) {
   $where_estado = "p.estado='4'";
+} elseif ($tp == 6) {
+  $where_estado = "p.estado='5'";
+} elseif ($tp == 7) {
+  $where_estado = "p.estado='6'";
+} elseif ($tp == 8) {
+  $where_estado = "p.estado='7'";
 } else {
   $where_estado = "p.estado='3'";
 }
 
 $req = $bdd->query("SELECT COUNT(*) FROM (SELECT p.id FROM pedidos2 p JOIN usuarios u ON u.id=p.id_usuario WHERE $where_estado GROUP BY p.id) t");
 $total = intval($req->fetchColumn());
+
+// tp=7 (Facturación): cuántos pedidos quedaron guardados en
+// lotes_facturacion_sa que todavía no se han enviado por correo.
+$pend_facturacion = 0;
+if ($tp == 7) {
+  $bdd->exec("CREATE TABLE IF NOT EXISTS lotes_facturacion_sa (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      fecha_generacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      id_usuario INT NOT NULL,
+      cantidad_pedidos INT NOT NULL DEFAULT 0,
+      enviado TINYINT(1) NOT NULL DEFAULT 0,
+      fecha_envio DATETIME NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  $bdd->exec("CREATE TABLE IF NOT EXISTS lotes_facturacion_sa_pedidos (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      id_lote INT NOT NULL,
+      id_pedido INT NOT NULL,
+      KEY idx_lote (id_lote),
+      FOREIGN KEY (id_lote) REFERENCES lotes_facturacion_sa(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  $pend_facturacion = intval($bdd->query(
+    "SELECT COUNT(*) FROM lotes_facturacion_sa_pedidos lp
+     JOIN lotes_facturacion_sa l ON l.id = lp.id_lote
+     WHERE l.enviado = 0"
+  )->fetchColumn());
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -61,6 +116,7 @@ $total = intval($req->fetchColumn());
     .lm-badge-green  { background:#dcfce7; color:#15803d; }
     .lm-badge-blue   { background:#dbeafe; color:#1d4ed8; }
     .lm-badge-red    { background:#fee2e2; color:#dc2626; }
+    .lm-badge-purple { background:#ede9fe; color:#6d28d9; }
     .lm-count-badge  { font-size:12px; color:#64748b; background:#f1f5f9; border-radius:20px; padding:3px 10px; font-weight:500; }
     .ft-date-wrap    { display:flex; align-items:center; gap:6px; }
     .ft-date-label   { font-size:12px; color:#64748b; font-weight:600; white-space:nowrap; margin:0; }
@@ -75,12 +131,54 @@ $total = intval($req->fetchColumn());
     #lps-table tbody tr                    { border-left: 3px solid transparent; transition: border-color .15s; }
     #lps-table tbody tr:hover              { border-left-color: <?= $ac['accent'] ?>; }
     .lm-btn-ver {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 5px 12px; border-radius: 7px; font-size: 12px; font-weight: 600;
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
       border: 1.5px solid <?= $ac['accent'] ?>; color: <?= $ac['accent'] ?>; background: transparent;
       text-decoration: none; white-space: nowrap; transition: background .15s, color .15s;
     }
     .lm-btn-ver:hover { background: <?= $ac['accent'] ?>; color: #fff; text-decoration: none; }
+
+    /* ── Columna Acciones: checkbox + Ver detalle en línea ──────────── */
+    .lp-acciones-cell { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .lp-chk-pedido {
+      width: 16px; height: 16px; margin: 0; flex-shrink: 0;
+      accent-color: <?= $ac['accent'] ?>; cursor: pointer;
+    }
+
+    /* ── Barra de acción masiva / avisos ─────────────────────────────── */
+    .lp-sel-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      flex-wrap: wrap;
+      padding: 12px 18px; margin: 0 8px 14px;
+      background: linear-gradient(135deg, #eff6ff, #f5f8ff);
+      border: 1px solid #bfdbfe; border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(15,23,42,.06);
+      font-size: 13.5px; color: #1e3a8a;
+    }
+    .lp-sel-bar.lp-sel-bar-warn {
+      background: linear-gradient(135deg, #fffbeb, #fffdf5);
+      border-color: #fde68a; color: #92400e;
+    }
+    .lp-sel-bar-info { display: flex; align-items: center; gap: 10px; }
+    .lp-sel-bar-icon {
+      width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; background: rgba(255,255,255,.65); color: inherit;
+    }
+    .lp-btn-action {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border: none; border-radius: 9px;
+      font-size: 13px; font-weight: 700; font-family: 'Inter', sans-serif;
+      background: #2563eb; color: #fff; cursor: pointer;
+      box-shadow: 0 1px 2px rgba(37,99,235,.3);
+      transition: background .15s, transform .1s, box-shadow .15s;
+      white-space: nowrap;
+    }
+    .lp-btn-action:hover:not(:disabled) { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(37,99,235,.35); }
+    .lp-btn-action:active:not(:disabled) { transform: translateY(0); }
+    .lp-btn-action:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+    .lp-sel-bar-warn .lp-btn-action { background: #d97706; box-shadow: 0 1px 2px rgba(217,119,6,.3); }
+    .lp-sel-bar-warn .lp-btn-action:hover:not(:disabled) { background: #b45309; box-shadow: 0 3px 8px rgba(217,119,6,.35); }
     @page { margin: 15px; size: landscape; }
     @media print {
       a, .left-side-bar, .header, .d-print-none { display: none !important; }
@@ -155,6 +253,28 @@ $total = intval($req->fetchColumn());
           <h5><i class="bi bi-list-ul mr-2"></i> Lista — <?= $st['label'] ?></h5>
           <span class="lm-count-badge" style="background:<?= $ac['hover'] ?>;color:<?= $ac['accent'] ?>"><?= $total ?> registros</span>
         </div>
+        <?php if (isset($bulk_cfg[$tp])): $bc = $bulk_cfg[$tp]; ?>
+        <div class="lp-sel-bar" id="lp-sel-bar">
+          <div class="lp-sel-bar-info">
+            <span class="lp-sel-bar-icon"><i class="bi bi-check2-square"></i></span>
+            <span><strong id="lp-sel-count">0</strong> pedido(s) seleccionado(s)</span>
+          </div>
+          <button type="button" id="lp-btn-procesar" class="lp-btn-action" disabled>
+            <i class="bi <?= $bc['icon'] ?>"></i> <?= htmlspecialchars($bc['label']) ?>
+          </button>
+        </div>
+        <?php endif; ?>
+        <?php if ($tp == 7 && $pend_facturacion > 0): ?>
+        <div class="lp-sel-bar lp-sel-bar-warn" id="lf-envio-bar">
+          <div class="lp-sel-bar-info">
+            <span class="lp-sel-bar-icon"><i class="bi bi-envelope"></i></span>
+            <span>Hay <strong><?= $pend_facturacion ?></strong> pedido(s) pendientes de enviar por correo a facturación.</span>
+          </div>
+          <button type="button" id="lf-btn-enviar" class="lp-btn-action">
+            <i class="bi bi-send"></i> Enviar por correo
+          </button>
+        </div>
+        <?php endif; ?>
         <div class="table-responsive px-2 pb-2">
           <table class="table table-sm table-hover" id="lps-table">
             <thead>
@@ -192,6 +312,16 @@ $total = intval($req->fetchColumn());
 $(document).ready(function () {
   var TP = <?= json_encode($tp) ?>;
   var SHOW_STOCK = <?= json_encode($show_stock) ?>;
+  var BULK_CFG = <?= json_encode($bulk_cfg, JSON_UNESCAPED_UNICODE) ?>;
+  var bulkCfg = BULK_CFG[TP] || null;
+
+  function confirmar(title, text, onOk) {
+    if (window.inkConfirm) {
+      window.inkConfirm({ type: 'info', title: title, text: text, btnOk: 'Sí, continuar' }, onOk);
+    } else if (confirm(title + '\n' + text)) {
+      onOk();
+    }
+  }
 
   var columns = [
     { data: 'id' },
@@ -206,10 +336,63 @@ $(document).ready(function () {
   columns.push({
     data: null, orderable: false,
     render: function (data, type, row) {
-      return '<a href="pedido_colegio_sa.php?id_pedido=' + row.id + '&tp=' + TP + '" class="lm-btn-ver">' +
-             '<i class="bi bi-eye"></i> Ver detalle</a>';
+      var chk = bulkCfg ? '<input type="checkbox" class="lp-chk-pedido" data-id="' + row.id + '">' : '';
+      return '<div class="lp-acciones-cell">' + chk +
+        '<a href="pedido_colegio_sa.php?id_pedido=' + row.id + '&tp=' + TP + '" class="lm-btn-ver">' +
+        '<i class="bi bi-eye"></i> Ver detalle</a></div>';
     }
   });
+
+  // Selección de pedidos persistida entre páginas del DataTable (server-side):
+  // se guarda en un objeto {id: true} y se vuelve a marcar el checkbox
+  // correspondiente cada vez que se pinta una página nueva.
+  var selectedIds = {};
+  function lpUpdateSelBar() {
+    var n = Object.keys(selectedIds).length;
+    $('#lp-sel-count').text(n);
+    $('#lp-btn-procesar').prop('disabled', n === 0);
+  }
+  $('#lps-table').on('change', '.lp-chk-pedido', function () {
+    var id = $(this).data('id');
+    if (this.checked) selectedIds[id] = true;
+    else delete selectedIds[id];
+    lpUpdateSelBar();
+  });
+  $('#lp-btn-procesar').on('click', function () {
+    var ids = Object.keys(selectedIds);
+    if (!ids.length || !bulkCfg) return;
+
+    confirmar(bulkCfg.confirm_title, ids.length + ' pedido(s). ' + bulkCfg.confirm_text, function () {
+      var $form = $('<form>', { method: 'POST', action: bulkCfg.endpoint });
+      if (bulkCfg.download) $form.attr('target', '_blank');
+      ids.forEach(function (id) {
+        $form.append($('<input>', { type: 'hidden', name: 'ids[]', value: id }));
+      });
+      $('body').append($form);
+      $form.submit();
+
+      if (bulkCfg.download) {
+        $form.remove();
+        var n = ids.length;
+        selectedIds = {};
+        lpUpdateSelBar();
+        table.ajax.reload(null, false);
+        if (window.inkToast) {
+          window.inkToast(n + ' pedido(s) actualizado(s). La planilla se está descargando en una pestaña nueva.', 'ok');
+        }
+      }
+    });
+  });
+
+  <?php if ($tp == 7): ?>
+  $('#lf-btn-enviar').on('click', function () {
+    confirmar('¿Enviar por correo?', 'Se enviarán a facturacion3@somoseureka.com.co los pedidos pendientes.', function () {
+      var $form = $('<form>', { method: 'POST', action: 'php/enviar_lote_facturacion_sa.php' });
+      $('body').append($form);
+      $form.submit();
+    });
+  });
+  <?php endif; ?>
 
   var table = $('#lps-table').DataTable({
     autoWidth: false,
@@ -244,6 +427,11 @@ $(document).ready(function () {
     initComplete: function () { $('.dataTables_filter').hide(); },
     drawCallback: function () {
       if (SHOW_STOCK) cargarStockBajo(table);
+      if (bulkCfg) {
+        $('.lp-chk-pedido').each(function () {
+          $(this).prop('checked', !!selectedIds[$(this).data('id')]);
+        });
+      }
     }
   });
 
@@ -300,5 +488,6 @@ $(document).ready(function () {
   }
 </style>
 <?php endif; ?>
+<script src="src/ink-alerts.js"></script>
 </body>
 </html>
