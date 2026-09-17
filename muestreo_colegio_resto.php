@@ -166,6 +166,25 @@
     .mc-btn-teal   { background:#0d9488; color:#fff; }
     .mc-btn-green  { background:#16a34a; color:#fff; }
     .mc-btn-yellow { background:#d97706; color:#fff; }
+
+    /* ── ¿Quién lo pasó a X? ── */
+    .pc-quien-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border-radius: 9px; font-size: 12.5px; font-weight: 700;
+      font-family: 'Inter', sans-serif; border: 1.5px solid #c7d2fe;
+      background: #eef2ff; color: #4338ca; cursor: pointer;
+      transition: background .15s, transform .1s, box-shadow .15s;
+      box-shadow: 0 1px 2px rgba(67,56,202,.08);
+    }
+    .pc-quien-btn:hover { background: #e0e7ff; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(67,56,202,.18); }
+    .pc-quien-btn:active { transform: translateY(0); }
+    .pc-quien-info {
+      display: flex; align-items: flex-start; gap: 10px;
+      margin-top: 10px; padding: 10px 14px;
+      background: #eef2ff; border-left: 3px solid #6366f1; border-radius: 0 9px 9px 0;
+      font-size: 12.5px; line-height: 1.5; color: #3730a3; text-align: left;
+    }
+    .pc-quien-info i { font-size: 15px; margin-top: 1px; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -181,9 +200,22 @@
             elseif ($_GET["tp"] == 4) { $titulo = 'Muestreo despachado'; $bc = 'Despachado'; $icon = 'bi-truck';             $icon_color = '#1d4ed8'; }
             elseif ($_GET["tp"] == 6) { $titulo = 'Muestreo procesando'; $bc = 'Procesando'; $icon = 'bi-shuffle';             $icon_color = '#1d4ed8'; }
             elseif ($_GET["tp"] == 7) { $titulo = 'Muestreo en facturación'; $bc = 'Facturación'; $icon = 'bi-file-earmark-text';             $icon_color = '#1d4ed8'; }
+            elseif ($_GET["tp"] == 8) { $titulo = 'Muestreo en despacho'; $bc = 'En despacho'; $icon = 'bi-box-seam';         $icon_color = '#7c3aed'; }
             else                      { $titulo = 'Muestreo anulado';    $bc = 'Anulado';    $icon = 'bi-x-circle-fill';     $icon_color = '#dc2626'; }
           } else {
             $titulo = 'Muestras entregadas'; $bc = 'Entregadas'; $icon = 'bi-box-seam'; $icon_color = '#4361ee';
+          }
+
+          // Quién pasó este muestreo al estado que se está viendo, y cuándo
+          // (botón en el header) — mismo historial compartido de pedidos,
+          // para todos los estados desde Aprobado en adelante.
+          require_once(__DIR__ . "/includes/historial_estados.php");
+          $tp_estado_map   = [3 => 2, 4 => 4, 6 => 5, 7 => 6, 8 => 7];
+          $tp_estado_label = [3 => 'Aprobado', 4 => 'Despachado', 6 => 'Procesando', 7 => 'Facturación', 8 => 'En despacho'];
+          $procesado_info  = null;
+          if (isset($_GET['id_pedido']) && isset($tp_estado_map[intval($_GET['tp'] ?? 0)])) {
+            crear_tabla_historial_estados($bdd);
+            $procesado_info = obtener_historial_estado($bdd, 'muestreos', intval($_GET['id_pedido']), $tp_estado_map[intval($_GET['tp'])]);
           }
         ?>
 
@@ -204,6 +236,20 @@
                 </ol>
               </nav>
             </div>
+            <?php if ($procesado_info): ?>
+            <div class="col-md-4 col-sm-12 text-md-right d-print-none">
+              <button type="button" id="mc-btn-quien" class="pc-quien-btn">
+                <i class="bi bi-person-check"></i> ¿Quién lo pasó a <?= htmlspecialchars($tp_estado_label[intval($_GET['tp'])]) ?>?
+              </button>
+              <div id="mc-quien-info" class="pc-quien-info" style="display:none;">
+                <i class="bi bi-info-circle-fill"></i>
+                <span>
+                  Pasado a <b><?= htmlspecialchars($tp_estado_label[intval($_GET['tp'])]) ?></b> por <b><?= htmlspecialchars(trim($procesado_info['nombre'])) ?></b>
+                  el <b><?= date('d/m/Y', strtotime($procesado_info['fecha'])) ?> a las <?= date('H:i:s', strtotime($procesado_info['fecha'])) ?></b>.
+                </span>
+              </div>
+            </div>
+            <?php endif; ?>
           </div>
         </div>
 
@@ -477,6 +523,10 @@
                 <i class="bi bi-file-earmark-text"></i> Facturación
             </button>
           <?php elseif (isset($_GET["id_pedido"]) && $_GET["tp"] == 7): ?>
+            <button type="button" id="despacho" class="mc-btn" style="background:#7c3aed;color:#fff;">
+              <i class="bi bi-box-seam"></i> Pasar a Despacho
+            </button>
+          <?php elseif (isset($_GET["id_pedido"]) && $_GET["tp"] == 8): ?>
             <button type="button" id="entregar" class="mc-btn mc-btn-green">
               <i class="bi bi-truck"></i> Despachar
             </button>
@@ -526,6 +576,17 @@
         window.location = "php/accion_muestreo.php?facturacion=<?= $_GET['id_pedido'] ?? '' ?>";
       });
     });
+
+    $("#despacho").click(function(){
+      inkConfirm({
+        title: '¿Pasar a despacho este muestreo?',
+        text:  'El muestreo pasará al estado En despacho.',
+        type:  'info',
+        btnOk: 'Sí, pasar a despacho'
+      }, function(){
+        window.location = "php/accion_muestreo.php?despacho=<?= $_GET['id_pedido'] ?? '' ?>";
+      });
+    });
     window.addEventListener('beforeprint', function () {
       document.querySelectorAll('textarea').forEach(function (ta) {
         ta._ph = ta.style.height;
@@ -539,6 +600,9 @@
     });
     $("#imprimir").click(function(){
       window.print();
+    });
+    $("#mc-btn-quien").click(function(){
+      $("#mc-quien-info").toggle();
     });
   </script>
 <script src="src/ink-alerts.js"></script>

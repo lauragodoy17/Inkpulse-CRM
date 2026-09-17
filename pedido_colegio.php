@@ -12,6 +12,7 @@ $tp_cfg = [
   5 => ['label'=>'Anulado',    'badge'=>'red',    'icon'=>'bi-x-circle-fill',     'accent'=>'#b91c1c'],
   6 => ['label'=>'Procesando',    'badge'=>'blue',    'icon'=>'bi-shuffle',     'accent'=>'#b91c1c'],
   7 => ['label'=>'Facturación',    'badge'=>'yellow',    'icon'=>'bi-file-earmark-text',     'accent'=>'#b91c1c'],
+  8 => ['label'=>'En despacho',   'badge'=>'purple',   'icon'=>'bi-box-seam',   'accent'=>'#7c3aed'],
 ];
 $ac = $tp_cfg[$tp] ?? $tp_cfg[2];
 
@@ -143,6 +144,18 @@ $show_tipo_pedido = (intval($pedido['tipo'] ?? 0) == 3 || ($pedido['codzona'] ??
 $can_act = ($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2 || $_SESSION['id'] == 21 || $_SESSION['tipo'] == 10);
 $rechazar_label = (intval($pedido['eid'] ?? 0) == 1) ? 'Rechazar' : 'Anular';
 
+// Quién pasó este pedido al estado que se está viendo, y cuándo (botón en el
+// header) — para todos los estados desde Aprobado en adelante. El mismo
+// mapeo tp->estado que usa lista_pedidos_query.php (lista_pedidos_estado_val).
+require_once(__DIR__ . "/includes/historial_estados.php");
+$tp_estado_map = [3 => 2, 4 => 4, 6 => 5, 7 => 6, 8 => 7];
+$tp_estado_label = [3 => 'Aprobado', 4 => 'Entregado', 6 => 'Procesando', 7 => 'Facturación', 8 => 'En despacho'];
+$procesado_info = null;
+if (isset($tp_estado_map[$tp])) {
+  crear_tabla_historial_estados($bdd);
+  $procesado_info = obtener_historial_estado($bdd, 'pedidos', $id_pedido, $tp_estado_map[$tp]);
+}
+
 // Columnas vacías en todas las filas: se ocultan al imprimir para que el resto se ajuste
 $col_isbn       = false;
 $col_desc_aprob = false;
@@ -242,6 +255,26 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
     .pc-badge-green  { background:#dcfce7; color:#15803d; }
     .pc-badge-blue   { background:#dbeafe; color:#1d4ed8; }
     .pc-badge-red    { background:#fee2e2; color:#dc2626; }
+    .pc-badge-purple { background:#ede9fe; color:#6d28d9; }
+
+    /* ── ¿Quién lo pasó a X? ── */
+    .pc-quien-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border-radius: 9px; font-size: 12.5px; font-weight: 700;
+      font-family: 'Inter', sans-serif; border: 1.5px solid #c7d2fe;
+      background: #eef2ff; color: #4338ca; cursor: pointer;
+      transition: background .15s, transform .1s, box-shadow .15s;
+      box-shadow: 0 1px 2px rgba(67,56,202,.08);
+    }
+    .pc-quien-btn:hover { background: #e0e7ff; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(67,56,202,.18); }
+    .pc-quien-btn:active { transform: translateY(0); }
+    .pc-quien-info {
+      display: flex; align-items: flex-start; gap: 10px;
+      margin-top: 10px; padding: 10px 14px;
+      background: #eef2ff; border-left: 3px solid #6366f1; border-radius: 0 9px 9px 0;
+      font-size: 12.5px; line-height: 1.5; color: #3730a3; text-align: left;
+    }
+    .pc-quien-info i { font-size: 15px; margin-top: 1px; flex-shrink: 0; }
 
     /* ── Table ── */
     .mc-table-wrap { border-radius:10px; overflow-x:auto; box-shadow:0 2px 10px rgba(15,23,42,.09); margin-bottom:24px; }
@@ -325,6 +358,20 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
               </ol>
             </nav>
           </div>
+          <?php if ($procesado_info): ?>
+          <div class="col-md-4 col-sm-12 text-md-right d-print-none">
+            <button type="button" id="pc-btn-quien" class="pc-quien-btn">
+              <i class="bi bi-person-check"></i> ¿Quién lo pasó a <?= htmlspecialchars($tp_estado_label[$tp]) ?>?
+            </button>
+            <div id="pc-quien-info" class="pc-quien-info" style="display:none;">
+              <i class="bi bi-info-circle-fill"></i>
+              <span>
+                Pasado a <b><?= htmlspecialchars($tp_estado_label[$tp]) ?></b> por <b><?= htmlspecialchars(trim($procesado_info['nombre'])) ?></b>
+                el <b><?= date('d/m/Y', strtotime($procesado_info['fecha'])) ?> a las <?= date('H:i:s', strtotime($procesado_info['fecha'])) ?></b>.
+              </span>
+            </div>
+          </div>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -574,6 +621,10 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <i class="bi bi-file-earmark-text"></i> Facturación
               </button>
             <?php elseif (intval($pedido['eid'] ?? 0) == 6): ?>
+              <button type="button" id="despacho" class="mc-btn" style="background:#7c3aed;color:#fff;">
+                <i class="bi bi-box-seam"></i> Pasar a Despacho
+              </button>
+            <?php elseif (intval($pedido['eid'] ?? 0) == 7): ?>
               <button type="button" id="entregar" class="mc-btn mc-btn-green">
                 <i class="bi bi-truck"></i> Entregar
               </button>
@@ -661,6 +712,12 @@ $('#procesar').on('click', function () {
 });
 $('#facturacion').on('click', function () {
   window.location = 'php/accion_pedidos.php?facturacion=<?= $id_pedido ?>';
+});
+$('#despacho').on('click', function () {
+  window.location = 'php/accion_pedidos.php?despacho=<?= $id_pedido ?>';
+});
+$('#pc-btn-quien').on('click', function () {
+  $('#pc-quien-info').toggle();
 });
 $('#modificar').on('click', function () {
   $('#form_pedido').attr('action', 'php/mod_pedido.php').submit();
