@@ -28,6 +28,8 @@ if ($tp == 2) {
   $where_estado = "p.estado='5'";
 } elseif ($tp == 7) {
   $where_estado = "p.estado='6'";
+} elseif ($tp == 8) {
+  $where_estado = "p.estado='7'";
 } else {
   $where_estado = "p.estado='3'";
 }

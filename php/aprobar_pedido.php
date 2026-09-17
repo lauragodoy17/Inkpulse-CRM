@@ -1,6 +1,7 @@
 <?php
 require_once("../php/aut.php");
 require_once("../conexion/bdd.php");
+require_once("../includes/historial_estados.php");
 
 header("Content-Type:text/html;charset=utf-8");
 
@@ -9,6 +10,7 @@ $id_pedido = intval($_POST['pedido'] ?? 0);
 $tp        = intval($_POST['tp'] ?? 3);
 
 $bdd->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+crear_tabla_historial_estados($bdd);
 try {
     foreach ($_POST['lib_p'] ?? [] as $lib_p) {
         if (trim($lib_p) === '') continue;
@@ -23,6 +25,7 @@ try {
 
     $bdd->prepare("UPDATE pedidos SET estado = '2', observaciones = ? WHERE id = ?")
         ->execute([$_POST['observaciones'] ?? '', $id_pedido]);
+    registrar_historial_estado($bdd, 'pedidos', $id_pedido, 2, intval($_SESSION['id'] ?? 0));
 
 } catch (Exception $e) {
     $error = "Error al aprobar el pedido: " . $e->getMessage();

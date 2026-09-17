@@ -1,6 +1,7 @@
 <?php
 require_once("../php/aut.php");
 require_once("../conexion/bdd.php");
+require_once("../includes/historial_estados.php");
 
 header("Content-Type:text/html;charset=utf-8");
 
@@ -10,6 +11,8 @@ $mensaje  = '';
 $redirect = '../lista_pedidos_sa.php?tp=2';
 
 $bdd->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+crear_tabla_historial_estados($bdd);
+$id_usuario_accion = intval($_SESSION['id'] ?? 0);
 try {
     if (isset($_GET['rechazar'])) {
         $id = intval($_GET['rechazar']);
@@ -21,6 +24,7 @@ try {
     } elseif (isset($_GET['aprobar'])) {
         $id = intval($_GET['aprobar']);
         $bdd->prepare("UPDATE pedidos2 SET estado = '2' WHERE id = ?")->execute([$id]);
+        registrar_historial_estado($bdd, 'pedidos_sa', $id, 2, $id_usuario_accion);
         $titulo   = '¡Pedido aprobado!';
         $mensaje  = "El pedido SA #$id fue aprobado correctamente.";
         $redirect = '../lista_pedidos_sa.php?tp=3';
@@ -28,13 +32,15 @@ try {
     } elseif (isset($_GET['entregado'])) {
         $id = intval($_GET['entregado']);
         $bdd->prepare("UPDATE pedidos2 SET estado = '4' WHERE id = ?")->execute([$id]);
+        registrar_historial_estado($bdd, 'pedidos_sa', $id, 4, $id_usuario_accion);
         $titulo   = '¡Pedido entregado!';
         $mensaje  = "El pedido SA #$id fue marcado como entregado.";
-        $redirect = '../lista_pedidos_sa.php?tp=7';
+        $redirect = '../lista_pedidos_sa.php?tp=8';
 
     } elseif (isset($_GET['procesar'])) {
         $id = intval($_GET['procesar']);
         $bdd->prepare("UPDATE pedidos2 SET estado = '5' WHERE id = ?")->execute([$id]);
+        registrar_historial_estado($bdd, 'pedidos_sa', $id, 5, $id_usuario_accion);
         $titulo   = '¡Pedido Procesando!';
         $mensaje  = "El pedido #$id fue marcado como procesando.";
         $redirect = '../lista_pedidos_sa.php?tp=3';
@@ -42,9 +48,18 @@ try {
     } elseif (isset($_GET['facturacion'])) {
         $id = intval($_GET['facturacion']);
         $bdd->prepare("UPDATE pedidos2 SET estado = '6' WHERE id = ?")->execute([$id]);
+        registrar_historial_estado($bdd, 'pedidos_sa', $id, 6, $id_usuario_accion);
         $titulo   = '¡Pedido enviado a factuación!';
         $mensaje  = "El pedido #$id fue enviado a facturación.";
         $redirect = '../lista_pedidos_sa.php?tp=6';
+
+    } elseif (isset($_GET['despacho'])) {
+        $id = intval($_GET['despacho']);
+        $bdd->prepare("UPDATE pedidos2 SET estado = '7' WHERE id = ?")->execute([$id]);
+        registrar_historial_estado($bdd, 'pedidos_sa', $id, 7, $id_usuario_accion);
+        $titulo   = '¡Pedido en despacho!';
+        $mensaje  = "El pedido #$id fue pasado a en despacho.";
+        $redirect = '../lista_pedidos_sa.php?tp=8';
 
     } else {
         $error = 'Acción no reconocida.';
