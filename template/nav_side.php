@@ -15,7 +15,7 @@ $atenciones_active   = $current_page === 'lista_atenciones.php';
 $ops_active          = in_array($current_page, ['solicitar_op.php','lista_op.php','clientes_op.php']);
 $opds_active         = in_array($current_page, ['solicitar_orden_pd.php','ver_opds.php','reporte_opd.php']);
 $oe_active           = in_array($current_page, ['solicitar_orden_externa.php','ver_ordenes_externas.php','oe_solicitada.php']);
-$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_stock.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php','reporte_paquetes.php']);
+$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_stock.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php','reporte_paquetes.php','reporte_backorders.php']);
 $libros_active       = $current_page === 'libros.php';
 $libros_bodega_active = $current_page === 'libros_bodega.php';
 $usuarios_active     = $current_page === 'usuarios.php';
@@ -368,6 +368,9 @@ $periodos_active     = $current_page === 'periodos.php';
 											<a href="lista_muestreo.php?tp=7" id="">En facturación</a>
 										</li>
 										<li>
+											<a href="lista_muestreo.php?tp=8" id="">En despacho</a>
+										</li>
+										<li>
 											<a href="lista_muestreo.php?tp=4" id="">Despachados</a>
 										</li>
 										<li>
@@ -423,6 +426,7 @@ $periodos_active     = $current_page === 'periodos.php';
 											<a href="lista_pedidos.php?tp=3" >Aprobados</a>
 											<a href="lista_pedidos.php?tp=6" >Procesando</a>
 											<a href="lista_pedidos.php?tp=7" >En facturacioón</a>
+											<a href="lista_pedidos.php?tp=8" >En despacho</a>
 											<a href="lista_pedidos.php?tp=4" >Entregados</a>
 											<a href="agrupar_pedidos.php" >Agrupar pedidos</a>
 											<a href="lista_pedidos.php?tp=5" >Anulados</a>
@@ -488,6 +492,7 @@ $periodos_active     = $current_page === 'periodos.php';
 											<a href="lista_pedidos_sa.php?tp=3" >Aprobados</a>
 											<a href="lista_pedidos_sa.php?tp=6" >Procesando</a>
 											<a href="lista_pedidos_sa.php?tp=7" >En facturación</a>
+											<a href="lista_pedidos_sa.php?tp=8" >En despacho</a>
 											<a href="lista_pedidos_sa.php?tp=4" >Entregados</a>
 											<a href="lista_pedidos_sa.php?tp=5" >Anulados</a>
 										</li>
@@ -506,6 +511,15 @@ $periodos_active     = $current_page === 'periodos.php';
 							<a href="colegios_presup.php" class="dropdown-toggle no-arrow <?= $presupuesto_active ? 'active' : '' ?>">
 								<span class="micon bi bi-currency-dollar"></span
 								><span class="mtext">Presupuesto</span>
+							</a>
+						</li>
+						<?php }?>
+
+						<?php if ($_SESSION["tipo"] ==1 || $_SESSION["tipo"] ==2) {?>
+						<li>
+							<a href="reporte_backorders_pedido.php" class="dropdown-toggle no-arrow <?= $current_page == 'reporte_backorders_pedido.php' ? 'active' : '' ?>">
+								<span class="micon bi bi-search"></span
+								><span class="mtext">Backorders por pedido</span>
 							</a>
 						</li>
 						<?php }?>
@@ -672,6 +686,7 @@ $periodos_active     = $current_page === 'periodos.php';
 											<li><a href="reporte_stock.php">Stock</a></li>
 											<li><a href="reporte_devoluciones.php">Devoluciones</a></li>
 											<li><a href="reporte_colocacion.php">Colocación</a></li>
+											<li><a href="reporte_backorders.php">Backorders</a></li>
 											<li><a href="reporte_seguimiento_gerencia.php">Seguimiento gerencia</a></li>
 										<?php } ?>
 										<?php if ($_SESSION["tipo"]==1 || $_SESSION["id"]==69) { ?>
