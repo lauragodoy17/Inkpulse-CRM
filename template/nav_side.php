@@ -15,7 +15,7 @@ $atenciones_active   = $current_page === 'lista_atenciones.php';
 $ops_active          = in_array($current_page, ['solicitar_op.php','lista_op.php','clientes_op.php']);
 $opds_active         = in_array($current_page, ['solicitar_orden_pd.php','ver_opds.php','reporte_opd.php']);
 $oe_active           = in_array($current_page, ['solicitar_orden_externa.php','ver_ordenes_externas.php','oe_solicitada.php']);
-$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_stock.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php','reporte_paquetes.php','reporte_backorders.php','reporte_editorial.php']);
+$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_stock.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php','reporte_paquetes.php','reporte_backorders.php','reporte_editorial.php','reporte_planillas_procesamiento.php']);
 $libros_active       = $current_page === 'libros.php';
 $libros_bodega_active = $current_page === 'libros_bodega.php';
 $usuarios_active     = $current_page === 'usuarios.php';
@@ -700,6 +700,11 @@ $periodos_active     = $current_page === 'periodos.php';
 										<li><a href="php/oppend_excel.php">Pendientes</a></li>
 										<li><a href="php/opaten_excel.php">Atendidas</a></li>
 										<li><a href="php/opanu_excel.php">Anuladas</a></li>
+									<?php } ?>
+
+									<?php if ($_SESSION["tipo"]==1 || $_SESSION["tipo"]==2) { ?>
+										<li class="menu-subgroup-label">Planillas</li>
+										<li><a href="reporte_planillas_procesamiento.php">Planillas generadas</a></li>
 									<?php } ?>
 
 								</ul>
