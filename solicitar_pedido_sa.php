@@ -86,7 +86,7 @@ $materias = $req->fetchAll();
         </div>
       </div>
 
-      <form action="php/pedido_sa_new.php" method="POST" id="miFormulario" enctype="multipart/form-data">
+      <form action="php/pedido_sa.php" method="POST" id="miFormulario" enctype="multipart/form-data">
 
         <!-- Datos generales -->
         <div class="modern-card mb-3">

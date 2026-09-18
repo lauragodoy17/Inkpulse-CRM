@@ -180,7 +180,6 @@ sort($zonas_uniq);
                 <th>Zona</th>
                 <th>Responsable</th>
                 <th>Colegio</th>
-                <th>Tipo</th>
                 <th>Calendario</th>
                 <th>Acciones</th>
               </tr>
@@ -203,13 +202,6 @@ sort($zonas_uniq);
                 $fecha_d = date('d/m/Y', strtotime($p['fecha']));
                 $fecha_r = substr($p['fecha'], 0, 10);
 
-                if ($p["ptipo"]==1){
-                  $p["ptipo"]="Docente";
-                } elseif ($p["ptipo"]==2) {
-                    $p["ptipo"]="Estudiante";
-                }else{
-                  $p["ptipo"]="";
-                }
               ?>
               <tr data-date="<?= $fecha_r ?>" data-zona="<?= htmlspecialchars($zona_d) ?>">
                 <td><?= $p['id'] ?></td>
@@ -218,7 +210,6 @@ sort($zonas_uniq);
                 <td><?= $n_zona ?></td>
                 <td><?= $resp ?></td>
                 <td><?= htmlspecialchars($p['colegio']) ?></td>
-                <td><?= htmlspecialchars($p['ptipo'] ?? '—') ?></td>
                 <td><?= htmlspecialchars($p['calendario'] ?? '—') ?></td>
                 <td style="white-space:nowrap">
                   <a href="muestreo_colegio_resto.php?id_muestras_e=<?= $p['id'] ?>" class="lm-btn-ver">

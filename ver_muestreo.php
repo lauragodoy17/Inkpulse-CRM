@@ -158,7 +158,6 @@ $estado_badge = [
                 <th>Zona</th>
                 <th>Responsable</th>
                 <th>Colegio</th>
-                <th>Tipo</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
@@ -182,13 +181,6 @@ $estado_badge = [
                 $e_cls    = $estado_badge[$e_id] ?? 'eb-1';
                 $e_nombre = htmlspecialchars($p['estado_nombre'] ?? '');
 
-                if ($p["ptipo"]==1){
-                  $p["ptipo"]="Docente";
-                } elseif ($p["ptipo"]==2) {
-                    $p["ptipo"]="Estudiante";
-                }else{
-                  $p["ptipo"]="";
-                }
               ?>
               <tr data-date="<?= $fecha_r ?>" data-estado="<?= htmlspecialchars($p['estado_nombre'] ?? '') ?>">
                 <td><?= $p['id'] ?></td>
@@ -197,7 +189,6 @@ $estado_badge = [
                 <td><?= $n_zona ?></td>
                 <td><?= $resp ?></td>
                 <td><?= htmlspecialchars($p['colegio']) ?></td>
-                <td><?= htmlspecialchars($p['ptipo']) ?></td>
                 <td><span class="estado-badge <?= $e_cls ?>"><?= $e_nombre ?></span></td>
                 <td>
                   <a href="muestreo_colegio_estado.php?id_pedido=<?= $p['id'] ?>" class="lm-btn-ver">

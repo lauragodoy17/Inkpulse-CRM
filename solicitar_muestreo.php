@@ -231,7 +231,7 @@
           </div>
           <!-- /Page Header -->
 
-          <form action="php/crear_muestreo_new.php" method="POST" enctype="multipart/form-data" id="miFormulario">
+          <form action="php/crear_muestreo.php" method="POST" enctype="multipart/form-data" id="miFormulario">
 
             <!-- ── Sección 1: Colegio ──────────────────────────── -->
             <?php if (!isset($_GET['colegio'])): ?>
@@ -239,29 +239,11 @@
               <div class="sm-section-head">
                 <span class="sm-step">1</span>
                 <span class="sm-sec-icon"><i class="bi bi-building"></i></span>
-                <span class="sm-section-title">Tipo de muestras y Colegio</span>
+                <span class="sm-section-title">Seleccione un colegio</span>
               </div>
               <div class="sm-section-body">
                 <div class="row">
-
-                  <?php if ($_SESSION['tipo']!=6): ?>
-                  <div class="form-group col-md-5 col-sm-6 mb-0">
-                    <label for="cole" class="control-label">Tipo de muestras<small style="color:red;">*</small></label>
-                    <select name="tipo" id="tipo" class="form-control custom-select2" required>
-                      <option value="">Seleccione</option>
-                      <option value="1">Docente</option>
-                      <option value="2">Estudiante</option>
-                      
-                    </select>
-                  </div>
-
-                  <?php else: ?>
-
-                    <input type="hidden" name="tipo" id="tipo" value="1">
-
-                  <?php endif; ?>
-
-                  <div class="form-group col-md-5 col-sm-6 ocultar_oficina mb-0">
+                  <div class="form-group col-md-5 col-sm-12 ocultar_oficina mb-0">
                     <label for="cole" class="control-label">Colegio <small style="color:red;">*</small></label>
                     <select name="cole" id="cole" class="form-control custom-select2" required>
                       <option value="">Selecciona un colegio</option>
@@ -282,7 +264,6 @@
                       ?>
                     </select>
                   </div>
-
                 </div>
               </div>
             </div>
@@ -323,8 +304,8 @@
 
                   <!-- Libro #1 -->
                   <div class="sm-book-block">
-                    <div class="row">
-                      <div class="form-group col-sm-4">
+                    <div class="row"> 
+                      <div class="form-group col-sm-3">
                         <label id="l_materia" for="materia" class="control-label">Materia <small style="color:red;">*</small></label>
                         <select name="materia[]" id="materia" class="form-control">
                           <option value="">Selecciona una materia</option>
@@ -339,13 +320,26 @@
                           ?>
                         </select>
                       </div>
-                      <div class="form-group col-sm-4">
+                      <?php if ($_SESSION["tipo"]!=6) {?>
+                        <div class="form-group col-sm-3">
+                          <label id="l_tipo" for="tipo<?php echo $i; ?>" class="control-label">Tipo<small style="color:red;">*</small></label>
+                          <select name="tipo[]" id="tipo" class="form-control custom-select2">
+                            <option value="">Seleccione</option>
+                            <option value="1">Docente</option>
+                            <option value="2">Estudiante</option>
+                            
+                          </select>
+                        </div>
+                      <?php }else { ?>
+                        <input type="hidden" name="tipo[]" id="tipo" value=1>
+                      <?php }?>
+                      <div class="form-group col-sm-3">
                         <label id="l_libro" for="libro" class="control-label">Libro <small style="color:red;">*</small></label>
                         <select name="libro" id="libro" class="form-control custom-select2">
                           <option value="">Selecciona un libro</option>
                         </select>
                       </div>
-                      <div class="form-group col-sm-4">
+                      <div class="form-group col-sm-3">
                         <label id="l_cantidad" for="cantidad" class="control-label">Cantidad <small style="color:red;">*</small></label>
                         <input type="number" class="form-control cantidad" name="cantidad" id="cantidad" placeholder="Ingresa la cantidad">
                       </div>
@@ -358,7 +352,8 @@
                   <?php for ($i=1; $i < 100; $i++): ?>
                   <div id="agg_l<?php echo $i; ?>" class="d-none sm-book-block">
                     <div class="row">
-                      <div class="form-group col-sm-4">
+
+                      <div class="form-group col-sm-3">
                         <label id="l_materia<?php echo $i; ?>" for="materia<?php echo $i; ?>" class="control-label">Materia <small style="color:red;">*</small></label>
                         <select name="materia[]" id="materia<?php echo $i; ?>" class="form-control">
                           <option value="">Selecciona una materia</option>
@@ -373,11 +368,25 @@
                           ?>
                         </select>
                       </div>
-                      <div class="form-group col-sm-4">
+                      <?php if ($_SESSION["tipo"]!=6) {?>
+                        <div class="form-group col-sm-3">
+                          <label id="l_tipo<?php echo $i; ?>" for="tipo<?php echo $i; ?>" class="control-label">Tipo<small style="color:red;">*</small></label>
+                          <select name="tipo[]" id="tipo<?php echo $i; ?>" class="form-control custom-select2">
+                            <option value="">Seleccione</option>
+                            <option value="1">Docente</option>
+                            <option value="2">Estudiante</option>
+                            
+                          </select>
+                        </div>
+                      <?php }else { ?>
+                        <input type="hidden" name="tipo[]" id="tipo<?php echo $i; ?>" value=1>
+                      <?php }?>
+
+                      <div class="form-group col-sm-3">
                         <label id="l_libro<?php echo $i; ?>" for="libro<?php echo $i; ?>" class="control-label">Libro <small style="color:red;">*</small></label>
                         <select name="libro" id="libro<?php echo $i; ?>" class="form-control custom-select2" width="200"></select>
                       </div>
-                      <div class="form-group col-sm-4">
+                      <div class="form-group col-sm-3">
                         <label id="l_cantidad<?php echo $i; ?>" for="cantidad<?php echo $i; ?>" class="control-label">Cantidad <small style="color:red;">*</small></label>
                         <input type="number" class="form-control cantidad" name="cantidad" id="cantidad<?php echo $i; ?>" placeholder="Ingresa la cantidad">
                       </div>
@@ -396,7 +405,7 @@
                 <hr class="sm-divider">
 
                 <div class="row">
-                  <div class="<?= $_GET['tp'] == 2 ? 'col-md-8' : 'col-md-12' ?> col-sm-12">
+                  <div class="col-md-8">
                     <div class="form-group mb-3">
                       <label for="observaciones" class="control-label">Observaciones</label>
                       <textarea name="observaciones" id="observaciones" class="form-control" rows="3" placeholder="Escribe observaciones opcionales..."></textarea>
@@ -414,6 +423,11 @@
                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
                       <p class="sm-file-name" id="sm-file-name"></p>
                     </div>
+                  </div>
+                  <?php else: ?>
+                  <div class="col-md-3">
+                    <label class="sop-label">Dirección de entrega <small style="color: red">*</small></label>
+                    <input type="text" class="form-control" name="dir_ent" id="dir_ent" placeholder="Dirección de entrega" required />
                   </div>
                   <?php endif; ?>
                 </div>
@@ -448,72 +462,69 @@
     <script src="vendors/scripts/layout-settings.js"></script>
 
     <script>
-
-         // 1. Al cargar la página, verificamos si hay un valor en la sesión
-        var valorGuardado = sessionStorage.getItem('select_tipo_valor');
-        
-        if (valorGuardado) {
-            $('#tipo').val(valorGuardado);
-            var cambios = 1; 
-        } else {
-            var cambios = 0;
-        }
-
-        // 2. Evento change
-        $('#tipo').on('change', function() {
-            var valor = $(this).val();
-            cambios++;
-            
-            if (valor != '' && cambios > 1) {
-                sessionStorage.setItem('select_tipo_valor', valor);
-                location.reload();
-            }
-        });
-
-        // 3. SOLUCIÓN AL ENVIAR EL FORMULARIO: Limpiar al hacer submit
-        // Cambia 'form' por el ID o clase de tu formulario si es necesario (ej: '#miFormulario')
-        $('form').on('submit', function() {
-            sessionStorage.removeItem('select_tipo_valor');
-        });
-
-        // 4. SOLUCIÓN AL CAMBIAR DE URL: Limpiar si el usuario hace clic en un enlace a otra página
-        $('a').on('click', function() {
-            // Opcional: Podrías verificar si el enlace va a otra página antes de borrar,
-            // pero borrarlo al hacer clic asegura que la siguiente URL empiece limpia.
-            sessionStorage.removeItem('select_tipo_valor');
-        });
-
-
-
       $('#materia').on('change',function(){
-      var valor = $(this).val();
-      var tipo = $("#tipo").val();
-      //alert(valor);
-      var dataString = 'mat_gra='+valor+"/"+tipo;
+        var valor = $(this).val();
+        var tipo = $("#tipo").val();
+        
+        if (tipo !="") {
 
-      $.ajax({
+          var dataString = 'mat_gra='+valor+"/"+tipo;
 
-        url: "ajax/buscar_l_eureka_sp_new.php",
-        type: "POST",
-        data: dataString,
-        dataType: "html",
-        success: function (resp) {
+          $.ajax({
 
-            $("#libro").html(resp);
-            //console.log(resp);
-        },
-        error: function (jqXHR,estado,error){
-            alert("Debes seleccionar tipo de muestras");
-            console.log(estado);
-            console.log(error);
-            $("#materia").val("");
-        },
-        complete: function (jqXHR,estado){
-            console.log(estado);
+            url: "ajax/buscar_l_eureka_sp_new.php",
+            type: "POST",
+            data: dataString,
+            dataType: "html",
+            success: function (resp) {
+
+                $("#libro").html(resp);
+                //console.log(resp);
+            },
+            error: function (jqXHR,estado,error){
+                alert("error");
+                console.log(estado);
+                console.log(error);
+            },
+            complete: function (jqXHR,estado){
+                console.log(estado);
+            }
+
+
+          })
         }
+        
+
+    });
+
+      $('#tipo').on('change',function(){
+        var valor = $(this).val();
+        var materia = $("#materia").val();
+        //alert(valor);
+        var dataString = 'mat_gra='+materia+"/"+valor;
+
+        $.ajax({
+
+          url: "ajax/buscar_l_eureka_sp_new.php",
+          type: "POST",
+          data: dataString,
+          dataType: "html",
+          success: function (resp) {
+
+              $("#libro").html(resp);
+              //console.log(resp);
+          },
+          error: function (jqXHR,estado,error){
+              alert("error");
+              console.log(estado);
+              console.log(error);
+          },
+          complete: function (jqXHR,estado){
+              console.log(estado);
+          }
 
 
-      })
+        })
 
     });
 
@@ -587,34 +598,71 @@
 
       $('#materia<?php echo $i; ?>').on('change',function(){
           var valor = $(this).val();
-          var tipo = $("#tipo").val();
-          //alert(valor);
-          var dataString = 'mat_gra='+valor+"/"+tipo;
+          var tipo = $("#tipo<?php echo $i; ?>").val();
 
-          $.ajax({
+          if (tipo !="") {
 
-              url: "ajax/buscar_l_eureka_sp_new.php",
-              type: "POST",
-              data: dataString,
-              dataType: "html",
-              success: function (resp) {
+              //alert(valor);
+              var dataString = 'mat_gra='+valor+"/"+tipo;
 
-                  $("#libro<?php echo $i; ?>").html(resp);
-                  //console.log(resp);
-              },
-              error: function (jqXHR,estado,error){
-                  alert("error");
-                  console.log(estado);
-                  console.log(error);
-              },
-              complete: function (jqXHR,estado){
-                  console.log(estado);
-              }
+              $.ajax({
+
+                  url: "ajax/buscar_l_eureka_sp_new.php",
+                  type: "POST",
+                  data: dataString,
+                  dataType: "html",
+                  success: function (resp) {
+
+                      $("#libro<?php echo $i; ?>").html(resp);
+                      //console.log(resp);
+                  },
+                  error: function (jqXHR,estado,error){
+                      alert("error");
+                      console.log(estado);
+                      console.log(error);
+                  },
+                  complete: function (jqXHR,estado){
+                      console.log(estado);
+                  }
+
+
+            })
+
+          }
+          
+
+        });
+
+      $('#tipo<?php echo $i; ?>').on('change',function(){
+        var valor = $(this).val();
+        var materia = $("#materia<?php echo $i; ?>").val();
+        //alert(valor);
+        var dataString = 'mat_gra='+materia+"/"+valor;
+
+        $.ajax({
+
+          url: "ajax/buscar_l_eureka_sp_new.php",
+          type: "POST",
+          data: dataString,
+          dataType: "html",
+          success: function (resp) {
+
+              $("#libro<?php echo $i; ?>").html(resp);
+              //console.log(resp);
+          },
+          error: function (jqXHR,estado,error){
+              alert("error");
+              console.log(estado);
+              console.log(error);
+          },
+          complete: function (jqXHR,estado){
+              console.log(estado);
+          }
 
 
         })
 
-        });
+    });
 
 
 
@@ -622,7 +670,6 @@
         var cant =$('#cantidad<?php echo $i; ?>').val();
         var libro=$('#libro<?php echo $i; ?>').val();
         var grado = $('#libro<?php echo $i; ?> option:selected').attr('data-grado');
-
 
         if (grado==15 || grado==16) {
           $('#l_cantidad<?php echo $i; ?>').addClass("d-none");

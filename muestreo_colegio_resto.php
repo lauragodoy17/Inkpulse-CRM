@@ -167,7 +167,7 @@
     .mc-btn-green  { background:#16a34a; color:#fff; }
     .mc-btn-yellow { background:#d97706; color:#fff; }
 
-    /* ── ¿Quién lo pasó a X? ── */
+     /* ── ¿Quién lo pasó a X? ── */
     .pc-quien-btn {
       display: inline-flex; align-items: center; gap: 7px;
       padding: 8px 16px; border-radius: 9px; font-size: 12.5px; font-weight: 700;
@@ -206,7 +206,7 @@
             $titulo = 'Muestras entregadas'; $bc = 'Entregadas'; $icon = 'bi-box-seam'; $icon_color = '#4361ee';
           }
 
-          // Quién pasó este muestreo al estado que se está viendo, y cuándo
+           // Quién pasó este muestreo al estado que se está viendo, y cuándo
           // (botón en el header) — mismo historial compartido de pedidos,
           // para todos los estados desde Aprobado en adelante.
           require_once(__DIR__ . "/includes/historial_estados.php");
@@ -236,7 +236,7 @@
                 </ol>
               </nav>
             </div>
-            <?php if ($procesado_info): ?>
+             <?php if ($procesado_info): ?>
             <div class="col-md-4 col-sm-12 text-md-right d-print-none">
               <button type="button" id="mc-btn-quien" class="pc-quien-btn">
                 <i class="bi bi-person-check"></i> ¿Quién lo pasó a <?= htmlspecialchars($tp_estado_label[intval($_GET['tp'])]) ?>?
@@ -263,7 +263,7 @@
             $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
             $pedido = $req_pedido->fetch();
 
-            $sql_pedido = "SELECT pe.id, pe.id_periodo, pe.id_colegio, pe.fecha, pe.observaciones, pe.archivo, pe.tipo as ptipo, z.zona, c.colegio, c.direccion, c.sub_zona, c.responsable, cal.calendario, u.nombres, u.apellidos, u.tipo, e.estado FROM muestreos pe JOIN colegios c ON pe.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.cod_zona=z.codigo JOIN estados_pedidos e ON e.id=pe.estado LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE pe.id='".$pedido["id"]."'";
+            $sql_pedido = "SELECT pe.id, pe.id_periodo, pe.id_colegio, pe.fecha, pe.observaciones, pe.archivo, pe.dir_ent, z.zona, c.colegio, c.direccion, c.sub_zona, c.responsable, cal.calendario, u.nombres, u.apellidos, u.tipo, e.estado FROM muestreos pe JOIN colegios c ON pe.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.cod_zona=z.codigo JOIN estados_pedidos e ON e.id=pe.estado LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE pe.id='".$pedido["id"]."'";
             $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
             $pedido = $req_pedido->fetch();
 
@@ -272,11 +272,11 @@
             $num_repetido = $req_repetido->rowCount();
             $n_repetido   = $req_repetido->fetchAll();
 
-            $sql = "SELECT pe.id, l.id, l.libro, lp.cantidad, lp.cantidad_aprob, lp.id as id_lm, l.isbn, m.materia, g.id as id_grado, g.grado FROM muestreos pe LEFT JOIN libros_muestreos lp ON lp.cod_muestreo=pe.codigo LEFT JOIN libros l ON l.id=lp.id_libro LEFT JOIN materias m ON m.id=l.id_materia LEFT JOIN grados g ON g.id=l.id_grado WHERE pe.id='".$_GET["id_pedido"]."' GROUP BY l.id";
+            $sql = "SELECT pe.id, l.id, l.libro, l.tipo, lp.cantidad, lp.cantidad_aprob, lp.id as id_lm, l.isbn, m.materia, g.id as id_grado, g.grado FROM muestreos pe LEFT JOIN libros_muestreos lp ON lp.cod_muestreo=pe.codigo LEFT JOIN libros l ON l.id=lp.id_libro LEFT JOIN materias m ON m.id=l.id_materia LEFT JOIN grados g ON g.id=l.id_grado WHERE pe.id='".$_GET["id_pedido"]."' GROUP BY l.id ORDER BY l.tipo";
             $req = $bdd->prepare($sql); $req->execute();
             $libros = $req->fetchAll();
 
-            $sql_op = "SELECT id, año FROM ordenes_pedidos WHERE id_muestreo='".$_GET["id_pedido"]."' AND estado!=4";
+            $sql_op = "SELECT o.id, o.año, c.direccion FROM ordenes_pedidos o JOIN clientes c ON o.cliente=c.id WHERE o.id_muestreo='".$_GET["id_pedido"]."' AND o.estado!=4";
             $req_op = $bdd->prepare($sql_op); $req_op->execute();
             $op   = $req_op->rowCount();
             $n_op = $req_op->fetch();
@@ -285,7 +285,7 @@
             $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
             $pedido = $req_pedido->fetch();
 
-            $sql_pedido = "SELECT pe.id, pe.id_periodo, pe.id_colegio, pe.fecha, pe.observaciones, pe.archivo, pe.tipo as ptipo, z.zona, c.colegio, c.direccion, c.sub_zona, c.responsable, cal.calendario, u.nombres, u.apellidos, u.tipo, e.estado FROM muestreos_e pe JOIN colegios c ON pe.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.cod_zona=z.codigo JOIN estados_pedidos e ON e.id=pe.estado LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE pe.id='".$_GET["id_muestras_e"]."'";
+            $sql_pedido = "SELECT pe.id, pe.id_periodo, pe.id_colegio, pe.fecha, pe.observaciones, pe.archivo, z.zona, c.colegio, c.direccion, c.sub_zona, c.responsable, cal.calendario, u.nombres, u.apellidos, u.tipo, e.estado FROM muestreos_e pe JOIN colegios c ON pe.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.cod_zona=z.codigo JOIN estados_pedidos e ON e.id=pe.estado LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE pe.id='".$_GET["id_muestras_e"]."'";
             $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
             $pedido = $req_pedido->fetch();
 
@@ -294,7 +294,7 @@
             $num_repetido = $req_repetido->rowCount();
             $n_repetido   = $req_repetido->fetchAll();
 
-            $sql = "SELECT pe.id, l.id, l.libro, lp.cantidad, lp.cantidad_aprob, lp.id as id_lm, l.isbn, m.materia, g.id as id_grado, g.grado FROM muestreos_e pe LEFT JOIN libros_muestreos_e lp ON lp.cod_muestreo=pe.codigo LEFT JOIN libros l ON l.id=lp.id_libro LEFT JOIN materias m ON m.id=l.id_materia LEFT JOIN grados g ON g.id=l.id_grado WHERE pe.id='".$_GET["id_muestras_e"]."' GROUP BY l.id";
+            $sql = "SELECT pe.id, l.id, l.libro, l.tipo, lp.cantidad, lp.cantidad_aprob, lp.id as id_lm, l.isbn, m.materia, g.id as id_grado, g.grado FROM muestreos_e pe LEFT JOIN libros_muestreos_e lp ON lp.cod_muestreo=pe.codigo LEFT JOIN libros l ON l.id=lp.id_libro LEFT JOIN materias m ON m.id=l.id_materia LEFT JOIN grados g ON g.id=l.id_grado WHERE pe.id='".$_GET["id_muestras_e"]."' GROUP BY l.id ORDER BY l.tipo";
             $req = $bdd->prepare($sql); $req->execute();
             $libros = $req->fetchAll();
             $op = 0;
@@ -314,13 +314,7 @@
 
           $id_disp = isset($_GET["id_pedido"]) ? $_GET["id_pedido"] : ($_GET["id_muestras_e"] ?? '—');
 
-          if ($pedido["ptipo"]==1){
-            $pedido["ptipo"]="Docente";
-          } elseif ($pedido["ptipo"]==2) {
-            $pedido["ptipo"]="Estudiante";
-          }else{
-            $pedido["ptipo"]="";
-          }
+         
         ?>
 
         <!-- OP badge (si existe) -->
@@ -348,13 +342,6 @@
             <div>
               <p class="mc-card-label">Colegio</p>
               <p class="mc-card-val"><?= htmlspecialchars($pedido["colegio"]) ?></p>
-            </div>
-          </div>
-          <div class="mc-card">
-            <div class="mc-card-icon teal"><i class="bi bi-journal"></i></div>
-            <div>
-              <p class="mc-card-label">Tipo</p>
-              <p class="mc-card-val"><?= htmlspecialchars($pedido["ptipo"] ?? '—') ?></p>
             </div>
           </div>
           <div class="mc-card">
@@ -399,13 +386,21 @@
               <p class="mc-card-val"><?= htmlspecialchars($responsable) ?></p>
             </div>
           </div>
-          <?php if (!empty($pedido["direccion"])): ?>
+          <?php if (!empty($pedido["dir_ent"])): ?>
           <div class="mc-card full-width">
             <div class="mc-card-icon orange"><i class="bi bi-map"></i></div>
             <div>
               <p class="mc-card-label">Dirección</p>
-              <p class="mc-card-val"><?= htmlspecialchars($pedido["direccion"]) ?></p>
+              <p class="mc-card-val"><?= htmlspecialchars($pedido["dir_ent"]) ?></p>
             </div>
+          </div>
+          <?php else: ?>
+            <div class="mc-card full-width">
+              <div class="mc-card-icon orange"><i class="bi bi-map"></i></div>
+              <div>
+                <p class="mc-card-label">Dirección</p>
+                <p class="mc-card-val"><?= htmlspecialchars($pedido["direccion"]) ?></p>
+              </div>
           </div>
           <?php endif; ?>
         </div>
@@ -431,12 +426,12 @@
                 <th>#</th>
                 <th>ISBN</th>
                 <th>Título</th>
+                <th>Tipo</th>
                 <th>Ubicación</th>
                 <th>Materia</th>
                 <th>Grado</th>
                 <?php if (isset($_GET["id_pedido"])): ?>
-                  <th>Cantidad solicitada</th>
-                  <th>Cantidad aprobada</th>
+                  <th>Cantidad</th>
                 <?php else: ?>
                   <th>Cantidad entregada</th>
                 <?php endif; ?>
@@ -446,9 +441,6 @@
               <?php
                 $i = 1;
                 foreach ($libros as $libro) {
-                  $total_cantidad[]       = $libro["cantidad"];
-                  $total_cantidad_aprob[] = $libro["cantidad_aprob"];
-
                   $su = $bdd->prepare(
                     "SELECT l.id_tipo, l.lugar, u.piso, u.ubicacion, lu.posicion
                      FROM lugares l
@@ -465,31 +457,42 @@
                       : $ub['lugar'].' Bandeja '.$ub['ubicacion'].', ';
                   $ubi = rtrim($ubi, ', ');
 
+                  if ($libro["tipo"]==1 || $libro["tipo"]==3) {
+                    $tipo_libro="E";
+                  }else {
+                    $tipo_libro="D";
+                  }
                   echo '<tr>';
                   echo '<td>'.($i++).'</td>';
                   echo '<td>'.htmlspecialchars($libro["isbn"]).'</td>';
                   echo '<td>'.htmlspecialchars($libro["libro"]).'</td>';
+                  echo '<td>'.htmlspecialchars($tipo_libro).'</td>';
                   echo '<td>'.htmlspecialchars($ubi).'</td>';
                   echo '<td>'.htmlspecialchars($libro["materia"]).'</td>';
                   echo '<td>'.htmlspecialchars($libro["grado"]).'</td>';
-                  echo '<td style="text-align:center">'.$libro["cantidad"].'</td>';
                   if (isset($_GET["id_pedido"])) {
-                    echo '<td style="text-align:center">'.$libro["cantidad_aprob"].'</td>';
+                    if ($libro["cantidad_aprob"] < 1) {
+                      echo '<td style="text-align:center">'.$libro["cantidad"].'</td>';
+                      $total_cantidad[]       = $libro["cantidad"];
+                    }else{
+                      echo '<td style="text-align:center">'.$libro["cantidad_aprob"].'</td>';
+                      $total_cantidad[]       = $libro["cantidad"];
+                    }        
+                  }else{
+                    echo '<td style="text-align:center">'.$libro["cantidad"].'</td>';
+                    $total_cantidad[]       = $libro["cantidad"];
                   }
                   echo '</tr>';
                 }
                 echo '<input type="hidden" name="id_muestreo" value="'.$pedido["id"].'">';
                 $total_c       = array_sum($total_cantidad);
-                $total_c_aprob = array_sum($total_cantidad_aprob);
               ?>
             </tbody>
             <tfoot>
               <tr>
+                <td></td>
                 <td colspan="6" style="text-align:right">Total</td>
                 <td style="text-align:center"><?= $total_c ?></td>
-                <?php if (isset($_GET["id_pedido"])): ?>
-                  <td style="text-align:center"><?= $total_c_aprob ?></td>
-                <?php endif; ?>
               </tr>
             </tfoot>
           </table>
@@ -587,6 +590,7 @@
         window.location = "php/accion_muestreo.php?despacho=<?= $_GET['id_pedido'] ?? '' ?>";
       });
     });
+
     window.addEventListener('beforeprint', function () {
       document.querySelectorAll('textarea').forEach(function (ta) {
         ta._ph = ta.style.height;

@@ -15,7 +15,7 @@
 	  END,
 	  libro;";
 	}elseif($tipo==2){
-		$sql = "SELECT id,libro,id_grado FROM libros WHERE id_materia='".$materia."' AND id_grado!=50 AND id_grado!=51 AND presupuesto=1 AND tipo=1 ORDER BY
+		$sql = "SELECT id,libro,id_grado FROM libros WHERE id_materia='".$materia."' AND id_grado!=50 AND id_grado!=51 AND presupuesto=1 AND (tipo=1 || tipo=3) ORDER BY
 	  CASE
 	    WHEN libro LIKE '%Primaria%' THEN 1
 	    WHEN libro LIKE '%Bachillerato%' THEN 2
