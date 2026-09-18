@@ -2,7 +2,7 @@
 /**
  * Botón "Enviar por correo" de lista_pedidos_sa.php?tp=7 (Facturación):
  * junta todos los pedidos sin adopción de lotes_facturacion_sa aún no
- * enviados y manda un solo correo a facturacion3@somoseureka.com.co con el
+ * enviados y manda un solo correo a comercial@somoseureka.com.co con el
  * detalle, marcando esos lotes como enviados. Mismo patrón que
  * php/enviar_lote_facturacion.php.
  */
@@ -76,7 +76,7 @@ try {
     ];
 
     $mail->setFrom('crm@somoseureka.com.co', 'CRM Eureka');
-    $mail->addAddress('facturacion3@somoseureka.com.co');
+    $mail->addAddress('comercial@somoseureka.com.co');
     $mail->addReplyTo('crm@somoseureka.com.co', 'CRM Eureka');
 
     $mail->isHTML(true);
@@ -100,4 +100,4 @@ $in_lotes = implode(',', array_fill(0, count($lotes_incluidos), '?'));
 $upd_lotes = $bdd->prepare("UPDATE lotes_facturacion_sa SET enviado = 1, fecha_envio = NOW() WHERE id IN ($in_lotes)");
 $upd_lotes->execute($lotes_incluidos);
 
-efs_redirect('ok', 'Correo enviado a facturacion3@somoseureka.com.co con ' . count($rows) . ' pedido(s).');
+efs_redirect('ok', 'Correo enviado a comercial@somoseureka.com.co con ' . count($rows) . ' pedido(s).');

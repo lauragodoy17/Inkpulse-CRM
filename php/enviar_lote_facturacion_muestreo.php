@@ -2,7 +2,7 @@
 /**
  * Botón "Enviar por correo" de lista_muestreo.php?tp=7 (Facturación): junta
  * todos los muestreos de lotes_facturacion_muestreo aún no enviados y manda
- * un solo correo a facturacion3@somoseureka.com.co con el detalle, marcando
+ * un solo correo a comercial@somoseureka.com.co con el detalle, marcando
  * esos lotes como enviados. Mismo patrón que
  * php/enviar_lote_facturacion.php (pedidos con adopción).
  */
@@ -78,7 +78,7 @@ try {
     ];
 
     $mail->setFrom('crm@somoseureka.com.co', 'CRM Eureka');
-    $mail->addAddress('facturacion3@somoseureka.com.co');
+    $mail->addAddress('comercial@somoseureka.com.co');
     $mail->addReplyTo('crm@somoseureka.com.co', 'CRM Eureka');
 
     $mail->isHTML(true);
@@ -102,4 +102,4 @@ $in_lotes = implode(',', array_fill(0, count($lotes_incluidos), '?'));
 $upd_lotes = $bdd->prepare("UPDATE lotes_facturacion_muestreo SET enviado = 1, fecha_envio = NOW() WHERE id IN ($in_lotes)");
 $upd_lotes->execute($lotes_incluidos);
 
-efm_redirect('ok', 'Correo enviado a facturacion3@somoseureka.com.co con ' . count($rows) . ' muestreo(s).');
+efm_redirect('ok', 'Correo enviado a comercial@somoseureka.com.co con ' . count($rows) . ' muestreo(s).');
