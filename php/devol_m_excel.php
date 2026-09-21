@@ -66,14 +66,15 @@ $estilo_negrita = array(
 		$objSpreadsheet->getActiveSheet()->SetCellValue("F1", "Fecha");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("F2", "$fecha");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("A4", "# Devolución");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Usuario");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Fecha Creación");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Estado");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "Fecha estado");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Cliente");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("G4", "Cantidad de Libros");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("H4", "OP");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("I4", "Observaciones");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("B4", "# Colegio");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Usuario");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Fecha Creación");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "Estado");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Fecha estado");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("G4", "Cliente");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("H4", "Cantidad de Libros");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("I4", "OP");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("J4", "Observaciones");
 
 
 	//}
@@ -105,18 +106,18 @@ $estilo_negrita = array(
 
 	
 
-	$objSpreadsheet->getActiveSheet()->getStyle("A1:I1")->getFont()->getColor()->applyFromArray(
+	$objSpreadsheet->getActiveSheet()->getStyle("A1:J1")->getFont()->getColor()->applyFromArray(
 		array(
 		'rgb' => '#251919'
 		)
 	);
-	$objSpreadsheet->getActiveSheet()->getStyle("A4:I4")->getFont()->getColor()->applyFromArray(
+	$objSpreadsheet->getActiveSheet()->getStyle("A4:J4")->getFont()->getColor()->applyFromArray(
 		array(
 		'rgb' => '#251919'
 		)
 	);
 
-	$objSpreadsheet->getActiveSheet()->getStyle('A4:I4')->applyFromArray([
+	$objSpreadsheet->getActiveSheet()->getStyle('A4:J4')->applyFromArray([
 	    'fill' => [
 	        'fillType' => Fill::FILL_SOLID,
 	        'startColor' => [
@@ -130,7 +131,7 @@ $estilo_negrita = array(
 
     //if ($_POST["usuario"]==0) {
 
-    	$sql="SELECT d.id, d.fecha, d.observaciones,d.codigo, d.fecha_impre, d.fecha_proceso, c.cliente, e.id as eid,e.estado, CONCAT(u.nombres, ' ',u.apellidos) as promotor FROM devoluciones d JOIN clientes c ON c.id=d.persona JOIN estados_dev e ON d.estado=e.id JOIN usuarios u ON d.id_usuario=u.id WHERE d.fecha BETWEEN '".$desde."' AND '".$hasta."' ORDER BY d.id DESC";
+    	$sql="SELECT d.id, d.fecha, d.observaciones,d.codigo, d.fecha_impre, d.fecha_proceso, c.cliente, e.id as eid,e.estado, CONCAT(u.nombres, ' ',u.apellidos) as promotor, co.colegio FROM devoluciones d LEFT JOIN clientes c ON c.id=d.persona LEFT JOIN colegios co ON co.id=d.id_colegio JOIN estados_dev e ON d.estado=e.id JOIN usuarios u ON d.id_usuario=u.id WHERE d.fecha BETWEEN '".$desde."' AND '".$hasta."' ORDER BY d.id DESC";
 
 
     //}
@@ -172,35 +173,36 @@ $estilo_negrita = array(
 		//if ($_POST["usuario"]==0) {
 
 			$objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$devolucion[id]");
-			$objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$devolucion[promotor]");
-			$objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$devolucion[fecha]");
+			$objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$devolucion[colegio]");
+			$objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$devolucion[promotor]");
+			$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$devolucion[fecha]");
 
 			if ( (!isset($n_op["estado"]) || $n_op["estado"] != 2) && $devolucion["eid"] <= 4 ) {
-				$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "$devolucion[estado]");
+				$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$devolucion[estado]");
 			}else{
-				$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", "Atendida");
+				$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "Atendida");
 			}
 
 			if ($devolucion["eid"]==1 && (!isset($n_op["estado"]) || $n_op["estado"]!=2)) {
-				$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$devolucion[fecha]");
+				$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$devolucion[fecha]");
 			}elseif ($devolucion["eid"]==2 && (!isset($n_op["estado"]) || $n_op["estado"]!=2)) {
-				$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$devolucion[fecha_impre]");
+				$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$devolucion[fecha_impre]");
 
 			}elseif ($devolucion["eid"]==4 && (!isset($n_op["estado"]) || $n_op["estado"]!=2)) {
-				$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$devolucion[fecha_proceso]");
+				$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$devolucion[fecha_proceso]");
 			}elseif (isset($n_op["estado"]) && $n_op["estado"]==2) {
-				$objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", "$n_op[fecha_at]");
+				$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$n_op[fecha_at]");
 			}
 			
-			$objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "$devolucion[cliente]");
-			$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "$cantidades[cant]");
+			$objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", "$devolucion[cliente]");
+			$objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "$cantidades[cant]");
 			if ($op !=0) {
-				$objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "$n_op[id]");
+				$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$n_op[id]");
 			}else{
-				$objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", "No");
+				$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "No");
 			}
 			
-			$objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", "$devolucion[observaciones]");
+			$objSpreadsheet->getActiveSheet()->SetCellValue("J$conta", "$devolucion[observaciones]");
 
 
 		//}

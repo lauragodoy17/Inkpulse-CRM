@@ -123,7 +123,7 @@
             <span class="sm-step">1</span>
             <span class="sm-sec-icon"><i class="bi bi-person-lines-fill"></i></span>
             <span class="sm-section-title">
-              <?= $_GET['tp'] == 2 ? 'Seleccione un proveedor' : 'Archivo adjunto' ?>
+              <?= $_GET['tp'] == 2 ? 'Seleccione un proveedor' : 'Información general' ?>
             </span>
           </div>
           <div class="sm-section-body">
@@ -156,12 +156,37 @@
               </div>
               <?php endif; ?>
 
+              <?php if ($_GET['tp'] == 1): ?>
+                <div class="col-md-5 col-6 mb-3">
+                  <label for="cole" class="control-label">Colegio <small style="color:red;">*</small></label>
+                  <select name="cole" id="cole" class="form-control custom-select2" required>
+                    <option value="">Selecciona un colegio</option>
+                    <?php
+                      if ($_SESSION["tipo"]==1 || $_SESSION["tipo"]==2 || $_SESSION["tipo"]==2) {
+                        $sql = "SELECT id,colegio FROM colegios WHERE colegio like'%".$colegio."%' AND id > 2";
+                      } elseif ($_SESSION["tipo"]==3) {
+                        $sql = "SELECT id,colegio FROM colegios WHERE colegio like'%".$colegio."%' AND cod_zona='".$_SESSION["zona"]."'";
+                      } else {
+                        $sql = "SELECT id,colegio FROM colegios WHERE colegio like'%".$colegio."%' AND cod_zona='".$_SESSION["zona"]."' OR zona_madre='".$_SESSION["zona"]."'";
+                      }
+                      $req = $bdd->prepare($sql);
+                      $req->execute();
+                      $colegios = $req->fetchAll();
+                      foreach ($colegios as $colegio) {
+                        echo "<option value='".$colegio["id"]."'>".$colegio["colegio"]."</option>";
+                      }
+                    ?>
+                    </select>
+              </div>
+              <?php endif; ?>
+
               <?php if ($_SESSION["tipo"] == 1 || $_SESSION["tipo"] == 2): ?>
-              <div class="col-md-5 col-12 mb-3">
+              <div class="col-md-5 col-6 mb-3">
                 <label class="control-label">Soporte adjunto</label>
                 <input type="file" name="archivo" id="archivo" class="form-control" />
               </div>
               <?php endif; ?>
+              
             </div>
           </div>
         </div>
@@ -198,7 +223,7 @@
                     <?php if ($_SESSION["tipo"]!=6) {?>
                         <div class="form-group col-sm-3">
                           <label id="l_tipo" for="tipo" class="control-label">Tipo<small style="color:red;">*</small></label>
-                          <select name="tipo[]" id="tipo" class="form-control custom-select2" required>
+                          <select name="tipo[]" id="tipo" class="form-control custom-select2">
                             <option value="">Seleccione</option>
                             <option value="1">Docente</option>
                             <option value="2">Estudiante</option>
@@ -253,7 +278,7 @@
                     <?php if ($_SESSION["tipo"]!=6) {?>
                         <div class="form-group col-sm-3">
                           <label id="l_tipo<?php echo $i; ?>" for="tipo<?php echo $i; ?>" class="control-label">Tipo<small style="color:red;">*</small></label>
-                          <select name="tipo[]" id="tipo<?php echo $i; ?>" class="form-control custom-select2" required>
+                          <select name="tipo[]" id="tipo<?php echo $i; ?>" class="form-control custom-select2">
                             <option value="">Seleccione</option>
                             <option value="1">Docente</option>
                             <option value="2">Estudiante</option>

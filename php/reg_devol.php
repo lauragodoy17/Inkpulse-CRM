@@ -143,8 +143,8 @@ try {
     // Insertar encabezado
     $obs = str_replace(["'", '"'], '', $_POST['observaciones'] ?? '');
     if ($tp == 1) {
-        $bdd->prepare("INSERT INTO devoluciones(codigo, tipo, id_periodo, id_usuario, observaciones, archivo, estado,tipo_muestras) VALUES(?, '1', '1', ?, ?, ?, ?,?)")
-            ->execute([$cod_pedido, $_SESSION['id'], $obs, $nombre_archivo, $estado, $_POST['tipo']]);
+        $bdd->prepare("INSERT INTO devoluciones(codigo, tipo, id_periodo, id_usuario, observaciones, archivo, estado,id_colegio) VALUES(?, '1', '1', ?, ?, ?, ?,?)")
+            ->execute([$cod_pedido, $_SESSION['id'], $obs, $nombre_archivo, $estado, $_POST['cole']]);
 
     } elseif ($tp == 2) {
         $bdd->prepare("INSERT INTO devoluciones_prov(codigo, tipo, id_periodo, persona, id_usuario, observaciones, archivo, estado) VALUES(?, '2', '1', ?, ?, ?, ?, ?)")

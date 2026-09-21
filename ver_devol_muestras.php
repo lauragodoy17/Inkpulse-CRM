@@ -3,18 +3,18 @@ require_once("php/aut.php");
 require_once("conexion/bdd.php");
 
 if ($_SESSION["tipo"] == 1 || $_SESSION["tipo"] == 2) {
-  $sql = "SELECT p.id, p.tipo, p.tipo_muestras, u.nombres, u.apellidos, p.fecha, e.estado, c.cliente
+  $sql = "SELECT p.id, p.tipo, p.tipo_muestras, u.nombres, u.apellidos, p.fecha, e.estado, c.colegio
           FROM devoluciones p
           JOIN usuarios u ON u.id=p.id_usuario
           JOIN estados_pedidos e ON e.id=p.estado
-          LEFT JOIN clientes c ON c.id=p.persona
+          LEFT JOIN colegios c ON c.id=p.id_colegio
           WHERE p.tipo='1'";
 } else {
   $sql = "SELECT p.id, p.tipo, p.tipo_muestras, u.nombres, u.apellidos, p.fecha, e.estado, c.cliente
           FROM devoluciones p
           JOIN usuarios u ON u.id=p.id_usuario
           JOIN estados_pedidos e ON e.id=p.estado
-          LEFT JOIN clientes c ON c.id=p.persona
+          LEFT JOIN colegios c ON c.id=p.id_colegio
           WHERE p.tipo='1' AND id_usuario='".$_SESSION['id']."'";
 }
 
@@ -163,6 +163,7 @@ sort($estados_uniq);
                 <th>#</th>
                 <th>Fecha</th>
                 <th>Usuario</th>
+                <th>Colegio</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
@@ -185,6 +186,7 @@ sort($estados_uniq);
                 <td><?= $p['id'] ?></td>
                 <td><?= $fecha_d ?></td>
                 <td><?= $promotor ?></td>
+                <td><?= $p['colegio'] ?></td>
                 <td><span class="estado-badge <?= $est_cls ?>"><?= htmlspecialchars($p['estado']) ?></span></td>
                 <td>
                   <a href="vista_devol.php?id_devol=<?= $p['id'] ?>&tipo=<?= $p['tipo'] ?>" class="lm-btn-ver">

@@ -17,7 +17,7 @@ $pedido_base = $req_pedido->fetch();
 
 // Full data
 if ($tipo == 1) {
-    $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.archivo,pe.codigo, pe.tipo_muestras,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado LEFT JOIN clientes c ON pe.persona=c.id WHERE pe.id='".$pedido_base["id"]."'";
+    $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.archivo,pe.codigo, pe.tipo_muestras,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid,co.colegio FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado LEFT JOIN clientes c ON pe.persona=c.id LEFT JOIN colegios co ON pe.id_colegio=co.id WHERE pe.id='".$pedido_base["id"]."'";
 
     $req_pedido = $bdd->prepare($sql_pedido);
     $req_pedido->execute();
@@ -277,6 +277,15 @@ if (isset($n_op['estado']) && $n_op['estado'] == 2) {
             <p class="mc-card-val"># <?= $id_devol ?></p>
           </div>
         </div>
+         <?php if ($tipo == 1): ?>
+          <div class="mc-card">
+            <div class="mc-card-icon green"><i class="bi bi-building"></i></div>
+            <div>
+              <p class="mc-card-label">Colegio</p>
+              <p class="mc-card-val"><?= htmlspecialchars($pedido['colegio'] ?? '—') ?></p>
+            </div>
+          </div>
+          <?php endif; ?>
         <div class="mc-card">
           <div class="mc-card-icon orange"><i class="bi bi-calendar3"></i></div>
           <div>
