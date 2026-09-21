@@ -1,17 +1,15 @@
 <?php
 require_once("php/aut.php");
 require_once("conexion/bdd.php");
+require_once("includes/ver_devol_proveedores_query.php");
 
-$sql = "SELECT p.id, p.tipo, u.nombres, u.apellidos, p.fecha, e.estado, c.proveedor AS cliente
-        FROM devoluciones_prov p
-        JOIN usuarios u ON u.id=p.id_usuario
-        JOIN estados_pedidos e ON e.id=p.estado
-        JOIN proveedores c ON c.id=p.persona
-        WHERE p.tipo='2'";
-$req = $bdd->prepare($sql);
-$req->execute();
-$pedidos = $req->fetchAll();
-$total   = count($pedidos);
+// El listado real de filas ahora lo trae ajax/ver_devol_proveedores_data.php
+// (server-side DataTables). Aquí solo se necesita el total para la tarjeta.
+list($from, $where, $params) = ver_devol_proveedores_query_parts();
+
+$req = $bdd->prepare("SELECT COUNT(*) $from $where");
+$req->execute($params);
+$total = intval($req->fetchColumn());
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -119,36 +117,7 @@ $total   = count($pedidos);
               </tr>
             </thead>
             <tbody>
-              <?php foreach ($pedidos as $pedido):
-                $promotor   = $pedido['nombres'] . ' ' . $pedido['apellidos'];
-                $estado_raw = $pedido['estado'];
-                if ($estado_raw == 'Pendiente') {
-                  $estado_txt = 'Realizada';
-                  $badge_cls  = 'vdp-badge-realizada';
-                } elseif ($estado_raw == 'Aprobado') {
-                  $estado_txt = 'Aprobado';
-                  $badge_cls  = 'vdp-badge-realizada';
-                } elseif ($estado_raw == 'Anulado') {
-                  $estado_txt = 'Anulado';
-                  $badge_cls  = 'vdp-badge-anulada';
-                } else {
-                  $estado_txt = htmlspecialchars($estado_raw);
-                  $badge_cls  = 'vdp-badge-otro';
-                }
-              ?>
-              <tr>
-                <td><?= $pedido['id'] ?></td>
-                <td><?= htmlspecialchars($pedido['fecha']) ?></td>
-                <td><?= htmlspecialchars($promotor) ?></td>
-                <td><?= htmlspecialchars($pedido['cliente']) ?></td>
-                <td><span class="<?= $badge_cls ?>"><?= $estado_txt ?></span></td>
-                <td>
-                  <a href="vista_devol.php?id_devol=<?= $pedido['id'] ?>&tipo=<?= $pedido['tipo'] ?>" class="vdp-btn-ver">
-                    <i class="bi bi-eye"></i> Ver detalle
-                  </a>
-                </td>
-              </tr>
-              <?php endforeach; ?>
+              <!-- Las filas las pinta DataTables via ajax/ver_devol_proveedores_data.php (server-side) -->
             </tbody>
           </table>
         </div>
@@ -170,9 +139,41 @@ $total   = count($pedidos);
 <script src="src/ink-alerts.js"></script>
 <script>
 $(document).ready(function () {
+  var estadoMap = {
+    'Pendiente': { txt: 'Realizada', cls: 'vdp-badge-realizada' },
+    'Aprobado':  { txt: 'Aprobado',  cls: 'vdp-badge-realizada' },
+    'Anulado':   { txt: 'Anulado',   cls: 'vdp-badge-anulada' }
+  };
+
   var table = $('#vdp-table').DataTable({
-    autoWidth: false,
-    order: [[0, 'desc']],
+    autoWidth:  false,
+    processing: true,
+    serverSide: true,
+    order:      [[0, 'desc']],
+    ajax: {
+      url: 'ajax/ver_devol_proveedores_data.php',
+      type: 'POST',
+      dataSrc: function (json) {
+        $('.lm-count-badge').text(json.recordsFiltered + ' registros');
+        return json.data;
+      }
+    },
+    columns: [
+      { data: 'id' },
+      { data: 'fecha_d' },
+      { data: 'usuario' },
+      { data: 'proveedor' },
+      { data: 'estado', render: function (data, type, row) {
+          var m = estadoMap[data] || { txt: data, cls: 'vdp-badge-otro' };
+          return '<span class="' + m.cls + '">' + m.txt + '</span>';
+        }
+      },
+      { data: null, orderable: false, render: function (data, type, row) {
+          return '<a href="vista_devol.php?id_devol=' + row.id + '&tipo=' + row.tipo + '" class="vdp-btn-ver">' +
+                 '<i class="bi bi-eye"></i> Ver detalle</a>';
+        }
+      },
+    ],
     language: {
       lengthMenu:   'Mostrar _MENU_ registros',
       zeroRecords:  'No se encontraron resultados',
@@ -180,13 +181,19 @@ $(document).ready(function () {
       info:         'Mostrando _START_ a _END_ de _TOTAL_ registros',
       infoEmpty:    'Sin registros disponibles',
       infoFiltered: '(filtrado de _MAX_ registros)',
+      processing:   'Buscando...',
       search:       '',
       paginate: { first:'«', previous:'‹', next:'›', last:'»' }
     },
     initComplete: function () { $('.dataTables_filter').hide(); }
   });
 
-  $('#vdp-search').on('keyup', function () { table.search(this.value).draw(); });
+  var searchTimer;
+  $('#vdp-search').on('keyup', function () {
+    clearTimeout(searchTimer);
+    var val = this.value;
+    searchTimer = setTimeout(function () { table.search(val).draw(); }, 300);
+  });
 });
 </script>
 </body>

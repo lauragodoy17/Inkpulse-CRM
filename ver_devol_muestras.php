@@ -1,34 +1,20 @@
 <?php
 require_once("php/aut.php");
 require_once("conexion/bdd.php");
+require_once("includes/ver_devol_muestras_query.php");
 
-if ($_SESSION["tipo"] == 1 || $_SESSION["tipo"] == 2) {
-  $sql = "SELECT p.id, p.tipo, p.tipo_muestras, u.nombres, u.apellidos, p.fecha, e.estado, c.colegio
-          FROM devoluciones p
-          JOIN usuarios u ON u.id=p.id_usuario
-          JOIN estados_pedidos e ON e.id=p.estado
-          LEFT JOIN colegios c ON c.id=p.id_colegio
-          WHERE p.tipo='1'";
-} else {
-  $sql = "SELECT p.id, p.tipo, p.tipo_muestras, u.nombres, u.apellidos, p.fecha, e.estado, c.cliente
-          FROM devoluciones p
-          JOIN usuarios u ON u.id=p.id_usuario
-          JOIN estados_pedidos e ON e.id=p.estado
-          LEFT JOIN colegios c ON c.id=p.id_colegio
-          WHERE p.tipo='1' AND id_usuario='".$_SESSION['id']."'";
-}
+// El listado real de filas ahora lo trae ajax/ver_devol_muestras_data.php
+// (server-side DataTables). Aquí solo se necesita el total (para la
+// tarjeta) y las opciones del select de estado.
+list($from, $where, $params) = ver_devol_muestras_query_parts();
 
-$req = $bdd->prepare($sql);
-$req->execute();
-$pedidos = $req->fetchAll();
-$total   = count($pedidos);
+$req = $bdd->prepare("SELECT COUNT(*) $from $where");
+$req->execute($params);
+$total = intval($req->fetchColumn());
 
-$estados_uniq = [];
-foreach ($pedidos as $p) {
-  $e = $p['estado'] ?? '';
-  if ($e && !in_array($e, $estados_uniq)) $estados_uniq[] = $e;
-}
-sort($estados_uniq);
+$req = $bdd->prepare("SELECT DISTINCT e.estado $from $where ORDER BY e.estado");
+$req->execute($params);
+$estados_uniq = array_column($req->fetchAll(), 'estado');
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -169,32 +155,7 @@ sort($estados_uniq);
               </tr>
             </thead>
             <tbody>
-              <?php foreach ($pedidos as $p):
-                $promotor = htmlspecialchars(trim(($p['nombres'] ?? '').' '.($p['apellidos'] ?? '')));
-                $fecha_d  = date('d/m/Y', strtotime($p['fecha']));
-                $fecha_r  = substr($p['fecha'], 0, 10);
-                $est      = strtolower($p['estado'] ?? '');
-                if (str_contains($est, 'anul') || str_contains($est, 'rechaz'))      $est_cls = 'rojo';
-                elseif (str_contains($est, 'realiz') || str_contains($est, 'recib')
-                     || str_contains($est, 'aprob') || str_contains($est, 'complet')) $est_cls = 'verde';
-                elseif (str_contains($est, 'entreg'))                                 $est_cls = 'teal';
-                elseif (str_contains($est, 'proceso') || str_contains($est, 'atend')
-                     || str_contains($est, 'camino'))                                 $est_cls = 'azul';
-                else                                                                  $est_cls = 'amarillo';
-              ?>
-              <tr data-date="<?= $fecha_r ?>" data-estado="<?= htmlspecialchars($p['estado'] ?? '') ?>">
-                <td><?= $p['id'] ?></td>
-                <td><?= $fecha_d ?></td>
-                <td><?= $promotor ?></td>
-                <td><?= $p['colegio'] ?></td>
-                <td><span class="estado-badge <?= $est_cls ?>"><?= htmlspecialchars($p['estado']) ?></span></td>
-                <td>
-                  <a href="vista_devol.php?id_devol=<?= $p['id'] ?>&tipo=<?= $p['tipo'] ?>" class="lm-btn-ver">
-                    <i class="bi bi-eye"></i> Ver detalle
-                  </a>
-                </td>
-              </tr>
-              <?php endforeach; ?>
+              <!-- Las filas las pinta DataTables via ajax/ver_devol_muestras_data.php (server-side) -->
             </tbody>
           </table>
         </div>
@@ -215,28 +176,49 @@ sort($estados_uniq);
 <script src="src/plugins/datatables/js/responsive.bootstrap4.min.js"></script>
 <script>
 $(document).ready(function () {
-  var table;
+  function estadoCls(estado) {
+    var est = (estado || '').toLowerCase();
+    if (est.indexOf('anul') !== -1 || est.indexOf('rechaz') !== -1) return 'rojo';
+    if (est.indexOf('realiz') !== -1 || est.indexOf('recib') !== -1 ||
+        est.indexOf('aprob') !== -1 || est.indexOf('complet') !== -1) return 'verde';
+    if (est.indexOf('entreg') !== -1) return 'teal';
+    if (est.indexOf('proceso') !== -1 || est.indexOf('atend') !== -1 || est.indexOf('camino') !== -1) return 'azul';
+    return 'amarillo';
+  }
 
-  $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
-    if (settings.nTable.id !== 'dv-table') return true;
-    var estado = $('#dv-estado').val();
-    var desde  = $('#dv-fecha-desde').val();
-    var hasta  = $('#dv-fecha-hasta').val();
-    if (estado && table) {
-      var rowEstado = $(table.row(dataIndex).node()).data('estado') || '';
-      if (rowEstado !== estado) return false;
-    }
-    if ((desde || hasta) && table) {
-      var raw = $(table.row(dataIndex).node()).data('date') || '';
-      if (desde && raw < desde) return false;
-      if (hasta && raw > hasta) return false;
-    }
-    return true;
-  });
-
-  table = $('#dv-table').DataTable({
-    autoWidth:  false,
-    order:      [[0, 'desc']],
+  var table = $('#dv-table').DataTable({
+    autoWidth:   false,
+    processing:  true,
+    serverSide:  true,
+    order:       [[0, 'desc']],
+    ajax: {
+      url: 'ajax/ver_devol_muestras_data.php',
+      type: 'POST',
+      data: function (d) {
+        d.estado      = $('#dv-estado').val();
+        d.fecha_desde = $('#dv-fecha-desde').val();
+        d.fecha_hasta = $('#dv-fecha-hasta').val();
+      },
+      dataSrc: function (json) {
+        $('.lm-count-badge').text(json.recordsFiltered + ' registros');
+        return json.data;
+      }
+    },
+    columns: [
+      { data: 'id' },
+      { data: 'fecha_d' },
+      { data: 'usuario' },
+      { data: 'colegio' },
+      { data: 'estado', render: function (data, type, row) {
+          return '<span class="estado-badge ' + estadoCls(data) + '">' + data + '</span>';
+        }
+      },
+      { data: null, orderable: false, render: function (data, type, row) {
+          return '<a href="vista_devol.php?id_devol=' + row.id + '&tipo=' + row.tipo + '" class="lm-btn-ver">' +
+                 '<i class="bi bi-eye"></i> Ver detalle</a>';
+        }
+      },
+    ],
     language: {
       lengthMenu:   'Mostrar _MENU_ registros',
       zeroRecords:  'No se encontraron resultados',
@@ -244,15 +226,21 @@ $(document).ready(function () {
       info:         'Mostrando _START_ a _END_ de _TOTAL_ registros',
       infoEmpty:    'Sin registros disponibles',
       infoFiltered: '(filtrado de _MAX_ registros)',
+      processing:   'Buscando...',
       search:       '',
       paginate: { first:'«', previous:'‹', next:'›', last:'»' }
     },
     initComplete: function () { $('.dataTables_filter').hide(); }
   });
 
-  $('#dv-search').on('keyup', function () { table.search(this.value).draw(); });
+  var searchTimer;
+  $('#dv-search').on('keyup', function () {
+    clearTimeout(searchTimer);
+    var val = this.value;
+    searchTimer = setTimeout(function () { table.search(val).draw(); }, 300);
+  });
   $('#dv-btn-apply').on('click', function () { table.draw(); });
-  $('#dv-fecha-desde, #dv-fecha-hasta').on('change', function () { table.draw(); });
+  $('#dv-fecha-desde, #dv-fecha-hasta, #dv-estado').on('change', function () { table.draw(); });
   $('#dv-btn-clear').on('click', function () {
     $('#dv-search').val('');
     $('#dv-estado').val('');
