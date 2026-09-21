@@ -526,9 +526,15 @@
               <i class="bi bi-x-circle"></i> Anular
             </button>
           <?php elseif (isset($_GET["id_pedido"]) && $_GET["tp"] == 6): ?>
+            <?php if ($_SESSION['tipo']==1 || ($_SESSION['id']==26 || $_SESSION['id']==21) ): ?>
+              <button type="button" id="rechazar" class="mc-btn mc-btn-red">
+                <i class="bi bi-x-circle"></i> Anular
+              </button>
+            <?php endif; ?>
             <button type="button" id="facturacion" class="mc-btn btn-warning">
                 <i class="bi bi-file-earmark-text"></i> Facturación
-            </button>
+            </button>    
+            
           <?php elseif (isset($_GET["id_pedido"]) && $_GET["tp"] == 7): ?>
             <button type="button" id="despacho" class="mc-btn" style="background:#7c3aed;color:#fff;">
               <i class="bi bi-box-seam"></i> Pasar a Despacho
