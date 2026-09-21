@@ -17,6 +17,7 @@ try {
     if (isset($_GET['rechazar'])) {
         $id = intval($_GET['rechazar']);
         $bdd->prepare("UPDATE pedidos2 SET estado = '3' WHERE id = ?")->execute([$id]);
+        registrar_historial_estado($bdd, 'pedidos_sa', $id, 3, $id_usuario_accion);
         $titulo   = '¡Pedido rechazado!';
         $mensaje  = "El pedido SA #$id fue rechazado correctamente.";
         $redirect = '../lista_pedidos_sa.php?tp=2';

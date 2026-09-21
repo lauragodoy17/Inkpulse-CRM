@@ -166,6 +166,7 @@
     .mc-btn-teal   { background:#0d9488; color:#fff; }
     .mc-btn-green  { background:#16a34a; color:#fff; }
     .mc-btn-yellow { background:#d97706; color:#fff; }
+    .mc-btn-red    { background:#dc2626; color:#fff; }
 
      /* ── ¿Quién lo pasó a X? ── */
     .pc-quien-btn {
@@ -210,8 +211,8 @@
           // (botón en el header) — mismo historial compartido de pedidos,
           // para todos los estados desde Aprobado en adelante.
           require_once(__DIR__ . "/includes/historial_estados.php");
-          $tp_estado_map   = [3 => 2, 4 => 4, 6 => 5, 7 => 6, 8 => 7];
-          $tp_estado_label = [3 => 'Aprobado', 4 => 'Despachado', 6 => 'Procesando', 7 => 'Facturación', 8 => 'En despacho'];
+          $tp_estado_map   = [3 => 2, 4 => 4, 5 => 3, 6 => 5, 7 => 6, 8 => 7];
+          $tp_estado_label = [3 => 'Aprobado', 4 => 'Despachado', 5 => 'Anulado', 6 => 'Procesando', 7 => 'Facturación', 8 => 'En despacho'];
           $procesado_info  = null;
           if (isset($_GET['id_pedido']) && isset($tp_estado_map[intval($_GET['tp'] ?? 0)])) {
             crear_tabla_historial_estados($bdd);
@@ -263,7 +264,7 @@
             $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
             $pedido = $req_pedido->fetch();
 
-            $sql_pedido = "SELECT pe.id, pe.id_periodo, pe.id_colegio, pe.fecha, pe.observaciones, pe.archivo, pe.dir_ent, z.zona, c.colegio, c.direccion, c.sub_zona, c.responsable, cal.calendario, u.nombres, u.apellidos, u.tipo, e.estado FROM muestreos pe JOIN colegios c ON pe.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.cod_zona=z.codigo JOIN estados_pedidos e ON e.id=pe.estado LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE pe.id='".$pedido["id"]."'";
+            $sql_pedido = "SELECT pe.id, pe.id_periodo, pe.id_colegio, pe.fecha, pe.observaciones, pe.archivo, z.zona, c.colegio, c.direccion, c.sub_zona, c.responsable, cal.calendario, u.nombres, u.apellidos, u.tipo, e.estado FROM muestreos pe JOIN colegios c ON pe.id_colegio=c.id JOIN zonas z ON z.codigo=c.cod_zona JOIN usuarios u ON u.cod_zona=z.codigo JOIN estados_pedidos e ON e.id=pe.estado LEFT JOIN calendarios cal ON c.id_calendario=cal.id WHERE pe.id='".$pedido["id"]."'";
             $req_pedido = $bdd->prepare($sql_pedido); $req_pedido->execute();
             $pedido = $req_pedido->fetch();
 
@@ -521,6 +522,9 @@
             <button type="button" id="procesar" class="mc-btn btn-info">
                 <i class="bi bi-shuffle"></i> Procesar
             </button>
+            <button type="button" id="rechazar" class="mc-btn mc-btn-red">
+              <i class="bi bi-x-circle"></i> Anular
+            </button>
           <?php elseif (isset($_GET["id_pedido"]) && $_GET["tp"] == 6): ?>
             <button type="button" id="facturacion" class="mc-btn btn-warning">
                 <i class="bi bi-file-earmark-text"></i> Facturación
@@ -566,6 +570,17 @@
         btnOk: 'Sí, Procesar'
       }, function(){
         window.location = "php/accion_muestreo.php?procesar=<?= $_GET['id_pedido'] ?? '' ?>";
+      });
+    });
+
+    $("#rechazar").click(function(){
+      inkConfirm({
+        title: '¿Anular este muestreo?',
+        text:  'Esta acción no se puede deshacer.',
+        type:  'danger',
+        btnOk: 'Sí, anular'
+      }, function(){
+        window.location = "php/accion_muestreo.php?rechazar=<?= $_GET['id_pedido'] ?? '' ?>";
       });
     });
 

@@ -20,8 +20,8 @@ $ac = $tp_cfg[$tp] ?? $tp_cfg[2];
 // header) — mismo historial compartido de pedidos/muestreo, para todos los
 // estados desde Aprobado en adelante.
 require_once(__DIR__ . "/includes/historial_estados.php");
-$tp_estado_map = [3 => 2, 4 => 4, 6 => 5, 7 => 6, 8 => 7];
-$tp_estado_label = [3 => 'Aprobado', 4 => 'Entregado', 6 => 'Procesando', 7 => 'Facturación', 8 => 'En despacho'];
+$tp_estado_map = [3 => 2, 4 => 4, 5 => 3, 6 => 5, 7 => 6, 8 => 7];
+$tp_estado_label = [3 => 'Aprobado', 4 => 'Entregado', 5 => 'Anulado', 6 => 'Procesando', 7 => 'Facturación', 8 => 'En despacho'];
 $procesado_info = null;
 if (isset($tp_estado_map[$tp])) {
   crear_tabla_historial_estados($bdd);

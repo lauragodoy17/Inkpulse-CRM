@@ -7,9 +7,10 @@
   $id_usuario_accion = intval($_SESSION['id'] ?? 0);
 
   if (isset($_GET["rechazar"])) {
-    $sql = "UPDATE muestreos SET estado='3' WHERE id='".$_GET["rechazar"]."'";
-    $req = $bdd->prepare($sql);
-    $req->execute();
+    $id_rechazar = intval($_GET["rechazar"]);
+    $req = $bdd->prepare("UPDATE muestreos SET estado='3' WHERE id=?");
+    $req->execute([$id_rechazar]);
+    registrar_historial_estado($bdd, 'muestreos', $id_rechazar, 3, $id_usuario_accion);
     header("location: ../lista_muestreo.php?tp=2&ink_status=ok&ink_msg=".urlencode('Muestreo rechazado correctamente.'));
 
   } elseif (isset($_GET["aprobar"])) {
