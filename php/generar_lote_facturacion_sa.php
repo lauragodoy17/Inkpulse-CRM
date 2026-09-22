@@ -4,7 +4,7 @@
  * pedidos sin adopción marcados a estado "Facturación" (estado=6) y los deja
  * guardados en un lote (lotes_facturacion_sa / lotes_facturacion_sa_pedidos)
  * para enviarlos después por correo con el botón de
- * lista_pedidos_sa.php?tp=7 (ver php/enviar_lote_facturacion_sa.php). Mismo
+ * lista_pedidos_sa.php?tp=6 (ver php/enviar_lote_facturacion_sa.php). Mismo
  * patrón que php/generar_lote_facturacion.php, sin restricción de zona.
  */
 require_once("../php/aut.php");

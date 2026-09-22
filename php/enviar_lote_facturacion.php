@@ -1,6 +1,6 @@
 <?php
 /**
- * Botón "Enviar por correo" de lista_pedidos.php?tp=7 (Facturación): junta
+ * Botón "Enviar por correo" de lista_pedidos.php?tp=6 (Procesando): junta
  * todos los pedidos de lotes_facturacion aún no enviados (creados por
  * php/generar_lote_facturacion.php al pasar pedidos de Procesando a
  * Facturación) y manda un solo correo a comercial@somoseureka.com.co con
@@ -16,7 +16,7 @@ require '../lib/PHPMailer/src/PHPMailer.php';
 require '../lib/PHPMailer/src/SMTP.php';
 
 function ef_redirect($status, $msg) {
-    header('Location: ../lista_pedidos.php?tp=7&ink_status=' . $status . '&ink_msg=' . urlencode($msg));
+    header('Location: ../lista_pedidos.php?tp=6&ink_status=' . $status . '&ink_msg=' . urlencode($msg));
     exit;
 }
 
@@ -53,7 +53,7 @@ $sql = "SELECT l.id AS id_lote, p.id AS id_pedido, c.colegio,
         ORDER BY p.id";
 $rows = $bdd->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
-if (empty($rows)) ef_redirect('warn', 'No hay pedidos pendientes de enviar a facturación.');
+if (empty($rows)) ef_redirect('warn', 'No hay pedidos pendientes de enviar por correo a comercial@somoseureka.com.co.');
 
 // Se marcan como enviados solo los lotes realmente incluidos en este correo
 // (por id, no "WHERE enviado=0" otra vez), para no marcar como enviado un

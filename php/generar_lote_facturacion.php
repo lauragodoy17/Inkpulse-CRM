@@ -4,7 +4,7 @@
  * marcados a estado "Facturación" (estado=6, igual que
  * accion_pedidos.php?facturacion=) y los deja guardados en un lote
  * (lotes_facturacion / lotes_facturacion_pedidos) para que después se puedan
- * enviar por correo a facturación con el botón de lista_pedidos.php?tp=7
+ * enviar por correo a facturación con el botón de lista_pedidos.php?tp=6
  * (ver php/enviar_lote_facturacion.php).
  */
 require_once("../php/aut.php");

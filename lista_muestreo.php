@@ -38,7 +38,7 @@ $bulk_cfg = [
   6 => ['label' => 'Pasar a Facturación', 'icon' => 'bi-file-earmark-text',
         'endpoint' => 'php/generar_lote_facturacion_muestreo.php', 'download' => false,
         'confirm_title' => '¿Pasar a Facturación?',
-        'confirm_text'  => 'Quedarán guardados para enviarlos luego por correo desde la lista de Facturación.'],
+        'confirm_text'  => 'Quedarán guardados para enviarlos luego por correo desde esta misma lista (Procesando).'],
   7 => ['label' => 'Pasar a En despacho', 'icon' => 'bi-box-seam',
         'endpoint' => 'php/generar_lote_despacho_muestreo.php', 'download' => false,
         'confirm_title' => '¿Pasar a En despacho?',
@@ -49,10 +49,10 @@ $bulk_cfg = [
         'confirm_text'  => 'Los muestreos seleccionados quedarán marcados como "Despachado".'],
 ];
 
-// tp=7 (Facturación): cuántos muestreos quedaron guardados en
+// tp=6 (Procesando): cuántos muestreos quedaron guardados en
 // lotes_facturacion_muestreo que todavía no se han enviado por correo.
 $pend_facturacion = 0;
-if ($tp == 7) {
+if ($tp == 6) {
   $bdd->exec("CREATE TABLE IF NOT EXISTS lotes_facturacion_muestreo (
       id INT AUTO_INCREMENT PRIMARY KEY,
       fecha_generacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -294,11 +294,11 @@ if ($tp == 1) {
           </button>
         </div>
         <?php endif; ?>
-        <?php if ($tp == 7 && $pend_facturacion > 0): ?>
+        <?php if ($tp == 6 && $pend_facturacion > 0): ?>
         <div class="lp-sel-bar lp-sel-bar-warn" id="lf-envio-bar">
           <div class="lp-sel-bar-info">
             <span class="lp-sel-bar-icon"><i class="bi bi-envelope"></i></span>
-            <span>Hay <strong><?= $pend_facturacion ?></strong> muestreo(s) pendientes de enviar por correo a facturación.</span>
+            <span>Hay <strong><?= $pend_facturacion ?></strong> muestreo(s) pendientes de enviar por correo a comercial@somoseureka.com.co.</span>
           </div>
           <button type="button" id="lf-btn-enviar" class="lp-btn-action">
             <i class="bi bi-send"></i> Enviar por correo
@@ -450,9 +450,9 @@ $(document).ready(function () {
     });
   });
 
-  <?php if ($tp == 7): ?>
+  <?php if ($tp == 6): ?>
   $('#lf-btn-enviar').on('click', function () {
-    confirmar('¿Enviar por correo?', 'Se enviarán a facturacion3@somoseureka.com.co los muestreos pendientes.', function () {
+    confirmar('¿Enviar por correo?', 'Se enviarán a comercial@somoseureka.com.co los muestreos pendientes.', function () {
       var $form = $('<form>', { method: 'POST', action: 'php/enviar_lote_facturacion_muestreo.php' });
       $('body').append($form);
       $form.submit();

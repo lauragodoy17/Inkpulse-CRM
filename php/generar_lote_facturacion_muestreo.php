@@ -4,7 +4,7 @@
  * muestreos marcados a estado "Facturación" (estado=6, igual que
  * accion_muestreo.php?facturacion=) y los deja guardados en un lote
  * (lotes_facturacion_muestreo / lotes_facturacion_muestreo_pedidos) para
- * enviarlos después por correo con el botón de lista_muestreo.php?tp=7
+ * enviarlos después por correo con el botón de lista_muestreo.php?tp=6
  * (ver php/enviar_lote_facturacion_muestreo.php). Mismo patrón que
  * php/generar_lote_facturacion.php (pedidos con adopción).
  */

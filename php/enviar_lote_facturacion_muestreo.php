@@ -1,6 +1,6 @@
 <?php
 /**
- * Botón "Enviar por correo" de lista_muestreo.php?tp=7 (Facturación): junta
+ * Botón "Enviar por correo" de lista_muestreo.php?tp=6 (Procesando): junta
  * todos los muestreos de lotes_facturacion_muestreo aún no enviados y manda
  * un solo correo a comercial@somoseureka.com.co con el detalle, marcando
  * esos lotes como enviados. Mismo patrón que
@@ -16,7 +16,7 @@ require '../lib/PHPMailer/src/PHPMailer.php';
 require '../lib/PHPMailer/src/SMTP.php';
 
 function efm_redirect($status, $msg) {
-    header('Location: ../lista_muestreo.php?tp=7&ink_status=' . $status . '&ink_msg=' . urlencode($msg));
+    header('Location: ../lista_muestreo.php?tp=6&ink_status=' . $status . '&ink_msg=' . urlencode($msg));
     exit;
 }
 
@@ -50,7 +50,7 @@ $sql = "SELECT l.id AS id_lote, m.id AS id_pedido, c.colegio,
         ORDER BY m.id";
 $rows = $bdd->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
-if (empty($rows)) efm_redirect('warn', 'No hay muestreos pendientes de enviar a facturación.');
+if (empty($rows)) efm_redirect('warn', 'No hay muestreos pendientes de enviar por correo a comercial@somoseureka.com.co.');
 
 $lotes_incluidos = array_values(array_unique(array_column($rows, 'id_lote')));
 
