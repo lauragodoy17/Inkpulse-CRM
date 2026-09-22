@@ -417,3 +417,104 @@ function obtener_ultimo_snapshot_informe_editorial($bdd, $idPeriodo) {
     }
     return ['fecha' => $fecha, 'porAsesor' => $porAsesor];
 }
+
+/**
+ * Venta real por asesor de UN SOLO período (sin combinar temporada) — mismo patrón de
+ * php/dashboard_ventareal_stats.php (recursos.venta_real manual reemplaza por completo al
+ * calculado, por colegio, cuando está capturado >0), pero atribuido con el mismo criterio de
+ * "dueño de zona" que usa ESTE informe (owner.tipo=3 OR owner.id=69, SIN owner.act=1) en vez del
+ * criterio de ese dashboard (tipo IN (3,6), owner.act=1) — para que sea el mismo asesor al que ya
+ * se le atribuye presupuesto/adopción en este reporte.
+ */
+function venta_real_por_asesor_un_periodo($bdd, $idPeriodo) {
+    $idPeriodo = (int)$idPeriodo;
+    $stmtPer = $bdd->prepare("SELECT id_calendario FROM periodos WHERE id = ?");
+    $stmtPer->execute([$idPeriodo]);
+    $idCalendario = (int)$stmtPer->fetchColumn();
+    if (!$idCalendario) return [];
+
+    $ownerJoin = "LEFT JOIN (
+            SELECT id_colegio, id_periodo, MIN(cod_zona) as cod_zona
+            FROM presupuestos
+            WHERE cod_zona <> ''
+            GROUP BY id_colegio, id_periodo
+            HAVING COUNT(DISTINCT cod_zona) = 1
+        ) pz ON pz.id_colegio = c.id AND pz.id_periodo = p.id_periodo
+        LEFT JOIN usuarios owner ON owner.cod_zona = COALESCE(pz.cod_zona, c.cod_zona) AND owner.cod_zona <> ''
+             AND (owner.tipo = 3 OR owner.id = 69)";
+
+    $stmtCalc = $bdd->prepare("SELECT c.id as id_colegio, owner.id as id_asesor,
+            SUM(CASE WHEN p.tasa_compra_d = 0
+                THEN (p.precio - p.precio * p.descuento) * p.uni_vr
+                ELSE (p.precio - p.precio * p.descuento_d) * p.uni_vr END) as venta_calculada
+        FROM presupuestos p
+        JOIN colegios c ON p.id_colegio = c.id
+        $ownerJoin
+        WHERE p.id_periodo = ? AND p.definido != 0 AND c.id_calendario = ?
+              AND p.probabilidad != 3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00)
+              AND owner.id IS NOT NULL
+        GROUP BY c.id, owner.id");
+    $stmtCalc->execute([$idPeriodo, $idCalendario]);
+
+    $ventaPorColegio = []; // id_colegio => ['id_asesor'=>, 'total'=>]
+    foreach ($stmtCalc->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $ventaPorColegio[(int)$row['id_colegio']] = ['id_asesor' => (int)$row['id_asesor'], 'total' => (float)$row['venta_calculada']];
+    }
+
+    $stmtManual = $bdd->prepare("SELECT r.id_colegio, owner.id as id_asesor, MAX(r.venta_real) as venta_real
+        FROM recursos r
+        JOIN colegios c ON r.id_colegio = c.id
+        JOIN presupuestos p ON p.id_colegio = c.id AND p.id_periodo = r.id_periodo
+        $ownerJoin
+        WHERE r.id_periodo = ? AND r.venta_real > 0 AND c.id_calendario = ? AND owner.id IS NOT NULL
+        GROUP BY r.id_colegio, owner.id");
+    $stmtManual->execute([$idPeriodo, $idCalendario]);
+    foreach ($stmtManual->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        // El manual reemplaza al calculado para ese colegio, sin importar si ya había uno.
+        $ventaPorColegio[(int)$row['id_colegio']] = ['id_asesor' => (int)$row['id_asesor'], 'total' => (float)$row['venta_real']];
+    }
+
+    $porAsesor = [];
+    foreach ($ventaPorColegio as $fila) {
+        if ($fila['total'] <= 0) continue;
+        $porAsesor[$fila['id_asesor']] = ($porAsesor[$fila['id_asesor']] ?? 0.0) + $fila['total'];
+    }
+    return $porAsesor;
+}
+
+/**
+ * Venta real por asesor de la TEMPORADA ANTERIOR a la de $idPeriodo (año A-1, con su propia pareja
+ * de Calendario B) — pedido por el usuario 2026-09-22 para la columna "Venta real temporada {año}"
+ * de php/informe_editorial_excel.php: al bajar el informe de una temporada (ej. 2027), mostrar de
+ * referencia cuánto vendió realmente cada asesor en la temporada pasada (2026+2025B). Reutiliza
+ * resolver_temporada_informe_editorial() para encontrar la pareja de Calendario B de esa temporada
+ * anterior, igual que se hace con la temporada actual.
+ * Devuelve ['anioAnterior' => int|null, 'labelAnterior' => string, 'porAsesor' => [id_usuario =>
+ * venta_real]]. anioAnterior=null si el período "año-1" de Calendario A no existe todavía (ej. se
+ * pidió el período más antiguo cargado) — el llamador debe dejar la columna vacía en ese caso, no
+ * lanzar error.
+ */
+function obtener_venta_real_temporada_anterior($bdd, $idPeriodo) {
+    $temporadaActual = resolver_temporada_informe_editorial($bdd, $idPeriodo);
+    $stmtA = $bdd->prepare("SELECT periodo FROM periodos WHERE id = ?");
+    $stmtA->execute([$temporadaActual['idCanonico']]);
+    $anioActual = (int)preg_replace('/[^0-9]/', '', (string)$stmtA->fetchColumn());
+    if ($anioActual <= 0) return ['anioAnterior' => null, 'labelAnterior' => '', 'porAsesor' => []];
+
+    $anioAnterior = $anioActual - 1;
+    $stmtPer = $bdd->prepare("SELECT p.id FROM periodos p JOIN calendarios c ON c.id = p.id_calendario WHERE c.calendario = 'A' AND p.periodo = ?");
+    $stmtPer->execute([(string)$anioAnterior]);
+    $idPeriodoAnterior = $stmtPer->fetchColumn();
+    if (!$idPeriodoAnterior) return ['anioAnterior' => $anioAnterior, 'labelAnterior' => (string)$anioAnterior, 'porAsesor' => []];
+
+    $temporadaAnterior = resolver_temporada_informe_editorial($bdd, (int)$idPeriodoAnterior);
+
+    $porAsesor = [];
+    foreach ($temporadaAnterior['idsIncluidos'] as $idPeriodoParte) {
+        foreach (venta_real_por_asesor_un_periodo($bdd, $idPeriodoParte) as $idAsesor => $monto) {
+            $porAsesor[$idAsesor] = ($porAsesor[$idAsesor] ?? 0.0) + $monto;
+        }
+    }
+
+    return ['anioAnterior' => $anioAnterior, 'labelAnterior' => $temporadaAnterior['labelCombinado'], 'porAsesor' => $porAsesor];
+}
