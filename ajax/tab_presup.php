@@ -694,10 +694,16 @@
     $req_hp->execute();
     $num_hp = $req_hp->rowCount();
 
-    $sql_exist_p = "SELECT DISTINCT id_libro FROM presupuestos WHERE id_colegio='".$_GET["colegio"]."' AND id_periodo='".$_GET["periodo"]."'";
+    // Clave de duplicado: id del libro; para libros de grado "Otro" (17) se agrega el grado específico,
+    // así el mismo libro puede estar en grados distintos pero no dos veces en el mismo.
+    $sql_exist_p = "SELECT DISTINCT p.id_libro, l.id_grado, a.id_grado_otro FROM presupuestos p JOIN libros l ON l.id=p.id_libro LEFT JOIN areas_objetivas a ON a.codigo=p.cod_area AND p.cod_area<>'' WHERE p.id_colegio='".$_GET["colegio"]."' AND p.id_periodo='".$_GET["periodo"]."'";
     $req_exist_p = $bdd->prepare($sql_exist_p);
     $req_exist_p->execute();
-    $ids_exist_presup = array_map('intval', array_column($req_exist_p->fetchAll(PDO::FETCH_ASSOC), 'id_libro'));
+    $ids_exist_presup = [];
+    foreach ($req_exist_p->fetchAll(PDO::FETCH_ASSOC) as $ex) {
+        $ids_exist_presup[] = $ex["id_grado"] == 17 ? $ex["id_libro"]."|".$ex["id_grado_otro"] : (string)$ex["id_libro"];
+    }
+    $ids_exist_presup = array_values(array_unique($ids_exist_presup));
 
     echo "<form action='php/actualizar_presupuesto.php' method='POST' id='pp' class='miFormulario'>";
 
@@ -728,6 +734,7 @@
         }
 
         $id_real_libro = $libro_p["id"];
+        $key_dup_libro = (string)$libro_p["id"];
 
         if ($libro_p["id_grado"] != 17) {
             $sql_presup = "SELECT id, precio, tasa_compra, descuento, pre_aprob, aprobado, probabilidad FROM presupuestos WHERE id_libro='".$libro_p["id"]."' AND id_periodo='".$_GET["periodo"]."' AND id_colegio='".$_GET["colegio"]."'";
@@ -745,6 +752,7 @@
             $req_go = $bdd->prepare($sql_go);
             $req_go->execute();
             $go = $req_go->fetch();
+            $key_dup_libro = $libro_p["id"]."|".$go["id_grado_otro"];
             $sq_gp = "SELECT paralelos, SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_colegio='".$_GET['colegio']."' AND id_grado='".$go["id_grado_otro"]."' AND id_periodo='".$_GET["periodo"]."'";
         }
         $req_gp = $bdd->prepare($sq_gp);
@@ -876,6 +884,7 @@
             echo "<button class='pr-btn-del pr-btn-row-del' type='button'
                     data-pid='".$libro_p["pid"]."'
                     data-libro='".$id_real_libro."'
+                    data-key='".$key_dup_libro."'
                     data-codigo='".htmlspecialchars($_GET["codigo"])."'
                     data-periodo='".htmlspecialchars($_GET["periodo"])."'>
                     <i class='fa fa-trash-o'></i></button>";
@@ -1300,17 +1309,24 @@
         $('input[name="libs_ao[]"]').each(function() {
             var val = $(this).val();
             if (!val) return;
-            var libroId = val.split('/')[2];
+            // Recalcular con el grado específico actual (pudo cambiarse después de elegir el libro)
+            var suf = this.id.replace('libs_ao', '');
+            var partes = val.split('/');
+            partes[3] = $('#grado_otro' + suf).val() || '';
+            $(this).val(partes.join('/'));
+            var libroId = partes[2];
             if (!libroId || libroId === '0') return;
-            if (ids.indexOf(libroId) !== -1) {
+            // Grado "Otro" (17): el mismo libro se permite en grados específicos distintos
+            var key = partes[1] == 17 ? libroId + '|' + partes[3] : libroId;
+            if (ids.indexOf(key) !== -1) {
                 errMsg = 'Hay libros repetidos en el formulario';
                 return false;
             }
-            if (librosYaEnPresup.indexOf(parseInt(libroId)) !== -1) {
+            if (librosYaEnPresup.indexOf(key) !== -1) {
                 errMsg = 'Uno de los libros ya existe en el presupuesto';
                 return false;
             }
-            ids.push(libroId);
+            ids.push(key);
         });
         if (errMsg) {
             e.preventDefault();
@@ -1350,7 +1366,7 @@
                 type: 'POST',
                 data: { 'b_presup[]': pid, codigo: codigo, periodo: periodo },
                 complete: function() {
-                    var idx = librosYaEnPresup.indexOf(libro);
+                    var idx = librosYaEnPresup.indexOf(String($btn.data('key')));
                     if (idx !== -1) librosYaEnPresup.splice(idx, 1);
                     $btn.closest('tr').fadeOut(300, function(){ $(this).remove(); });
                     prToast('Libro eliminado correctamente', 'ok');

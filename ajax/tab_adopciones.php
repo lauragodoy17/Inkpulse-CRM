@@ -803,10 +803,16 @@
         $req->execute();
         $libros_p = $req->fetchAll();
 
-        $sql_exist_d = "SELECT DISTINCT id_libro_eureka FROM areas_objetivas WHERE id_colegio='".$_GET["colegio"]."' AND id_periodo='".$gp_periodo["id"]."'";
+        // Clave de duplicado: id del libro; para grado "Otro" (17) se agrega el grado específico,
+        // así el mismo libro puede estar en grados distintos pero no dos veces en el mismo.
+        $sql_exist_d = "SELECT DISTINCT id_libro_eureka, id_grado, id_grado_otro FROM areas_objetivas WHERE id_colegio='".$_GET["colegio"]."' AND id_periodo='".$gp_periodo["id"]."'";
         $req_exist_d = $bdd->prepare($sql_exist_d);
         $req_exist_d->execute();
-        $ids_exist_adop = array_map('intval', array_column($req_exist_d->fetchAll(PDO::FETCH_ASSOC), 'id_libro_eureka'));
+        $ids_exist_adop = [];
+        foreach ($req_exist_d->fetchAll(PDO::FETCH_ASSOC) as $ex) {
+            $ids_exist_adop[] = $ex["id_grado"] == 17 ? $ex["id_libro_eureka"]."|".$ex["id_grado_otro"] : (string)$ex["id_libro_eureka"];
+        }
+        $ids_exist_adop = array_values(array_unique($ids_exist_adop));
 
     echo "<form action='php/guardar_definicion.php' class='miFormulario' method='POST' id='form_definicion' name='f2' enctype='multipart/form-data'>";
                               
@@ -2390,17 +2396,24 @@
         $('input[name="libs_aod[]"]').each(function() {
             var val = $(this).val();
             if (!val) return;
-            var libroId = val.split('/')[2];
+            // Recalcular con el grado específico actual (pudo cambiarse después de elegir el libro)
+            var suf = this.id.replace('libs_aod', '');
+            var partes = val.split('/');
+            partes[3] = $('#grado_otrod' + suf).val() || '';
+            $(this).val(partes.join('/'));
+            var libroId = partes[2];
             if (!libroId || libroId === '0') return;
-            if (ids.indexOf(libroId) !== -1) {
+            // Grado "Otro" (17): el mismo libro se permite en grados específicos distintos
+            var key = partes[1] == 17 ? libroId + '|' + partes[3] : libroId;
+            if (ids.indexOf(key) !== -1) {
                 errMsg = 'Hay libros repetidos en el formulario';
                 return false;
             }
-            if (librosYaEnAdop.indexOf(parseInt(libroId)) !== -1) {
+            if (librosYaEnAdop.indexOf(key) !== -1) {
                 errMsg = 'Uno de los libros ya existe en adopciones';
                 return false;
             }
-            ids.push(libroId);
+            ids.push(key);
         });
         if (errMsg) {
             e.preventDefault();
