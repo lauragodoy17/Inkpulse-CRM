@@ -629,7 +629,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
               </button>
               
             <?php elseif (($pedido['estado'] ?? '') == 5): ?>
-              <?php if ($_SESSION['tipo']==1 || ($_SESSION['id']==26 || $_SESSION['id']==21) ): ?>
+              <?php if ($_SESSION['tipo']==1 || ($_SESSION['id']==25 || $_SESSION['id']==21) ): ?>
               <button type="button" id="rechazar" class="mc-btn mc-btn-red">
                 <i class="bi bi-x-circle"></i> Anular
               </button>
