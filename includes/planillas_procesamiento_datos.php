@@ -7,6 +7,8 @@
  * fecha y el tipo de cada una bien identificado. Pedido por el usuario 2026-09-18.
  */
 
+require_once(__DIR__ . "/pedidos2_cliente.php");
+
 /**
  * Los tres tipos de planilla, con la etiqueta a mostrar y las tablas/columnas propias de cada uno
  * — para no repetir "if tipo == x" por todos lados, cualquier función de acá recorre este mapa.
@@ -124,11 +126,15 @@ function obtener_detalle_planilla_procesamiento($bdd, $tipo, $idPlanilla) {
                 GROUP BY o.id
                 ORDER BY o.id";
     } else { // sa: pedidos2.colegio es texto directo, sin FK a colegios
+        asegurar_columna_cliente_pedidos2($bdd);
         $sql = "SELECT o.id, o.fecha, o.colegio,
-                       CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) AS responsable
+                       CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) AS responsable,
+                       COALESCE(NULLIF(TRIM(cl.cliente),''),
+                                NULLIF(TRIM(CONCAT_WS(' ',TRIM(u.nombres),TRIM(u.apellidos))),'')) AS cliente
                 FROM {$info['tabla_detalle']} d
                 JOIN {$info['tabla_origen']} o ON o.id = d.id_pedido
                 LEFT JOIN usuarios u ON u.id = o.id_usuario
+                LEFT JOIN clientes cl ON cl.id = o.cliente
                 WHERE d.id_planilla = ?
                 GROUP BY o.id
                 ORDER BY o.id";

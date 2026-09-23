@@ -13,6 +13,7 @@
 	require '../lib/PHPMailer/src/PHPMailer.php';
 	require '../lib/PHPMailer/src/SMTP.php';
 	require_once("../includes/stock_bajo.php");
+	require_once("../includes/pedidos2_cliente.php");
 
 	header("Content-Type:text/html;charset=utf-8");
 
@@ -209,7 +210,12 @@
 
 	
 
-	$sql_p2 = "INSERT INTO pedidos2(codigo,id_periodo,colegio,id_usuario,fecha_r,observaciones,archivo,fac_rem,estado,tipo,tipo_muestras) VALUES('".$cod_pedido."','".$gp_periodo["id"]."','".$_POST["colegio"]."','".$_SESSION["id"]."','".$_POST["fecha_r"]."','".$_POST["observaciones"]."','".$nombre_archivo."','".$_POST["fac_rem"]."','1','".$_POST["tipo_p"]."','".$_POST["tipo"]."')";
+	// Cliente de World Office (clientes.id) elegido en el formulario: es el que sale en la planilla
+	asegurar_columna_cliente_pedidos2($bdd);
+	$id_cliente = intval($_POST["cliente"] ?? 0);
+	$cliente_sql = $id_cliente > 0 ? "'".$id_cliente."'" : "NULL";
+
+	$sql_p2 = "INSERT INTO pedidos2(codigo,id_periodo,colegio,cliente,id_usuario,fecha_r,observaciones,archivo,fac_rem,estado,tipo,tipo_muestras) VALUES('".$cod_pedido."','".$gp_periodo["id"]."','".$_POST["colegio"]."',".$cliente_sql.",'".$_SESSION["id"]."','".$_POST["fecha_r"]."','".$_POST["observaciones"]."','".$nombre_archivo."','".$_POST["fac_rem"]."','1','".$_POST["tipo_p"]."','".$_POST["tipo"]."')";
 
 				
 				

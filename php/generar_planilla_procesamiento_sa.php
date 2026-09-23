@@ -18,6 +18,7 @@ require_once("../conexion/bdd.php");
 require_once("../lib/FPDF/fpdf.php");
 require_once("../includes/historial_estados.php");
 require_once("../includes/planilla_pdf.php");
+require_once("../includes/pedidos2_cliente.php");
 
 function lps_error($msg) {
     header('Content-Type: text/html; charset=utf-8');
@@ -33,10 +34,15 @@ if (empty($ids)) lps_error('No se seleccionó ningún pedido.');
 
 // pedidos2.colegio es texto directo (no hay FK a colegios), y "responsable"
 // es el nombre del distribuidor/promotor que hizo el pedido.
+// "cliente" (columna Cliente de la planilla): el cliente de World Office
+// elegido al solicitar el pedido; pedidos viejos sin cliente muestran el responsable.
+asegurar_columna_cliente_pedidos2($bdd);
 $in_ph = implode(',', array_fill(0, count($ids), '?'));
-$sql = "SELECT p.id, p.fecha, CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) AS responsable
+$sql = "SELECT p.id, p.fecha, CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) AS responsable,
+               TRIM(cl.cliente) AS cliente
         FROM pedidos2 p
         JOIN usuarios u ON u.id = p.id_usuario
+        LEFT JOIN clientes cl ON cl.id = p.cliente
         WHERE p.estado = '2' AND p.id IN ($in_ph)
         GROUP BY p.id";
 $req = $bdd->prepare($sql);

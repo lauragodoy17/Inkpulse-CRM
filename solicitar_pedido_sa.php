@@ -126,7 +126,18 @@ $materias = $req->fetchAll();
                   <input type="text" class="form-control" name="colegio" id="colegio" required>
                 </div>
               </div>
-              
+
+            </div>
+            <div class="row">
+              <div class="col-md-8 col-12">
+                <div class="form-group">
+                  <label for="cliente" class="control-label">Cliente <small style="color:red;">*</small></label>
+                  <!-- clientes tiene ~10.000 filas (catálogo World Office): se busca por AJAX -->
+                  <select name="cliente" id="cliente" class="form-control" required>
+                    <option value="">Seleccionar cliente</option>
+                  </select>
+                </div>
+              </div>
             </div>
             <div class="row">
               <div class="col-md-4 col-sm-6 col-12">
@@ -284,8 +295,27 @@ $materias = $req->fetchAll();
 <script src="vendors/scripts/layout-settings.js"></script>
 <script>
 
+  $('#cliente').select2({
+    placeholder: 'Seleccionar cliente',
+    allowClear: true,
+    width: '100%',
+    minimumInputLength: 2,
+    ajax: {
+      url: 'ajax/buscar_clientes.php',
+      dataType: 'json',
+      delay: 300,
+      data: function (params) { return { q: params.term }; },
+      processResults: function (data) { return { results: data }; }
+    },
+    language: {
+      inputTooShort: function () { return 'Escribe al menos 2 letras para buscar...'; },
+      noResults:  function () { return 'Sin resultados'; },
+      searching:  function () { return 'Buscando...'; }
+    }
+  });
+
   // ==========================================
-  // LÓGICA PARA EL SEGUNDO SELECT (#tipo_p) 
+  // LÓGICA PARA EL SEGUNDO SELECT (#tipo_p)
   // ==========================================
     
   function validarTipoP(valorP) {
