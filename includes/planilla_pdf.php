@@ -145,7 +145,7 @@ function planilla_pdf_generar($consecutivo, $fecha_descarga, $procesados, $cols,
         ];
         foreach ($cols as $c) {
             if ($c['key'] === 'cliente') {
-                $pdf->Cell($c['w'], $fila_h, pdf_fit_text($pdf, $p['responsable'] ?? '', $c['w'] - 2), 1, 0, 'L');
+                $pdf->Cell($c['w'], $fila_h, pdf_fit_text($pdf, ($p['cliente'] ?? '') !== '' ? $p['cliente'] : ($p['responsable'] ?? ''), $c['w'] - 2), 1, 0, 'L');
             } else {
                 $pdf->Cell($c['w'], $fila_h, $valores[$c['key']], 1, 0, 'C');
             }

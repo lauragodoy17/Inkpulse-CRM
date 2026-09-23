@@ -33,9 +33,13 @@ if (empty($ids)) lpm_error('No se seleccionó ningún muestreo.');
 // zona que usa lista_muestreo.php. El JOIN y el cálculo de "responsable"
 // replican lista_muestreo_query_parts() (u.tipo IN (1,3), a diferencia de
 // pedidos que solo usa u.tipo=3).
+// "cliente" (columna Cliente de la planilla): muestreos no tiene cliente, así
+// que va el responsable y, si sale vacío, quien hizo el muestreo.
 $in_ph = implode(',', array_fill(0, count($ids), '?'));
 $sql = "SELECT m.id, m.fecha, c.cod_zona, c.zona_madre,
-               CASE WHEN u.tipo IN (1,3) THEN CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) ELSE TRIM(c.responsable) END AS responsable
+               CASE WHEN u.tipo IN (1,3) THEN CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) ELSE TRIM(c.responsable) END AS responsable,
+               COALESCE(NULLIF(TRIM(CASE WHEN u.tipo IN (1,3) THEN CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) ELSE c.responsable END),''),
+                        NULLIF(TRIM(CONCAT_WS(' ',TRIM(u.nombres),TRIM(u.apellidos))),'')) AS cliente
         FROM muestreos m
         JOIN colegios c ON m.id_colegio = c.id
         JOIN zonas z ON z.codigo = c.cod_zona

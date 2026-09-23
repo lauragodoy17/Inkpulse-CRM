@@ -35,13 +35,23 @@ if (empty($ids)) lp_error('No se seleccionó ningún pedido.');
 // columna "Cliente" de la planilla muestre lo mismo que la columna
 // "Responsable" de la lista (puede ser el promotor o el responsable del
 // colegio, según el tipo de usuario de la zona).
+// "cliente" es lo que se imprime en la columna Cliente de la planilla: el
+// cliente del pedido y, si no tiene, el responsable; si el responsable sale
+// vacío (colegio sin responsable en una zona cuyo usuario no es tipo 3), el
+// usuario de la zona y por último quien hizo el pedido — nunca queda en blanco.
 $in_ph = implode(',', array_fill(0, count($ids), '?'));
 $sql = "SELECT p.id, p.fecha, c.cod_zona, c.zona_madre,
-               CASE WHEN u.tipo=3 THEN CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) ELSE TRIM(c.responsable) END AS responsable
+               CASE WHEN u.tipo=3 THEN CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) ELSE TRIM(c.responsable) END AS responsable,
+               COALESCE(NULLIF(TRIM(cl.cliente),''),
+                        NULLIF(TRIM(CASE WHEN u.tipo=3 THEN CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) ELSE c.responsable END),''),
+                        NULLIF(TRIM(CONCAT_WS(' ',TRIM(u.nombres),TRIM(u.apellidos))),''),
+                        NULLIF(TRIM(CONCAT_WS(' ',TRIM(uc.nombres),TRIM(uc.apellidos))),'')) AS cliente
         FROM pedidos p
         JOIN colegios c ON p.id_colegio = c.id
         JOIN zonas z ON z.codigo = c.cod_zona
         JOIN usuarios u ON u.cod_zona = z.codigo
+        LEFT JOIN clientes cl ON cl.id = p.cliente
+        LEFT JOIN usuarios uc ON uc.id = p.id_usuario
         WHERE p.estado = '2' AND p.id IN ($in_ph)
         GROUP BY p.id";
 $req = $bdd->prepare($sql);
