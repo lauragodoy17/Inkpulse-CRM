@@ -4,6 +4,12 @@
 	require_once("registrar_historial.php");
 	require_once(__DIR__ . "/../includes/paquetes_colegio.php");
 	crear_tablas_paquetes($bdd);
+	require_once(__DIR__ . "/../includes/adopcion_cerrada.php");
+
+	if (adopcion_cerrada($bdd, $_POST["id_colegio"] ?? 0, $_POST["periodo"] ?? 0)) {
+		header('Location: ../colegio.php?codigo='.urlencode($_POST["codigo"] ?? '').'&periodo='.intval($_POST["periodo"] ?? 0).'&tab=adopciones');
+		exit;
+	}
 
 	$id_usuario_h = intval($_SESSION["id"] ?? 0);
 

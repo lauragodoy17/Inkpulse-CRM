@@ -25,12 +25,20 @@
 		exit;
 	}
 
-	$req_paq = $bdd->prepare("SELECT precio_neto_sumado FROM paquetes_colegio WHERE id=?");
+	$req_paq = $bdd->prepare("SELECT precio_neto_sumado, id_colegio, id_periodo FROM paquetes_colegio WHERE id=?");
 	$req_paq->execute([$id_paquete]);
-	$precio_neto_sumado = $req_paq->fetchColumn();
+	$paq = $req_paq->fetch();
 
-	if ($precio_neto_sumado === false) {
+	if ($paq === false) {
 		http_response_code(404);
+		echo json_encode(["ok" => false]);
+		exit;
+	}
+	$precio_neto_sumado = $paq['precio_neto_sumado'];
+
+	require_once(__DIR__ . "/../includes/adopcion_cerrada.php");
+	if (adopcion_cerrada($bdd, $paq['id_colegio'], $paq['id_periodo'])) {
+		http_response_code(403);
 		echo json_encode(["ok" => false]);
 		exit;
 	}

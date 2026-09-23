@@ -13,6 +13,12 @@ ini_set('memory_limit', '200000M');
 		$req_periodo->execute();
 		$gp_periodo = $req_periodo->fetch();
 
+		require_once(__DIR__ . "/../includes/adopcion_cerrada.php");
+		if (adopcion_cerrada($bdd, $_POST["id_colegio"] ?? 0, $gp_periodo["id"] ?? 0)) {
+			header('Location: ../colegio.php?codigo='.urlencode($_POST["cod_colegio"] ?? '').'&periodo='.intval($_POST["periodo"] ?? 0).'&tab=adopciones');
+			exit;
+		}
+
 		$libs_2=[];
 
 

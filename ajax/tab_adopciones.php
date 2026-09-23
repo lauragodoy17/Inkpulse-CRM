@@ -19,7 +19,13 @@
   $req_hp->execute();
   $num_hp = $req_hp->rowCount();
 
-  $show_guardar = ($num_hp >= 1 && $_SESSION["tipo"] != 4) &&
+  require_once(__DIR__ . "/../includes/adopcion_cerrada.php");
+  $adop_cerrada = adopcion_cerrada($bdd, $_GET["colegio"], $gp_periodo["id"]);
+  $req_existe_rec = $bdd->prepare("SELECT COUNT(*) FROM recursos WHERE id_colegio = ? AND id_periodo = ?");
+  $req_existe_rec->execute([$_GET["colegio"], $gp_periodo["id"]]);
+  $existe_recurso = (int)$req_existe_rec->fetchColumn() > 0;
+
+  $show_guardar = !$adop_cerrada && ($num_hp >= 1 && $_SESSION["tipo"] != 4) &&
     (!($_SESSION['tipo'] == 3 && $_SESSION["zona"] != '5656') || $_GET["f_cierre"] > date("Y-m-d"));
 
   $sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia, mt.costo_almacenamiento
@@ -427,8 +433,35 @@
       <a class="btn btn-success btn-sm" href="php/adopcion_excel.php?cole=<?= htmlspecialchars($_GET['colegio']) ?>&periodo=<?= htmlspecialchars($_GET['periodo']) ?>">
         <i class="bi bi-file-earmark-excel"></i> Exportar Excel
       </a>
+      <?php if ($_SESSION['tipo'] == 1): ?>
+        <?php if ($existe_recurso): ?>
+        <form action="php/cerrar_adopcion.php" method="POST" style="display:inline;"
+          onsubmit="return confirm(<?= htmlspecialchars(json_encode($adop_cerrada ? '¿Reabrir la adopción? Se podrán volver a añadir libros y hacer cambios.' : '¿Cerrar la adopción? No se podrán añadir libros ni hacer cambios de ningún tipo.'), ENT_QUOTES) ?>);">
+          <input type="hidden" name="id_colegio" value="<?= (int)$_GET['colegio'] ?>">
+          <input type="hidden" name="periodo"    value="<?= (int)$gp_periodo['id'] ?>">
+          <input type="hidden" name="codigo"     value="<?= htmlspecialchars($_GET['codigo']) ?>">
+          <input type="hidden" name="accion"     value="<?= $adop_cerrada ? 'abrir' : 'cerrar' ?>">
+          <?php if ($adop_cerrada): ?>
+          <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-unlock"></i> Reabrir adopción</button>
+          <?php else: ?>
+          <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-lock"></i> Cerrar adopción</button>
+          <?php endif; ?>
+        </form>
+        <?php else: ?>
+        <button type="button" class="btn btn-danger btn-sm" disabled title="Guarda la adopción (canal de venta, cliente...) antes de cerrarla">
+          <i class="bi bi-lock"></i> Cerrar adopción
+        </button>
+        <?php endif; ?>
+      <?php endif; ?>
     </div>
   </div>
+
+  <?php if ($adop_cerrada): ?>
+  <div class="alert alert-secondary d-flex align-items-center" style="gap:8px;font-size:.85rem;">
+    <i class="bi bi-lock-fill"></i>
+    <span>Esta adopción está <strong>cerrada</strong>: no se pueden añadir libros ni hacer cambios.</span>
+  </div>
+  <?php endif; ?>
 
   <!-- Tarjetas de resumen -->
   <?php
@@ -585,9 +618,11 @@
       </button>
     </div>
     <div class="adop-filter-right">
+      <?php if (!$adop_cerrada): ?>
       <a href="#" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal_adopciones">
         <i class="bi bi-plus-circle"></i> Añadir libros
       </a>
+      <?php endif; ?>
       <?php if ($show_guardar): ?>
       <button type="submit" form="form_definicion" class="btn btn-success btn-sm miBoton">
         <i class="bi bi-floppy"></i> Guardar cambios
@@ -769,7 +804,7 @@
         <div class="modal-footer">
           <?php if ($_SESSION["tipo"] != 2 && $_SESSION["tipo"] != 4): ?>
             <?php if ($_SESSION["zona"] == $_GET["cod_zona"] || $_SESSION["tipo"] == 1): ?>
-              <?php if ($_GET["f_cierre"] > date("Y-m-d")): ?>
+              <?php if ($_GET["f_cierre"] > date("Y-m-d") && !$adop_cerrada): ?>
                 <button type="button" class="lb-add-btn" id="agregar_aod">
                   <i class="bi bi-plus-circle"></i> Añadir otro libro
                 </button>
@@ -1825,7 +1860,7 @@
                                   }
                               }
                               $arch_existente = count($archivos_existentes) > 0;
-                              $periodo_activo = $_GET["f_cierre"] > date("Y-m-d");
+                              $periodo_activo = $_GET["f_cierre"] > date("Y-m-d") && !$adop_cerrada;
 
                               if ($periodo_activo) {
                                   // Periodo activo: upload interactivo
@@ -1965,7 +2000,9 @@
                           paquetes.forEach(function(p){
                             var titulos = (p.titulos || []).map(function(t){ return escHtmlPaquete(t.libro); }).join(', ');
                             var redondeado;
-                            if (p.id_paquete) {
+                            if (p.id_paquete && adopCerrada) {
+                              redondeado = (p.precio_redondeado !== null && p.precio_redondeado !== undefined) ? formatCopPaquete(p.precio_redondeado) : '<span class="text-muted">Sin definir</span>';
+                            } else if (p.id_paquete) {
                               // Paquete ya guardado: se puede definir/editar el precio redondeado al vuelo.
                               var valorInput = (p.precio_redondeado !== null && p.precio_redondeado !== undefined) ? Number(p.precio_redondeado).toFixed(2) : '';
                               redondeado = '<span class="precio-padre-wrap"><span class="pp-signo">$</span>' +
@@ -2056,6 +2093,15 @@
 
 </div>
 <script>var librosYaEnAdop = <?= json_encode($ids_exist_adop) ?>;</script>
+<script>var adopCerrada = <?= $adop_cerrada ? 'true' : 'false' ?>;</script>
+<?php if ($adop_cerrada): ?>
+<script>
+  // Adopción cerrada: todo el formulario queda en solo lectura (el servidor también rechaza los guardados).
+  $(function () {
+    $('#form_definicion').find('input, select, textarea').attr('disabled', 'disabled');
+  });
+</script>
+<?php endif; ?>
 <script src="../vendors/scripts/core.js"></script>
 <script src="../src/plugins/datatables/js/jquery.dataTables.min.js"></script>
 <script src="../src/plugins/datatables/js/dataTables.bootstrap4.min.js"></script>
