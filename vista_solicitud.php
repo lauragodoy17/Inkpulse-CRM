@@ -354,6 +354,8 @@
         </tr>
       </thead>
       <tbody>
+        <script src="vendors/scripts/core.js"></script>
+        <script src="vendors/scripts/script.min.js"></script>
         <?php
           $sql = "SELECT t.tipo, r.id, r.recurso, r.presupuesto, r.tipo_e, r.valor_e, r.fecha_e, r.legaliza, c.categoria
                   FROM recursos_solicitados r
@@ -373,7 +375,7 @@
           <td>
             <?php if ($solicitud["idestado"] == 1): ?>
               <input type="text" id="presup<?= $recurso["id"] ?>" value="<?= $recurso["presupuesto"] ?>">
-              <input type="hidden" id="i_presup<?= $recurso["id"] ?>" name="i_presup[]">
+              <input type="hidden" id="i_presup<?= $recurso["id"] ?>" name="i_presup[]">   
               <script>
                 $('#i_presup<?= $recurso["id"] ?>').val('<?= $recurso["presupuesto"] ?>');
                 $('#presup<?= $recurso["id"] ?>').keyup(function(){
@@ -709,8 +711,6 @@
   </div>
 </div>
 
-<script src="vendors/scripts/core.js"></script>
-<script src="vendors/scripts/script.min.js"></script>
 <script src="vendors/scripts/process.js"></script>
 <script src="vendors/scripts/layout-settings.js"></script>
 <script>

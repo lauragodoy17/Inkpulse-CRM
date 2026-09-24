@@ -113,6 +113,7 @@ if (($_SESSION["autentificado"] ?? '') === "SI" && !in_array($_SESSION["tipo"] ?
                   <option value="Panamericana Formas e Impresos">Panamericana Formas e Impresos</option>
                   <option value="DIDICOM">DIDICOM</option>
                   <option value="EEE Taller de producción">EEE Taller de producción</option>
+                  <option value="GRUPO HOLA SAS">GRUPO HOLA SAS</option>
                 </select>
               </div>
             </div>

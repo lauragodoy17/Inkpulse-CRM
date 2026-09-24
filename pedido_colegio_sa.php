@@ -30,7 +30,7 @@ if (isset($tp_estado_map[$tp])) {
 
 // Pedido
 $stmt = $bdd->prepare(
-  "SELECT pe.fecha, pe.observaciones, pe.fecha_r, pe.colegio, pe.archivo, pe.codigo,
+  "SELECT pe.fecha, pe.observaciones, pe.fecha_r, pe.cliente, pe.colegio, pe.archivo, pe.codigo,
           pe.estado, pe.fac_rem, pe.verify, pe.tipo as ptipo, pe.tipo_muestras, u.nombres, u.apellidos
    FROM pedidos2 pe
    JOIN usuarios u ON u.id=pe.id_usuario
@@ -38,6 +38,11 @@ $stmt = $bdd->prepare(
 );
 $stmt->execute([$id_pedido]);
 $pedido = $stmt->fetch();
+
+// Cliente
+$stmt2 = $bdd->prepare("SELECT cliente FROM clientes WHERE id = ?");
+$stmt2->execute([$pedido['cliente'] ?? 0]);
+$cliente = $stmt2->fetch();
 
 if ($pedido["ptipo"]==1){
   $pedido["ptipo"]="Venta";
@@ -416,6 +421,13 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
           </div>
         </div>
         <div class="mc-card">
+          <div class="mc-card-icon green"><i class="bi bi-person-lines-fill"></i></div>
+          <div>
+            <p class="mc-card-label">Cliente</p>
+            <p class="mc-card-val"><?= htmlspecialchars($cliente['cliente'] ?? '—') ?></p>
+          </div>
+        </div>
+        <div class="mc-card">
           <div class="mc-card-icon teal"><i class="bi bi-file-earmark-text"></i></div>
           <div>
             <p class="mc-card-label">Documento</p>
@@ -537,9 +549,9 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
             </tfoot>
           </table>
           <!-- lib_p[] hidden inputs fuera del table -->
-          <div class="d-none">
+          <div class="">
             <?php foreach ($libros as $lb): ?>
-            <input type="hidden" name="lpid[]" value="<?= $lb['lpid'] ?>">
+           <input type="hidden" name="lpid[]" value="<?= $lb['lpid'] ?>" id="lid_form<?= $lb['lpid'] ?>">
             <input type="hidden" name="lib_p[]" id="l<?= $lb['lpid'] ?>">
             <?php endforeach; ?>
           </div>
@@ -684,6 +696,8 @@ $('#form_pedido').on('submit', function () {
 });
 $(document).on('click', '.elim-libro', function () {
   $('#' + $(this).data('lpid')).remove();
+  var n_id = $(this).data('lpid');
+  $("#lid_form"+n_id).remove();
 });
 
 $('#imprimir').on('click', function () { window.print(); });
