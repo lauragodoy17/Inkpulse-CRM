@@ -1939,30 +1939,138 @@
                               ksort($grupos_seleccion);
                       ?>
                       <div class="adop-footer-form" id="panel-seleccion-paquete" style="margin-top:22px;<?= ($tipo_adop_actual === 3) ? '' : ' display:none;' ?>">
-                        <span class="form-label-sm"><i class="bi bi-ui-checks"></i> Selecciona los títulos que van al paquete</span>
+                        <style>
+                          #panel-seleccion-paquete .amb-toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-bottom:10px; }
+                          #panel-seleccion-paquete .amb-grupo { border:1px solid #e2e8f0; border-radius:10px; margin-bottom:10px; overflow:hidden; background:#fff; }
+                          #panel-seleccion-paquete .amb-head { display:flex; align-items:center; gap:10px; padding:9px 14px; background:#f8fafc; cursor:pointer; user-select:none; }
+                          #panel-seleccion-paquete .amb-head strong { font-size:.86rem; color:#1e293b; flex:1 1 auto; }
+                          #panel-seleccion-paquete .amb-head .bi-chevron-down { transition:transform .15s; color:#64748b; }
+                          #panel-seleccion-paquete .amb-grupo.cerrado .bi-chevron-down { transform:rotate(-90deg); }
+                          #panel-seleccion-paquete .amb-grupo.cerrado table { display:none; }
+                          #panel-seleccion-paquete .amb-badge { font-size:.72rem; border-radius:999px; padding:2px 9px; font-weight:600; white-space:nowrap; }
+                          #panel-seleccion-paquete .amb-badge.paq { background:#eef0ff; color:#4361ee; }
+                          #panel-seleccion-paquete .amb-badge.sue { background:#ecfdf5; color:#047857; }
+                          #panel-seleccion-paquete table { width:100%; margin:0; font-size:.82rem; }
+                          #panel-seleccion-paquete th { background:#fff; color:#64748b; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; font-weight:600; padding:7px 14px; border-top:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; }
+                          #panel-seleccion-paquete td { padding:7px 14px; border-bottom:1px solid #f1f5f9; vertical-align:middle; color:#374151; }
+                          #panel-seleccion-paquete tr:last-child td { border-bottom:0; }
+                          #panel-seleccion-paquete .amb-col { width:150px; text-align:center; white-space:nowrap; }
+                          #panel-seleccion-paquete .amb-col input { width:16px; height:16px; cursor:pointer; vertical-align:middle; }
+                          #panel-seleccion-paquete th.amb-col label { margin:0; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:5px; }
+                          #panel-seleccion-paquete .amb-isbn { color:#94a3b8; font-size:.72rem; margin-left:6px; white-space:nowrap; }
+                          #panel-seleccion-paquete .amb-aviso { display:none; color:#b45309; font-size:.72rem; margin-left:6px; white-space:nowrap; }
+                          #panel-seleccion-paquete tr.sin-venta td { background:#fffbeb; }
+                          #panel-seleccion-paquete tr.sin-venta .amb-aviso { display:inline; }
+                        </style>
+                        <?php
+                          // Toda la selección viaja en UN solo campo (JSON {paq:[ids], sue:[ids]}), no como
+                          // dos checkboxes con name por libro: en colegios grandes el formulario ya supera el
+                          // límite de campos de PHP (max_input_vars) y el guardado llegaba incompleto.
+                          $sel_inicial = ['paq' => [], 'sue' => []];
+                          foreach ($grupos_seleccion as $g_ini) foreach ($g_ini['titulos'] as $t_ini) {
+                              if ($t_ini['en_paquete'])   $sel_inicial['paq'][] = (int)$t_ini['id_presupuesto'];
+                              if ($t_ini['venta_suelta']) $sel_inicial['sue'][] = (int)$t_ini['id_presupuesto'];
+                          }
+                        ?>
+                        <input type="hidden" name="seleccion_ambos" id="seleccion_ambos" value="<?= htmlspecialchars(json_encode($sel_inicial)) ?>">
+                        <span class="form-label-sm"><i class="bi bi-ui-checks"></i> Libros para paquete y venta suelta</span>
                         <p class="text-muted" style="font-size:.82rem;margin-top:-4px;">
-                          Con Tipo de adopción "Ambos", elige por curso cuáles títulos adoptados hacen parte del
-                          paquete; los que no marques se venden sueltos y no entran a ningún paquete.
+                          Con Tipo de adopción "Ambos", marca por curso qué libros forman el <strong>paquete</strong> completo y cuáles
+                          se pueden comprar como <strong>libro suelto</strong>. Las dos opciones son independientes: un libro puede tener ambas.
                         </p>
+                        <div class="amb-toolbar">
+                          <span class="text-muted" style="font-size:.78rem;"><?= count($grupos_seleccion) ?> cursos</span>
+                          <span>
+                            <button type="button" class="btn btn-link btn-sm amb-expandir" data-abrir="1" style="font-size:.78rem;padding:0 6px;">Expandir todo</button>
+                            <button type="button" class="btn btn-link btn-sm amb-expandir" data-abrir="0" style="font-size:.78rem;padding:0 6px;">Contraer todo</button>
+                          </span>
+                        </div>
                         <?php foreach ($grupos_seleccion as $id_grado_sel => $g_sel): ?>
-                        <div style="margin-bottom:14px;">
-                          <strong style="font-size:.85rem;color:#1e293b;"><?= htmlspecialchars($grados_map_sel[$id_grado_sel] ?? ('Grado ' . $id_grado_sel)) ?></strong>
-                          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
-                            <?php foreach ($g_sel['titulos'] as $t_sel): ?>
-                            <label style="display:flex;align-items:center;gap:5px;font-size:.81rem;font-weight:400;color:#374151;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;cursor:pointer;">
-                              <input type="checkbox" name="en_paquete[]" value="<?= (int)$t_sel['id_presupuesto'] ?>" <?= $t_sel['en_paquete'] ? 'checked' : '' ?>>
-                              <?= htmlspecialchars($t_sel['libro']) ?>
-                            </label>
-                            <?php endforeach; ?>
+                        <div class="amb-grupo">
+                          <div class="amb-head">
+                            <i class="bi bi-chevron-down"></i>
+                            <strong><?= htmlspecialchars(nombre_grado_ficha($id_grado_sel, $grados_map_sel[$id_grado_sel] ?? ('Grado ' . $id_grado_sel))) ?></strong>
+                            <span class="amb-badge paq"><span class="amb-n-paq">0</span> en paquete</span>
+                            <span class="amb-badge sue"><span class="amb-n-sue">0</span> sueltos</span>
                           </div>
+                          <table>
+                            <thead><tr>
+                              <th>Nombre del libro</th>
+                              <th class="amb-col"><label title="Marcar/desmarcar todos"><input type="checkbox" class="amb-todos" data-col="paq"> Paquete</label></th>
+                              <th class="amb-col"><label title="Marcar/desmarcar todos"><input type="checkbox" class="amb-todos" data-col="sue"> Libro suelto</label></th>
+                            </tr></thead>
+                            <tbody>
+                            <?php foreach ($g_sel['titulos'] as $t_sel): ?>
+                              <tr>
+                                <td><?= htmlspecialchars($t_sel['libro']) ?><?php if ($t_sel['isbn'] !== ''): ?><span class="amb-isbn">ISBN <?= htmlspecialchars($t_sel['isbn']) ?></span><?php endif; ?><span class="amb-aviso"><i class="bi bi-exclamation-triangle"></i> No se venderá</span></td>
+                                <td class="amb-col"><input type="checkbox" class="amb-chk" data-col="paq" value="<?= (int)$t_sel['id_presupuesto'] ?>" <?= $t_sel['en_paquete'] ? 'checked' : '' ?>></td>
+                                <td class="amb-col"><input type="checkbox" class="amb-chk" data-col="sue" value="<?= (int)$t_sel['id_presupuesto'] ?>" <?= $t_sel['venta_suelta'] ? 'checked' : '' ?>></td>
+                              </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                          </table>
                         </div>
                         <?php endforeach; ?>
+                        <script>
+                          (function(){
+                            // Contadores por curso, "marcar todos" por columna y aviso cuando un libro
+                            // no queda ni en el paquete ni como suelto.
+                            function refrescarGrupo(grupo) {
+                              var filas = grupo.find('tbody tr');
+                              ['paq', 'sue'].forEach(function(col){
+                                var chks = filas.find('.amb-chk[data-col="' + col + '"]');
+                                var n = chks.filter(':checked').length;
+                                grupo.find(col === 'paq' ? '.amb-n-paq' : '.amb-n-sue').text(n);
+                                grupo.find('.amb-todos[data-col="' + col + '"]').prop('checked', n === chks.length && n > 0);
+                              });
+                              filas.each(function(){
+                                $(this).toggleClass('sin-venta', $(this).find('.amb-chk:checked').length === 0);
+                              });
+                            }
+                            function actualizarSeleccionAmbos() {
+                              var sel = { paq: [], sue: [] };
+                              $('#panel-seleccion-paquete .amb-chk:checked').each(function(){
+                                sel[$(this).data('col')].push(parseInt(this.value, 10));
+                              });
+                              $('#seleccion_ambos').val(JSON.stringify(sel));
+                            }
+                            $('#panel-seleccion-paquete .amb-grupo').each(function(){ refrescarGrupo($(this)); });
+                            $('#panel-seleccion-paquete').on('change', '.amb-chk', function(){
+                              refrescarGrupo($(this).closest('.amb-grupo'));
+                              actualizarSeleccionAmbos();
+                            });
+                            $('#panel-seleccion-paquete').on('change', '.amb-todos', function(){
+                              var grupo = $(this).closest('.amb-grupo');
+                              grupo.find('.amb-chk[data-col="' + $(this).data('col') + '"]').prop('checked', this.checked);
+                              refrescarGrupo(grupo);
+                              actualizarSeleccionAmbos();
+                            });
+                            $('#form_definicion').on('submit', actualizarSeleccionAmbos);
+                            $('#panel-seleccion-paquete').on('click', '.amb-head', function(){
+                              $(this).closest('.amb-grupo').toggleClass('cerrado');
+                            });
+                            $('#panel-seleccion-paquete').on('click', '.amb-expandir', function(){
+                              $('#panel-seleccion-paquete .amb-grupo').toggleClass('cerrado', $(this).data('abrir') != 1);
+                            });
+                          })();
+                        </script>
                       </div>
 
                       <div id="panel-previsualizar-paquete" style="margin-top:16px;<?= in_array($tipo_adop_actual, [2, 3], true) ? '' : ' display:none;' ?>">
                         <button type="button" class="btn btn-outline-primary btn-sm" id="btn-previsualizar-paquete">
                           <i class="bi bi-eye"></i> Previsualizar paquetes
                         </button>
+                        <?php
+                          // Fichas técnicas: solo con Tipo de adopción "Paquetes" o "Ambos" YA guardado y con paquetes guardados.
+                          $req_n_paq = $bdd->prepare("SELECT COUNT(*) FROM paquetes_colegio WHERE id_colegio=? AND id_periodo=?");
+                          $req_n_paq->execute([(int)$_GET['colegio'], (int)$gp_periodo['id']]);
+                          if (tipo_adop_con_fichas($tipo_adop_actual) && (int)$req_n_paq->fetchColumn() > 0):
+                        ?>
+                        <a href="ficha_paquete.php?colegio=<?= (int)$_GET['colegio'] ?>&periodo=<?= (int)$gp_periodo['id'] ?>" target="_blank" rel="noopener"
+                           class="btn btn-outline-success btn-sm" id="btn-fichas-paquete" style="margin-left:6px;">
+                          <i class="bi bi-file-earmark-richtext"></i> Fichas técnicas
+                        </a>
+                        <?php endif; ?>
                         <div id="resultado-preview-paquete" style="margin-top:14px;"></div>
                         <?php if ($show_guardar): ?>
                         <button type="submit" form="form_definicion" class="btn btn-success btn-sm miBoton" style="margin-top:14px;">
@@ -1972,10 +2080,15 @@
                       </div>
 
                       <script>
+                        // Tipo de adopción YA guardado: el piso del precio y las fichas técnicas
+                        // dependen de este (igual que la validación del servidor), no del select sin guardar.
+                        var tipoAdopGuardado = <?= (int)$tipo_adop_actual ?>;
+
                         $('#tipo_adop').on('change', function(){
                           var val = $(this).val();
                           $('#panel-seleccion-paquete').toggle(val == '3');
                           $('#panel-previsualizar-paquete').toggle(val == '2' || val == '3');
+                          $('#btn-fichas-paquete').toggle(val == '2' || val == '3');
                           $('#resultado-preview-paquete').empty();
                         });
 
@@ -1997,23 +2110,43 @@
                           }
                           var html = '<div class="table-responsive"><table class="table table-sm" style="font-size:.84rem;">' +
                             '<thead><tr><th>Paquete</th><th>Código</th><th>Títulos incluidos</th><th>Precio neto (sumatoria)</th><th>Precio redondeado</th><th>Precio del paquete</th></tr></thead><tbody>';
+                          // Con Tipo de adopción "Paquetes": ISBN por libro, piso del precio y ficha técnica.
+                          var modoPaquetes = $('#tipo_adop').val() == '2';
+                          var precioConPiso = tipoAdopGuardado === 2;
                           paquetes.forEach(function(p){
-                            var titulos = (p.titulos || []).map(function(t){ return escHtmlPaquete(t.libro); }).join(', ');
+                            var titulos;
+                            if (modoPaquetes) {
+                              titulos = (p.titulos || []).map(function(t){
+                                return '<div>' + escHtmlPaquete(t.libro) +
+                                  ' <span class="text-muted" style="font-size:.76rem;white-space:nowrap;">ISBN ' + (t.isbn ? escHtmlPaquete(t.isbn) : '—') + '</span></div>';
+                              }).join('');
+                            } else {
+                              titulos = (p.titulos || []).map(function(t){ return escHtmlPaquete(t.libro); }).join(', ');
+                            }
                             var redondeado;
                             if (p.id_paquete && adopCerrada) {
                               redondeado = (p.precio_redondeado !== null && p.precio_redondeado !== undefined) ? formatCopPaquete(p.precio_redondeado) : '<span class="text-muted">Sin definir</span>';
                             } else if (p.id_paquete) {
                               // Paquete ya guardado: se puede definir/editar el precio redondeado al vuelo.
                               var valorInput = (p.precio_redondeado !== null && p.precio_redondeado !== undefined) ? Number(p.precio_redondeado).toFixed(2) : '';
+                              var conPiso = precioConPiso && p.precio_minimo !== null && p.precio_minimo !== undefined;
                               redondeado = '<span class="precio-padre-wrap"><span class="pp-signo">$</span>' +
                                 '<input type="text" class="precio-padre-inp precio-paquete-inp" data-id-paquete="' + p.id_paquete + '" ' +
-                                'value="' + escHtmlPaquete(valorInput) + '" placeholder="Sin definir"></span>';
+                                (conPiso ? 'data-precio-minimo="' + p.precio_minimo + '" ' : '') +
+                                'data-valor-previo="' + escHtmlPaquete(valorInput) + '" ' +
+                                'value="' + escHtmlPaquete(valorInput) + '" placeholder="Sin definir"></span>' +
+                                (conPiso ? '<div class="text-muted" style="font-size:.74rem;">Mínimo ' + formatCopPaquete(p.precio_minimo) + '</div>' : '');
                             } else {
                               // Todavía no existe el paquete en BD (cambios sin guardar) — no hay dónde guardar el redondeado aún.
                               redondeado = '<span class="text-muted" title="Guarda los cambios para poder definir un precio redondeado">Guarda primero</span>';
                             }
+                            // Ficha técnica con "Paquetes" o "Ambos" (con Ambos, solo los libros marcados como Paquete).
+                            var tipoSel = $('#tipo_adop').val();
+                            var fichaLink = ((tipoSel == '2' || tipoSel == '3') && (tipoAdopGuardado === 2 || tipoAdopGuardado === 3) && p.id_paquete)
+                              ? '<br><a href="ficha_paquete.php?colegio=<?= (int)$_GET['colegio'] ?>&periodo=<?= (int)$gp_periodo['id'] ?>&paquete=' + p.id_paquete + '" target="_blank" rel="noopener" style="font-size:.76rem;"><i class="bi bi-file-earmark-richtext"></i> Ficha técnica</a>'
+                              : '';
                             html += '<tr>' +
-                              '<td><strong>' + escHtmlPaquete(p.paquete) + '</strong></td>' +
+                              '<td><strong>' + escHtmlPaquete(p.paquete) + '</strong>' + fichaLink + '</td>' +
                               '<td>' + escHtmlPaquete(p.codigo) + '</td>' +
                               '<td>' + titulos + ' <span class="text-muted">(' + p.cantidad_titulos + ')</span></td>' +
                               '<td>' + formatCopPaquete(p.precio_neto_sumado) + '</td>' +
@@ -2030,6 +2163,17 @@
                           var input = $(this);
                           var idPaquete = input.data('id-paquete');
                           var valor = input.val().trim();
+                          var valorPrevio = String(input.attr('data-valor-previo') || '');
+
+                          // Tipo de adopción "Paquetes": como máximo $1.000 por debajo del precio original
+                          // (misma regla que precio_minimo_paquete() en el servidor, que es la que manda).
+                          var minimo = input.attr('data-precio-minimo');
+                          if (minimo !== undefined && valor !== '' && !(Number(valor) >= Number(minimo))) {
+                            alert('El precio del paquete no puede ser menor a ' + formatCopPaquete(minimo) +
+                                  ' (se permite bajar como máximo $1.000 del precio original).');
+                            input.val(valorPrevio);
+                            return;
+                          }
 
                           $.ajax({
                             url: "ajax/guardar_precio_paquete.php",
@@ -2038,12 +2182,18 @@
                             dataType: "json",
                             success: function(resp){
                               if (resp && resp.ok) {
+                                input.attr('data-valor-previo', valor);
                                 $('#precio-final-paq' + idPaquete).text(formatCopPaquete(resp.precio_final));
                               } else {
+                                if (minimo !== undefined) input.val(valorPrevio);
                                 alert('No se pudo guardar el precio del paquete.');
                               }
                             },
-                            error: function(){ alert('No se pudo guardar el precio del paquete.'); }
+                            error: function(xhr){
+                              if (minimo !== undefined) input.val(valorPrevio);
+                              var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'No se pudo guardar el precio del paquete.';
+                              alert(msg);
+                            }
                           });
                         });
 
@@ -2054,7 +2204,7 @@
                             if (idp) definidos.push(idp);
                           });
                           var enPaquete = [];
-                          $('input[name="en_paquete[]"]:checked').each(function(){
+                          $('#panel-seleccion-paquete .amb-chk[data-col="paq"]:checked').each(function(){
                             enPaquete.push($(this).val());
                           });
 
@@ -2087,6 +2237,8 @@
                       <?php
                           }
 
+                          // Debe ser el ÚLTIMO campo del formulario: ver guardar_definicion.php.
+                          echo '<input type="hidden" name="form_completo" value="1">';
                           echo '</form>';
                        ?>
 

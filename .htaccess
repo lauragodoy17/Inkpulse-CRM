@@ -1,0 +1,9 @@
+# El formulario de Adopciones (ajax/tab_adopciones.php -> php/guardar_definicion.php) envía
+# ~7 campos por libro: un colegio con 150+ libros supera el límite por defecto de PHP
+# (max_input_vars = 1000) y el POST llega cortado. Solo aplica si PHP corre como módulo de Apache.
+<IfModule php_module>
+    php_value max_input_vars 10000
+</IfModule>
+<IfModule mod_php7.c>
+    php_value max_input_vars 10000
+</IfModule>

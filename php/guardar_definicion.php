@@ -6,6 +6,20 @@
 	crear_tablas_paquetes($bdd);
 	require_once(__DIR__ . "/../includes/adopcion_cerrada.php");
 
+	// Si el formulario llegó incompleto, no se guarda nada. PHP descarta los campos que
+	// pasan de max_input_vars; entonces faltan id_colegio/periodo y el guardado escribía
+	// registros con colegio/periodo vacíos. "form_completo" es el último campo del
+	// formulario (ajax/tab_adopciones.php): si no llegó, el POST se cortó.
+	if (!isset($_POST['form_completo']) || intval($_POST['id_colegio'] ?? 0) <= 0 || intval($_POST['periodo'] ?? 0) <= 0) {
+		header('Content-Type: text/html; charset=utf-8');
+		echo '<div style="font-family:sans-serif;max-width:640px;margin:60px auto;padding:24px;border:1px solid #fecaca;background:#fef2f2;border-radius:10px;color:#7f1d1d;">'
+		   . '<h3 style="margin-top:0;">No se guardaron los cambios</h3>'
+		   . '<p>El formulario de Adopciones llegó incompleto al servidor (tiene más campos de los que el servidor acepta en un solo envío), así que no se guardó nada para no dejar datos a medias.</p>'
+		   . '<p>Avísale al administrador del sistema para que aumente el límite <code>max_input_vars</code> de PHP.</p>'
+		   . '<p><a href="javascript:history.back()">&larr; Volver</a></p></div>';
+		exit;
+	}
+
 	if (adopcion_cerrada($bdd, $_POST["id_colegio"] ?? 0, $_POST["periodo"] ?? 0)) {
 		header('Location: ../colegio.php?codigo='.urlencode($_POST["codigo"] ?? '').'&periodo='.intval($_POST["periodo"] ?? 0).'&tab=adopciones');
 		exit;
@@ -194,7 +208,13 @@
 	$descripcion_canal = $_POST['descripcion'] ?? '';
 	$venta_real        = $_POST['venta_real'] ?? 0;
 	$cliente_adop      = $_POST['cliente'] ?? 0;
-	$tipo_adop			= $_POST['tipo_adop'] ?? 0;
+	// El select "Tipo de adopción" solo se muestra a Administrador/Héctor Morales
+	// (puede_usar_tipo_adopcion()). Si no vino en el formulario, el tipo guardado NO
+	// se toca: antes se sobrescribía con 0 y recalcular_paquetes_colegio() borraba
+	// los paquetes del colegio cada vez que otro usuario guardaba Adopciones.
+	$tipo_adop_enviado	= isset($_POST['tipo_adop']);
+	$tipo_adop			= (int)($_POST['tipo_adop'] ?? 0);
+	$set_tipo_adop		= $tipo_adop_enviado ? ", tipo_adop='".$tipo_adop."'" : '';
 
 	if ($num < 1 ) {
 
@@ -203,7 +223,7 @@
 	}else {
 
 		$arch_set = $hay_archivos_nuevos ? ", archivo='".$archivos_subidos[0]."', archivo2='".$archivos_subidos[1]."', archivo3='".$archivos_subidos[2]."'" : '';
-		$sql_e = "UPDATE recursos SET recurso='".$recurso."', valor_recurso='".$valor_recurso."', reintegro='".$reintegro."', valor_reintegro='".$valor_reintegro."', id_canal='".$_POST["canal"]."', descripcion_canal='".$descripcion_canal."',venta_real='".$venta_real."' , fecha='".date("Y-m-d")."', observaciones='".$_POST["observaciones"]."', cliente='".$cliente_adop."', tipo_adop='".$tipo_adop."'".$arch_set." WHERE id_colegio='".$_POST["id_colegio"]."' AND id_periodo='".$_POST["periodo"]."'";
+		$sql_e = "UPDATE recursos SET recurso='".$recurso."', valor_recurso='".$valor_recurso."', reintegro='".$reintegro."', valor_reintegro='".$valor_reintegro."', id_canal='".$_POST["canal"]."', descripcion_canal='".$descripcion_canal."',venta_real='".$venta_real."' , fecha='".date("Y-m-d")."', observaciones='".$_POST["observaciones"]."', cliente='".$cliente_adop."'".$set_tipo_adop.$arch_set." WHERE id_colegio='".$_POST["id_colegio"]."' AND id_periodo='".$_POST["periodo"]."'";
 	}
 
 	
@@ -615,13 +635,35 @@
 	// estaba adoptado antes de este guardado respeta lo que el usuario marcó/desmarcó
 	// en el panel "Selecciona los títulos para el paquete"; uno recién adoptado en
 	// este mismo guardado (no tuvo panel para elegir) entra incluido por defecto.
-	$en_paquete_marcados = array_map('intval', $_POST['en_paquete'] ?? []);
+	// Si el panel no vino en el formulario (usuario que no ve el módulo de paquetes),
+	// los títulos ya adoptados conservan su selección en vez de quedar todos en 0.
+	// La tabla "Paquete / Libro suelto" viaja como un solo campo JSON {paq:[ids], sue:[ids]}.
+	$seleccion_ambos = json_decode((string)($_POST['seleccion_ambos'] ?? ''), true);
+	$panel_seleccion_enviado = is_array($seleccion_ambos);
+	$en_paquete_marcados = array_map('intval', (array)($seleccion_ambos['paq'] ?? []));
 	$req_en_paquete = $bdd->prepare("UPDATE presupuestos SET en_paquete=? WHERE id=?");
 	foreach (($defs2 ?? []) as $id_p) {
 		$id_p = (int)$id_p;
 		$ya_estaba_antes = in_array($id_p, $defs ?? []);
+		if ($ya_estaba_antes && !$panel_seleccion_enviado) continue;
 		$en_paquete_val = $ya_estaba_antes ? (in_array($id_p, $en_paquete_marcados) ? 1 : 0) : 1;
 		$req_en_paquete->execute([$en_paquete_val, $id_p]);
+	}
+
+	// Columna "Libro suelto" de la tabla de selección de "Ambos" (presupuestos.venta_suelta),
+	// independiente de "Paquete". Solo se toca si la tabla vino en el formulario y el tipo
+	// guardado es Ambos (3); con otros tipos, o si el usuario no ve la tabla, no cambia nada.
+	// Un título recién adoptado en este guardado queda SIN marcar como suelto (0), para
+	// que el usuario lo marque explícitamente.
+	if ($panel_seleccion_enviado && $tipo_adop === 3) {
+		$venta_suelta_marcados = array_map('intval', (array)($seleccion_ambos['sue'] ?? []));
+		$req_venta_suelta = $bdd->prepare("UPDATE presupuestos SET venta_suelta=? WHERE id=?");
+		foreach (($defs2 ?? []) as $id_p) {
+			$id_p = (int)$id_p;
+			$ya_estaba_antes = in_array($id_p, $defs ?? []);
+			$venta_suelta_val = ($ya_estaba_antes && in_array($id_p, $venta_suelta_marcados)) ? 1 : 0;
+			$req_venta_suelta->execute([$venta_suelta_val, $id_p]);
+		}
 	}
 
 	recalcular_paquetes_colegio($bdd, $_POST["id_colegio"], $_POST["periodo"]);

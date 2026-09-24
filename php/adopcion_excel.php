@@ -1497,6 +1497,22 @@ $req_paq_excel->execute([$_GET["cole"], $_GET["periodo"]]);
 $paquetes_excel = $req_paq_excel->fetchAll(PDO::FETCH_ASSOC);
 
 if ($paquetes_excel) {
+	// Con Tipo de adopción "Paquetes": ISBN por libro en "Paquetes por grado" y hoja
+	// "Detalle paquetes". Con "Ambos" la hoja de paquetes queda como antes.
+	$paq_con_isbn = es_tipo_adop_paquetes(tipo_adop_guardado($bdd, $_GET["cole"], $_GET["periodo"]));
+	$fichas_excel = $paq_con_isbn ? datos_fichas_paquetes($bdd, $_GET["cole"], $_GET["periodo"]) : null;
+	$libros_por_paquete_excel = [];
+	$nombres_paquete_excel = []; // "Paquete - [Colegio] - [Grado]", igual que en las fichas técnicas
+	foreach (($fichas_excel['paquetes'] ?? []) as $fp) {
+		$libros_por_paquete_excel[$fp['id_paquete']] = $fp['libros'];
+		$nombres_paquete_excel[$fp['id_paquete']] = $fp['nombre'];
+	}
+
+	// $estilo_borde de arriba usa la clave 'style', que esta versión de PhpSpreadsheet
+	// ignora (espera 'borderStyle'); estas dos sí dibujan el borde.
+	$borde_celda_paq = ['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'BFBFBF']]]];
+	$borde_fin_curso = ['borders' => ['bottom' => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['rgb' => '000000']]]];
+
 	$req_lib_paq_excel = $bdd->prepare("SELECT l.libro FROM paquetes_colegio_libros pl JOIN libros l ON l.id=pl.id_libro WHERE pl.id_paquete=? ORDER BY l.libro ASC");
 
 	$hojaPaq = $objSpreadsheet->createSheet(1);
@@ -1507,12 +1523,15 @@ if ($paquetes_excel) {
 	$hojaPaq->getPageSetup()->setFitToWidth(1);
 	$hojaPaq->getPageSetup()->setFitToHeight(0);
 
-	$hojaPaq->mergeCells('A1:F1');
+	$ult_col_paq = $paq_con_isbn ? 'G' : 'F';
+	$hojaPaq->mergeCells('A1:' . $ult_col_paq . '1');
 	$hojaPaq->getStyle('A1')->applyFromArray($estilo_negrita);
 	$hojaPaq->getStyle('A1')->applyFromArray($estilo_centrar);
 	$hojaPaq->SetCellValue('A1', 'PAQUETES POR GRADO - ' . $cole['colegio']);
 
-	$encabezados_paq = ['Paquete', 'Código', 'Títulos incluidos', 'Precio neto (sumatoria)', 'Precio redondeado', 'Precio del paquete'];
+	$encabezados_paq = $paq_con_isbn
+		? ['Paquete', 'Código', 'Título', 'ISBN', 'Precio neto (sumatoria)', 'Precio redondeado', 'Precio del paquete']
+		: ['Paquete', 'Código', 'Títulos incluidos', 'Precio neto (sumatoria)', 'Precio redondeado', 'Precio del paquete'];
 	$col_paq = 'A';
 	foreach ($encabezados_paq as $enc) {
 		$hojaPaq->SetCellValue($col_paq . '3', $enc);
@@ -1523,6 +1542,37 @@ if ($paquetes_excel) {
 	}
 
 	$fila_paq = 4;
+	if ($paq_con_isbn) {
+		$hojaPaq->getStyle('A3:G3')->applyFromArray($borde_celda_paq);
+		// Una fila por libro (con su ISBN); paquete, código y precios combinados por curso,
+		// y un borde inferior grueso al cerrar cada curso.
+		foreach ($paquetes_excel as $paq) {
+			$libros_paq = $libros_por_paquete_excel[(int)$paq['id']] ?? [];
+			if (!$libros_paq) $libros_paq = [['libro' => '', 'isbn' => '']];
+			$fila_ini = $fila_paq;
+			foreach ($libros_paq as $lib) {
+				$hojaPaq->SetCellValue('C' . $fila_paq, $lib['libro']);
+				$hojaPaq->setCellValueExplicit('D' . $fila_paq, $lib['isbn'], DataType::TYPE_STRING);
+				$hojaPaq->getStyle('D' . $fila_paq)->getNumberFormat()->setFormatCode('@');
+				$fila_paq++;
+			}
+			$fila_fin = $fila_paq - 1;
+
+			$hojaPaq->SetCellValue('A' . $fila_ini, $nombres_paquete_excel[(int)$paq['id']] ?? $paq['paquete']);
+			// Código de 18 dígitos como texto: ver comentario de la rama sin ISBN, abajo.
+			$hojaPaq->setCellValueExplicit('B' . $fila_ini, $paq['codigo'], DataType::TYPE_STRING);
+			$hojaPaq->getStyle('B' . $fila_ini)->getNumberFormat()->setFormatCode('@');
+			$hojaPaq->SetCellValue('E' . $fila_ini, (float)$paq['precio_neto_sumado']);
+			$hojaPaq->SetCellValue('F' . $fila_ini, $paq['precio_redondeado'] !== null ? (float)$paq['precio_redondeado'] : '');
+			$hojaPaq->SetCellValue('G' . $fila_ini, (float)$paq['precio_final']);
+			if ($fila_fin > $fila_ini) {
+				foreach (['A', 'B', 'E', 'F', 'G'] as $c) $hojaPaq->mergeCells($c . $fila_ini . ':' . $c . $fila_fin);
+			}
+			$hojaPaq->getStyle('A' . $fila_ini . ':G' . $fila_fin)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+			$hojaPaq->getStyle('A' . $fila_ini . ':G' . $fila_fin)->applyFromArray($borde_celda_paq);
+			$hojaPaq->getStyle('A' . $fila_fin . ':G' . $fila_fin)->applyFromArray($borde_fin_curso);
+		}
+	} else
 	foreach ($paquetes_excel as $paq) {
 		$req_lib_paq_excel->execute([$paq['id']]);
 		$titulos_paq = implode(', ', array_column($req_lib_paq_excel->fetchAll(PDO::FETCH_ASSOC), 'libro'));
@@ -1545,13 +1595,13 @@ if ($paquetes_excel) {
 		$fila_paq++;
 	}
 
-	$hojaPaq->getStyle('A1:F' . ($fila_paq - 1))->applyFromArray($estilo_fuente);
-	foreach (range('A', 'F') as $columnID) {
+	$hojaPaq->getStyle('A1:' . $ult_col_paq . ($fila_paq - 1))->applyFromArray($estilo_fuente);
+	foreach (range('A', $ult_col_paq) as $columnID) {
 		$hojaPaq->getColumnDimension($columnID)->setAutoSize(true);
 	}
 	// Mismo formato de moneda (separador de miles + símbolo $) que usa la hoja
 	// "Presupuesto en excel" general.
-	$hojaPaq->getStyle('D4:F' . ($fila_paq - 1))
+	$hojaPaq->getStyle(($paq_con_isbn ? 'E4:G' : 'D4:F') . ($fila_paq - 1))
 		->getNumberFormat()
 		->setFormatCode('_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)');
 
@@ -1568,12 +1618,16 @@ if ($paquetes_excel) {
 		$hojaSueltos->getPageSetup()->setFitToWidth(1);
 		$hojaSueltos->getPageSetup()->setFitToHeight(0);
 
-		$hojaSueltos->mergeCells('A1:D1');
+		// Con "Ambos" un libro suelto puede estar también en el paquete: columna extra para verlo.
+		$sueltos_ambos = tipo_adop_guardado($bdd, $_GET["cole"], $_GET["periodo"]) === 3;
+		$ult_col_sueltos = $sueltos_ambos ? 'E' : 'D';
+		$hojaSueltos->mergeCells('A1:' . $ult_col_sueltos . '1');
 		$hojaSueltos->getStyle('A1')->applyFromArray($estilo_negrita);
 		$hojaSueltos->getStyle('A1')->applyFromArray($estilo_centrar);
 		$hojaSueltos->SetCellValue('A1', 'LIBROS SUELTOS - ' . $cole['colegio']);
 
 		$encabezados_sueltos = ['Grado', 'Título', 'Precio neto', 'Precio venta padre'];
+		if ($sueltos_ambos) $encabezados_sueltos[] = 'También en paquete';
 		$col_sueltos = 'A';
 		foreach ($encabezados_sueltos as $enc) {
 			$hojaSueltos->SetCellValue($col_sueltos . '3', $enc);
@@ -1589,14 +1643,15 @@ if ($paquetes_excel) {
 			$hojaSueltos->SetCellValue('B' . $fila_sueltos, $suelto['libro']);
 			$hojaSueltos->SetCellValue('C' . $fila_sueltos, (float)$suelto['precio_neto']);
 			$hojaSueltos->SetCellValue('D' . $fila_sueltos, (float)$suelto['precio_venta_padre']);
+			if ($sueltos_ambos) $hojaSueltos->SetCellValue('E' . $fila_sueltos, $suelto['en_paquete'] ? 'Sí' : 'No');
 
-			foreach (['A', 'B', 'C', 'D'] as $c) $hojaSueltos->getStyle($c . $fila_sueltos)->applyFromArray($estilo_borde);
+			foreach (range('A', $ult_col_sueltos) as $c) $hojaSueltos->getStyle($c . $fila_sueltos)->applyFromArray($estilo_borde);
 
 			$fila_sueltos++;
 		}
 
-		$hojaSueltos->getStyle('A1:D' . ($fila_sueltos - 1))->applyFromArray($estilo_fuente);
-		foreach (range('A', 'D') as $columnID) {
+		$hojaSueltos->getStyle('A1:' . $ult_col_sueltos . ($fila_sueltos - 1))->applyFromArray($estilo_fuente);
+		foreach (range('A', $ult_col_sueltos) as $columnID) {
 			$hojaSueltos->getColumnDimension($columnID)->setAutoSize(true);
 		}
 		// Mismo formato de moneda (separador de miles + símbolo $) que usa la hoja
@@ -1604,6 +1659,66 @@ if ($paquetes_excel) {
 		$hojaSueltos->getStyle('C4:D' . ($fila_sueltos - 1))
 			->getNumberFormat()
 			->setFormatCode('_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)');
+	}
+
+	// ── Hoja adicional: Detalle de paquetes con ISBN (solo con Tipo de adopción
+	// "Paquetes"): un renglón por libro de cada paquete guardado. ISBN y título
+	// salen de `libros` por el id_libro guardado en paquetes_colegio_libros. ──
+	if ($paq_con_isbn) {
+
+		// Justo después de la última hoja de paquetes creada arriba (antes de la hoja en blanco preexistente).
+		$idx_detalle = $objSpreadsheet->getIndex(isset($hojaSueltos) ? $hojaSueltos : $hojaPaq) + 1;
+		$hojaDet = $objSpreadsheet->createSheet($idx_detalle);
+		$hojaDet->setTitle("Detalle paquetes");
+		$hojaDet->getPageSetup()->setOrientation(PageSetup::ORIENTATION_LANDSCAPE);
+		$hojaDet->getPageSetup()->setPaperSize(PageSetup::PAPERSIZE_LETTER);
+		$hojaDet->getPageSetup()->setFitToPage(true);
+		$hojaDet->getPageSetup()->setFitToWidth(1);
+		$hojaDet->getPageSetup()->setFitToHeight(0);
+
+		$hojaDet->mergeCells('A1:F1');
+		$hojaDet->getStyle('A1')->applyFromArray($estilo_negrita);
+		$hojaDet->getStyle('A1')->applyFromArray($estilo_centrar);
+		$hojaDet->SetCellValue('A1', 'DETALLE DE PAQUETES - ' . $cole['colegio']);
+
+		$encabezados_det = ['Paquete', 'Código', 'ISBN', 'Título', 'Precio del libro', 'Precio del paquete'];
+		$col_det = 'A';
+		foreach ($encabezados_det as $enc) {
+			$hojaDet->SetCellValue($col_det . '3', $enc);
+			$hojaDet->getStyle($col_det . '3')->applyFromArray($estilo_negrita);
+			$hojaDet->getStyle($col_det . '3')->applyFromArray($estilo_centrar);
+			$hojaDet->getStyle($col_det . '3')->applyFromArray($borde_celda_paq);
+			$col_det++;
+		}
+
+		$fila_det = 4;
+		foreach (($fichas_excel['paquetes'] ?? []) as $paq) {
+			foreach ($paq['libros'] as $lib) {
+				$hojaDet->SetCellValue('A' . $fila_det, $paq['nombre']);
+				// Código (18 dígitos) e ISBN (13) como texto explícito: ver el comentario de la hoja "Paquetes por grado".
+				$hojaDet->setCellValueExplicit('B' . $fila_det, $paq['codigo'], DataType::TYPE_STRING);
+				$hojaDet->setCellValueExplicit('C' . $fila_det, $lib['isbn'], DataType::TYPE_STRING);
+				$hojaDet->getStyle('B' . $fila_det . ':C' . $fila_det)->getNumberFormat()->setFormatCode('@');
+				$hojaDet->SetCellValue('D' . $fila_det, $lib['libro']);
+				$hojaDet->SetCellValue('E' . $fila_det, $lib['precio']);
+				$hojaDet->SetCellValue('F' . $fila_det, $paq['precio_final']);
+
+				$hojaDet->getStyle('A' . $fila_det . ':F' . $fila_det)->applyFromArray($borde_celda_paq);
+				$fila_det++;
+			}
+			// Borde inferior grueso al cerrar cada curso, para separar visualmente los paquetes.
+			if ($paq['libros']) $hojaDet->getStyle('A' . ($fila_det - 1) . ':F' . ($fila_det - 1))->applyFromArray($borde_fin_curso);
+		}
+
+		$hojaDet->getStyle('A1:F' . max(3, $fila_det - 1))->applyFromArray($estilo_fuente);
+		foreach (range('A', 'F') as $columnID) {
+			$hojaDet->getColumnDimension($columnID)->setAutoSize(true);
+		}
+		if ($fila_det > 4) {
+			$hojaDet->getStyle('E4:F' . ($fila_det - 1))
+				->getNumberFormat()
+				->setFormatCode('_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)');
+		}
 	}
 }
 

@@ -71,6 +71,45 @@ function puede_usar_tipo_adopcion() {
 	return (($_SESSION['tipo'] ?? null) == 1) || ((int)($_SESSION['id'] ?? 0) === 69);
 }
 
+/**
+ * true si el Tipo de adopción es "Paquetes" (tipos_adopciones.id=2). Las
+ * funcionalidades exclusivas de "Paquetes" (piso del precio redondeado, ISBN en
+ * el detalle de los paquetes, fichas técnicas) solo corren con este tipo; con
+ * "Ambos" o "Libros Sueltos" todo sigue como antes.
+ */
+function es_tipo_adop_paquetes($tipo_adop) {
+	return (int)$tipo_adop === 2;
+}
+
+/**
+ * true si el Tipo de adopción genera fichas técnicas: "Paquetes" (2) y "Ambos" (3).
+ * Con "Ambos" la ficha incluye solo los libros que quedaron en el paquete.
+ */
+function tipo_adop_con_fichas($tipo_adop) {
+	return in_array((int)$tipo_adop, [2, 3], true);
+}
+
+/** Tipo de adopción guardado en `recursos` para un colegio+periodo (0 si no hay). */
+function tipo_adop_guardado(PDO $bdd, $id_colegio, $id_periodo) {
+	$req = $bdd->prepare("SELECT tipo_adop FROM recursos WHERE id_colegio=? AND id_periodo=?");
+	$req->execute([(int)$id_colegio, (int)$id_periodo]);
+	return (int)($req->fetchColumn() ?: 0);
+}
+
+/**
+ * Menor precio redondeado permitido para un paquete: como máximo $1.000 por debajo
+ * del precio original (sumatoria de precios netos), y redondeado al múltiplo de
+ * $1.000 inmediatamente superior. Ej.: 765.890 → 765.000; 675.000 → 674.000.
+ * La misma fórmula está replicada en JS en ajax/tab_adopciones.php (validación
+ * de frontend); ajax/guardar_precio_paquete.php es la validación que manda.
+ */
+function precio_minimo_paquete($precio_original) {
+	// En centavos enteros para no arrastrar errores de punto flotante.
+	$centavos = (int)round((float)$precio_original * 100) - 100000;
+	if ($centavos <= 0) return 0.0;
+	return (float)(intdiv($centavos + 99999, 100000) * 1000);
+}
+
 function crear_tablas_paquetes(PDO $bdd) {
 	$bdd->exec("CREATE TABLE IF NOT EXISTS paquetes_colegio (
 		id INT AUTO_INCREMENT PRIMARY KEY,
@@ -103,6 +142,20 @@ function crear_tablas_paquetes(PDO $bdd) {
 	// esta bandera no se consulta). Por defecto en 1 para no cambiar el
 	// comportamiento de nada existente.
 	try { $bdd->exec("ALTER TABLE presupuestos ADD COLUMN en_paquete TINYINT(1) NOT NULL DEFAULT 1"); } catch (Exception $e) {}
+	// Con Tipo de adopción "Ambos": si el título también se vende suelto (independiente
+	// de en_paquete — un título puede estar en el paquete y además venderse suelto).
+	// Con los otros tipos no se consulta. Por defecto en 0: el usuario marca
+	// explícitamente qué libros se venden sueltos.
+	try { $bdd->exec("ALTER TABLE presupuestos ADD COLUMN venta_suelta TINYINT(1) NOT NULL DEFAULT 0"); } catch (Exception $e) {}
+	// La primera versión de la columna se creó con DEFAULT 1 (todo marcado como suelto)
+	// antes de que se pidiera que arrancara vacía; se corrige una sola vez (después el
+	// default ya es 0 y esto no vuelve a correr).
+	$default_vs = $bdd->query("SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS
+	                           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'presupuestos' AND COLUMN_NAME = 'venta_suelta'")->fetchColumn();
+	if ($default_vs !== false && trim((string)$default_vs, "'") === '1') {
+		$bdd->exec("ALTER TABLE presupuestos MODIFY COLUMN venta_suelta TINYINT(1) NOT NULL DEFAULT 0");
+		$bdd->exec("UPDATE presupuestos SET venta_suelta = 0");
+	}
 }
 
 /**
@@ -142,17 +195,19 @@ function _agrupar_filas_presupuesto_por_grado(array $filas) {
 			'id_presupuesto'      => (int)$f['id_presupuesto'],
 			'id_libro'            => (int)$f['id_libro'],
 			'libro'               => $f['libro'],
+			'isbn'                => (string)$f['isbn'],
 			'precio_neto'         => $precio_neto,
 			'precio_venta_padre'  => (float)$f['precio_venta_final'],
 			'en_paquete'          => (int)$f['en_paquete'] === 1,
+			'venta_suelta'        => (int)$f['venta_suelta'] === 1,
 		];
 		$grupos[$id_grado_real]['suma'] += $precio_neto;
 	}
 	return $grupos;
 }
 
-const _SQL_COLUMNAS_TITULO_PAQUETE = "p.id AS id_presupuesto, p.id_libro, p.cod_area, p.precio, p.descuento, p.descuento_d, p.tasa_compra_d, p.en_paquete, p.precio_venta_final,
-	               l.libro, l.id_grado AS libro_grado,
+const _SQL_COLUMNAS_TITULO_PAQUETE = "p.id AS id_presupuesto, p.id_libro, p.cod_area, p.precio, p.descuento, p.descuento_d, p.tasa_compra_d, p.en_paquete, p.venta_suelta, p.precio_venta_final,
+	               l.libro, l.isbn, l.id_grado AS libro_grado,
 	               (SELECT ao.id_grado_otro FROM areas_objetivas ao
 	                WHERE ao.codigo = p.cod_area AND ao.id_colegio = p.id_colegio AND ao.id_periodo = p.id_periodo
 	                LIMIT 1) AS id_grado_otro
@@ -190,7 +245,10 @@ function titulos_por_ids_agrupados(PDO $bdd, $id_colegio, $id_periodo, array $id
 }
 
 /**
- * Títulos adoptados que NO quedaron incluidos en ningún paquete ya guardado
+ * Con Tipo de adopción "Ambos": títulos marcados como "Libro suelto"
+ * (presupuestos.venta_suelta=1), estén o no también en el paquete.
+ *
+ * Con los otros tipos: títulos adoptados que NO quedaron incluidos en ningún paquete ya guardado
  * (es decir, no aparecen en `paquetes_colegio_libros` para ningún paquete de
  * ese colegio+periodo) — los "libros sueltos". Se compara contra lo REALMENTE
  * guardado, no contra el flag `en_paquete` solo, porque con Tipo de adopción
@@ -198,7 +256,7 @@ function titulos_por_ids_agrupados(PDO $bdd, $id_colegio, $id_periodo, array $id
  * adoptado) y podría quedar en 0 de un cambio de tipo anterior sin que eso
  * signifique que el título esté realmente suelto.
  *
- * Devuelve una lista plana (no agrupada) de {grado, libro, precio_neto, precio_venta_padre},
+ * Devuelve una lista plana (no agrupada) de {grado, libro, precio_neto, precio_venta_padre, en_paquete},
  * ordenada por grado.
  */
 function titulos_sueltos(PDO $bdd, $id_colegio, $id_periodo) {
@@ -207,6 +265,10 @@ function titulos_sueltos(PDO $bdd, $id_colegio, $id_periodo) {
 
 	$grupos = titulos_adoptados_por_grado($bdd, $id_colegio, $id_periodo);
 	if (!$grupos) return [];
+
+	// Con "Ambos", "suelto" es lo que el usuario marcó en la columna "Libro suelto"
+	// (presupuestos.venta_suelta), que puede coincidir con estar en el paquete.
+	$es_ambos = tipo_adop_guardado($bdd, $id_colegio, $id_periodo) === 3;
 
 	$req_en_paq = $bdd->prepare("SELECT pl.id_presupuesto FROM paquetes_colegio_libros pl
 	                              JOIN paquetes_colegio pc ON pc.id = pl.id_paquete
@@ -223,12 +285,14 @@ function titulos_sueltos(PDO $bdd, $id_colegio, $id_periodo) {
 	foreach ($grupos as $id_grado => $g) {
 		$nombre_grado = $grados_map[$id_grado] ?? ('Grado ' . $id_grado);
 		foreach ($g['titulos'] as $t) {
-			if (isset($en_algun_paquete[$t['id_presupuesto']])) continue;
+			$en_paquete = isset($en_algun_paquete[$t['id_presupuesto']]);
+			if ($es_ambos ? !$t['venta_suelta'] : $en_paquete) continue;
 			$out[] = [
 				'grado'              => $nombre_grado,
 				'libro'              => $t['libro'],
 				'precio_neto'        => $t['precio_neto'],
 				'precio_venta_padre' => $t['precio_venta_padre'],
+				'en_paquete'         => $en_paquete,
 			];
 		}
 	}
@@ -272,7 +336,7 @@ function _armar_lista_paquetes(PDO $bdd, $id_colegio, $id_periodo, array $grupos
 
 	// Paquete ya guardado para ese grado (si existe), para no perder su id ni su
 	// precio_redondeado ni en el recálculo real ni en la previsualización.
-	$req_ex = $bdd->prepare("SELECT id, id_grado, precio_redondeado FROM paquetes_colegio WHERE id_colegio=? AND id_periodo=?");
+	$req_ex = $bdd->prepare("SELECT id, id_grado, precio_neto_sumado, precio_redondeado FROM paquetes_colegio WHERE id_colegio=? AND id_periodo=?");
 	$req_ex->execute([$id_colegio, $id_periodo]);
 	$existentes = [];
 	foreach ($req_ex->fetchAll(PDO::FETCH_ASSOC) as $e) $existentes[(int)$e['id_grado']] = $e;
@@ -297,6 +361,10 @@ function _armar_lista_paquetes(PDO $bdd, $id_colegio, $id_periodo, array $grupos
 			'precio_neto_sumado' => $suma,
 			'precio_redondeado'  => $precio_redondeado !== null ? (float)$precio_redondeado : null,
 			'precio_final'       => $precio_final,
+			// Piso del precio redondeado (solo aplica con Tipo de adopción "Paquetes",
+			// ver precio_minimo_paquete()); se calcula sobre la sumatoria YA GUARDADA,
+			// que es contra la que valida ajax/guardar_precio_paquete.php.
+			'precio_minimo'      => $existente ? precio_minimo_paquete($existente['precio_neto_sumado']) : null,
 		];
 	}
 	return $out;
@@ -476,5 +544,174 @@ function obtener_datos_reporte_paquetes(PDO $bdd, $id_periodo, $id_usuario) {
 			'libro'              => $f['libro'],
 		];
 	}
+	return $out;
+}
+
+/**
+ * Nombre del grado tal como va en el nombre de la ficha técnica
+ * ("1° Primaria", "7° Secundaria"); preescolar va con su nombre tal cual.
+ */
+function nombre_grado_ficha($id_grado, $nombre_bd) {
+	$id_grado = (int)$id_grado;
+	if ($id_grado >= 4 && $id_grado <= 8)  return ($id_grado - 3) . '° Primaria';
+	if ($id_grado >= 9 && $id_grado <= 14) return ($id_grado - 3) . '° Secundaria';
+	return (string)$nombre_bd;
+}
+
+/**
+ * Curso tal como va en el NOMBRE del paquete: solo el número ("1°", "11°"), sin
+ * Primaria/Secundaria; preescolar va con su nombre tal cual ("Jardín").
+ */
+function nombre_curso_paquete($id_grado, $nombre_bd) {
+	$id_grado = (int)$id_grado;
+	if ($id_grado >= 4 && $id_grado <= 14) return ($id_grado - 3) . '°';
+	return (string)$nombre_bd;
+}
+
+/**
+ * Datos de las fichas técnicas de los paquetes YA GUARDADOS de un colegio+periodo
+ * (o de un solo paquete si $id_paquete > 0). Libro e ISBN salen de `libros` por el
+ * id_libro guardado en `paquetes_colegio_libros` — es decir, del libro que
+ * realmente compone el paquete — y el precio de cada libro es el precio neto con
+ * el que entró a la sumatoria del paquete.
+ *
+ * Devuelve null si el Tipo de adopción guardado no es "Paquetes" ni "Ambos" (ver
+ * tipo_adop_con_fichas()); si no, {colegio, dane, periodo, paquetes:[...]}. Con
+ * "Ambos" los libros son solo los marcados como "Paquete" (los que quedaron en
+ * paquetes_colegio_libros al recalcular).
+ */
+function datos_fichas_paquetes(PDO $bdd, $id_colegio, $id_periodo, $id_paquete = 0) {
+	$id_colegio = (int)$id_colegio;
+	$id_periodo = (int)$id_periodo;
+	$id_paquete = (int)$id_paquete;
+	if ($id_colegio <= 0 || $id_periodo <= 0) return null;
+	if (!tipo_adop_con_fichas(tipo_adop_guardado($bdd, $id_colegio, $id_periodo))) return null;
+
+	$req_col = $bdd->prepare("SELECT colegio, dane FROM colegios WHERE id=?");
+	$req_col->execute([$id_colegio]);
+	$col = $req_col->fetch(PDO::FETCH_ASSOC);
+	if (!$col) return null;
+
+	$req_per = $bdd->prepare("SELECT periodo FROM periodos WHERE id=?");
+	$req_per->execute([$id_periodo]);
+	$periodo = (string)$req_per->fetchColumn();
+
+	$sql = "SELECT pc.id, pc.id_grado, g.grado, pc.codigo, pc.cantidad_titulos,
+	               pc.precio_neto_sumado, pc.precio_redondeado, pc.precio_final
+	        FROM paquetes_colegio pc
+	        LEFT JOIN grados g ON g.id = pc.id_grado
+	        WHERE pc.id_colegio = ? AND pc.id_periodo = ?";
+	$params = [$id_colegio, $id_periodo];
+	if ($id_paquete > 0) {
+		$sql .= " AND pc.id = ?";
+		$params[] = $id_paquete;
+	}
+	$sql .= " ORDER BY pc.id_grado ASC";
+	$req = $bdd->prepare($sql);
+	$req->execute($params);
+	$paquetes = $req->fetchAll(PDO::FETCH_ASSOC);
+
+	$req_lib = $bdd->prepare("SELECT l.id AS id_libro, l.libro, l.isbn, pl.precio_neto
+	                          FROM paquetes_colegio_libros pl
+	                          JOIN libros l ON l.id = pl.id_libro
+	                          WHERE pl.id_paquete = ?
+	                          ORDER BY l.libro ASC");
+
+	$out = [];
+	foreach ($paquetes as $p) {
+		$req_lib->execute([$p['id']]);
+		$libros = [];
+		foreach ($req_lib->fetchAll(PDO::FETCH_ASSOC) as $l) {
+			$libros[] = [
+				'id_libro' => (int)$l['id_libro'],
+				'libro'    => $l['libro'],
+				'isbn'     => (string)$l['isbn'],
+				'precio'   => (float)$l['precio_neto'],
+			];
+		}
+		$grado_bd = $p['grado'] ?? ('Grado ' . $p['id_grado']);
+		$grado = nombre_grado_ficha($p['id_grado'], $grado_bd);
+		$out[] = [
+			'id_paquete'         => (int)$p['id'],
+			'id_grado'           => (int)$p['id_grado'],
+			'grado'              => $grado,
+			'nombre'             => 'Paquete - ' . $col['colegio'] . ' - ' . nombre_curso_paquete($p['id_grado'], $grado_bd),
+			'codigo'             => $p['codigo'],
+			'libros'             => $libros,
+			'precio_neto_sumado' => (float)$p['precio_neto_sumado'],
+			'precio_redondeado'  => $p['precio_redondeado'] !== null ? (float)$p['precio_redondeado'] : null,
+			'precio_final'       => (float)$p['precio_final'],
+		];
+	}
+
+	return [
+		'colegio'  => $col['colegio'],
+		'dane'     => $col['dane'],
+		'periodo'  => $periodo,
+		'paquetes' => $out,
+	];
+}
+
+/**
+ * Datos de "Reporte Paquetes" en pantalla: colegios con paquetes guardados en el
+ * periodo, agrupados por la persona responsable (el usuario cuyo cod_zona es el del
+ * colegio — mismo criterio que es_colegio_eureka(): solo promotores tipo=3 y Héctor
+ * Morales id=69), cada uno con sus fichas técnicas (datos_fichas_paquetes()). Si
+ * $id_usuario > 0, solo los colegios de ese usuario.
+ *
+ * Devuelve [id_usuario => {id_usuario, usuario, colegios: [{id_colegio, colegio, dane,
+ * zona, tipo_adop, fichas}]}], ordenado por nombre de la persona y del colegio.
+ */
+function obtener_reporte_fichas_paquetes(PDO $bdd, $id_periodo, $id_usuario) {
+	$id_periodo = (int)$id_periodo;
+	$id_usuario = (int)$id_usuario;
+	if ($id_periodo <= 0) return [];
+
+	$sql = "SELECT DISTINCT co.id, co.colegio, co.cod_zona
+	        FROM paquetes_colegio pc
+	        JOIN colegios co ON co.id = pc.id_colegio
+	        WHERE pc.id_periodo = ?";
+	$params = [$id_periodo];
+	if ($id_usuario > 0) {
+		$req_u = $bdd->prepare("SELECT cod_zona FROM usuarios WHERE id=?");
+		$req_u->execute([$id_usuario]);
+		$cod_zona_usuario = $req_u->fetchColumn();
+		if ($cod_zona_usuario === false) return [];
+		$sql .= " AND co.cod_zona = ?";
+		$params[] = $cod_zona_usuario;
+	}
+	$sql .= " ORDER BY co.colegio ASC";
+	$req = $bdd->prepare($sql);
+	$req->execute($params);
+
+	$req_resp = $bdd->prepare("SELECT id, tipo, CONCAT(nombres, ' ', apellidos) AS nombre FROM usuarios WHERE cod_zona = ? LIMIT 1");
+	$cache_resp = [];
+	$out = [];
+	foreach ($req->fetchAll(PDO::FETCH_ASSOC) as $c) {
+		$cz = trim((string)$c['cod_zona']);
+		if ($cz === '' || $cz === '0') continue;
+		if (!array_key_exists($cz, $cache_resp)) {
+			$req_resp->execute([$cz]);
+			$cache_resp[$cz] = $req_resp->fetch(PDO::FETCH_ASSOC) ?: null;
+		}
+		$resp = $cache_resp[$cz];
+		if (!$resp || !((int)$resp['tipo'] === 3 || (int)$resp['id'] === 69)) continue;
+
+		$fichas = datos_fichas_paquetes($bdd, $c['id'], $id_periodo);
+		if (!$fichas || !$fichas['paquetes']) continue;
+
+		$info = resolver_empresa_colegio($bdd, $cz);
+		$uid = (int)$resp['id'];
+		if (!isset($out[$uid])) $out[$uid] = ['id_usuario' => $uid, 'usuario' => trim($resp['nombre']), 'colegios' => []];
+		$out[$uid]['colegios'][] = [
+			'id_colegio' => (int)$c['id'],
+			'colegio'    => $fichas['colegio'],
+			'dane'       => $fichas['dane'],
+			'zona'       => $info['zona'] ?? '',
+			'tipo_adop'  => tipo_adop_guardado($bdd, $c['id'], $id_periodo),
+			'fichas'     => $fichas,
+		];
+	}
+	uasort($out, function ($a, $b) { return strcasecmp($a['usuario'], $b['usuario']); });
 	return $out;
 }
