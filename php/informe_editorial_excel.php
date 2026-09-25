@@ -52,6 +52,7 @@ $periodoLabel = resolver_temporada_informe_editorial($bdd, $idPeriodo)['labelCom
 
 $datos = obtener_datos_informe_editorial($bdd, $idPeriodo);
 $asesores = $datos['asesores'];
+asegurar_snapshot_semanal_informe_editorial($bdd, $idPeriodo);
 $ultimo = obtener_ultimo_snapshot_informe_editorial($bdd, $idPeriodo);
 // Presupuesto por temporada ya guardado (ver reporte_editorial.php) — se precarga en la columna K
 // en vez de dejarla en blanco, para no tener que volver a escribirlo cada semana. Pedido por el
@@ -260,9 +261,9 @@ foreach ($asesores as $a) {
 
     // $cumpTotal sigue haciendo falta en PHP para la flecha de variación (Q, comparada contra el
     // snapshot guardado) y para el color inicial de Meta (R) — son estilos fijos que reflejan el
-    // estado "recién generado" (igual a lo que muestra O mientras K siga vacío) y no se
-    // recalculan solos si alguien llena K a mano después.
-    $cumpTotal = cumplimiento_informe_editorial($adop['total'], $pres['total']);
+    // estado "recién generado" (igual a lo que muestra O con el K precargado) y no se
+    // recalculan solos si alguien cambia K a mano después.
+    $cumpTotal = cumplimiento_informe_editorial($adop['total'], $valorGuardadoK ?? $pres['total']);
 
     $cumpAnterior = $ultimo['porAsesor'][$a['id_usuario']]['cumplimiento'] ?? null;
     $hoja->setCellValue("P{$fila}", $cumpAnterior !== null ? $cumpAnterior / 100 : '—');

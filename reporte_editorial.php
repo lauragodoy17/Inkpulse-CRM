@@ -15,6 +15,7 @@ asegurar_fechas_periodos($bdd);
 $infoPeriodos = obtener_periodo_activo($bdd);
 $idPeriodo = isset($_GET['periodo']) && $_GET['periodo'] !== '' ? (int)$_GET['periodo'] : $infoPeriodos['periodoActivo'];
 
+asegurar_snapshot_semanal_informe_editorial($bdd, $idPeriodo);
 $ultimo = obtener_ultimo_snapshot_informe_editorial($bdd, $idPeriodo);
 $fechaUltimo = $ultimo['fecha'] ? date('d/m/Y', strtotime($ultimo['fecha'])) : null;
 

@@ -107,6 +107,11 @@ function asegurar_tabla_informe_editorial_snapshots($bdd) {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_fecha_periodo_usuario (fecha, id_periodo, id_usuario)
     )");
+    // "Presupuesto asignado por temporada" vigente al tomar la foto (NULL si no había). El
+    // TOTAL CUMPLIMIENTO del Excel se calcula contra ese valor cuando existe, así que la foto
+    // tiene que usar el mismo denominador para que "Último informe" sea comparable (reportado
+    // 2026-09-25: Bernardo salía 10,69% en la foto contra 128% en el cumplimiento actual).
+    try { $bdd->exec("ALTER TABLE informe_editorial_snapshots ADD COLUMN presupuesto_temporada DECIMAL(14,2) NULL DEFAULT NULL"); } catch (Exception $e) {}
 }
 
 /**
@@ -366,22 +371,44 @@ function guardar_snapshot_informe_editorial($bdd, $idPeriodo) {
     $datos = obtener_datos_informe_editorial($bdd, $idPeriodo);
     if (empty($datos['asesores'])) return 0;
 
+    $presTemporada = obtener_presupuesto_temporada_informe_editorial($bdd, $idPeriodo);
+
     $hoy = date('Y-m-d');
     $stmt = $bdd->prepare("INSERT INTO informe_editorial_snapshots
             (fecha, id_periodo, id_usuario, adopcion_eureka, adopcion_mcgraw, adopcion_otra,
-             presupuesto_eureka, presupuesto_mcgraw, presupuesto_otra)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             presupuesto_eureka, presupuesto_mcgraw, presupuesto_otra, presupuesto_temporada)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             adopcion_eureka = VALUES(adopcion_eureka), adopcion_mcgraw = VALUES(adopcion_mcgraw), adopcion_otra = VALUES(adopcion_otra),
-            presupuesto_eureka = VALUES(presupuesto_eureka), presupuesto_mcgraw = VALUES(presupuesto_mcgraw), presupuesto_otra = VALUES(presupuesto_otra)");
+            presupuesto_eureka = VALUES(presupuesto_eureka), presupuesto_mcgraw = VALUES(presupuesto_mcgraw), presupuesto_otra = VALUES(presupuesto_otra),
+            presupuesto_temporada = VALUES(presupuesto_temporada)");
     foreach ($datos['asesores'] as $a) {
         $stmt->execute([
             $hoy, $idCanonico, $a['id_usuario'],
             $a['adopcion']['eureka'], $a['adopcion']['mcgraw'], $a['adopcion']['otra'],
             $a['presupuesto']['eureka'], $a['presupuesto']['mcgraw'], $a['presupuesto']['otra'],
+            $presTemporada[$a['id_usuario']] ?? null,
         ]);
     }
     return count($datos['asesores']);
+}
+
+/**
+ * Respaldo del cron semanal: si hoy es viernes y todavía no hay foto de hoy para la temporada, la
+ * guarda al abrir el informe o descargar el Excel. El Programador de tareas de Windows nunca se
+ * llegó a configurar (reportado 2026-09-25: las columnas "Último informe" / "Variación" salían
+ * vacías), así que la foto semanal no puede depender solo de él. Si el cron sí corre, su
+ * guardado de las 9am sobrescribe este (ON DUPLICATE KEY UPDATE). No afecta la comparación del
+ * mismo día: obtener_ultimo_snapshot_informe_editorial() solo mira fechas anteriores a hoy.
+ */
+function asegurar_snapshot_semanal_informe_editorial($bdd, $idPeriodo) {
+    if ((int)date('N') !== 5) return;
+    asegurar_tabla_informe_editorial_snapshots($bdd);
+    $idCanonico = resolver_temporada_informe_editorial($bdd, $idPeriodo)['idCanonico'];
+    $stmt = $bdd->prepare("SELECT 1 FROM informe_editorial_snapshots WHERE id_periodo = ? AND fecha = CURDATE() LIMIT 1");
+    $stmt->execute([$idCanonico]);
+    if ($stmt->fetchColumn()) return;
+    guardar_snapshot_informe_editorial($bdd, $idPeriodo);
 }
 
 /**
@@ -404,13 +431,17 @@ function obtener_ultimo_snapshot_informe_editorial($bdd, $idPeriodo) {
     if (!$fecha) return ['fecha' => null, 'porAsesor' => []];
 
     $stmt = $bdd->prepare("SELECT id_usuario, adopcion_eureka, adopcion_mcgraw, adopcion_otra,
-                                   presupuesto_eureka, presupuesto_mcgraw, presupuesto_otra
+                                   presupuesto_eureka, presupuesto_mcgraw, presupuesto_otra, presupuesto_temporada
                             FROM informe_editorial_snapshots WHERE id_periodo = ? AND fecha = ?");
     $stmt->execute([$idCanonico, $fecha]);
     $porAsesor = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $adopTotal = $row['adopcion_eureka'] + $row['adopcion_mcgraw'] + $row['adopcion_otra'];
-        $presTotal = $row['presupuesto_eureka'] + $row['presupuesto_mcgraw'] + $row['presupuesto_otra'];
+        // Mismo denominador que el TOTAL CUMPLIMIENTO del Excel: presupuesto por temporada si
+        // estaba guardado al tomar la foto; si no, el presupuesto cargado en el CRM.
+        $presTotal = $row['presupuesto_temporada'] !== null
+            ? (float)$row['presupuesto_temporada']
+            : $row['presupuesto_eureka'] + $row['presupuesto_mcgraw'] + $row['presupuesto_otra'];
         $porAsesor[(int)$row['id_usuario']] = [
             'cumplimiento' => $presTotal > 0 ? ($adopTotal / $presTotal) * 100 : null,
         ];
