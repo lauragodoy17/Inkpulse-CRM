@@ -8,7 +8,7 @@ $tp = intval($_GET['tp'] ?? 2);
 $status_cfg = [
   2 => ['label'=>'Pendientes',  'badge'=>'lm-badge-yellow', 'icon'=>'bi-hourglass-split'],
   3 => ['label'=>'Aprobados',   'badge'=>'lm-badge-green',  'icon'=>'bi-check-circle-fill'],
-  4 => ['label'=>'Enviado',    'badge'=>'lm-badge-green',    'icon'=>'bi-truck'],
+  4 => ['label'=>'Entregados', 'badge'=>'lm-badge-green',    'icon'=>'bi-truck'],
   5 => ['label'=>'Anulados',    'badge'=>'lm-badge-red',    'icon'=>'bi-x-circle-fill'],
   6 => ['label'=>'Procesando',  'badge'=>'lm-badge-blue',   'icon'=>'bi-shuffle'],
   7 => ['label'=>'Facturación',    'badge'=>'lm-badge-yellow',    'icon'=>'bi-file-earmark-text'],
@@ -43,10 +43,10 @@ $bulk_cfg = [
         'endpoint' => 'php/generar_lote_despacho_muestreo.php', 'download' => false,
         'confirm_title' => '¿Pasar a En despacho?',
         'confirm_text'  => 'Los muestreos seleccionados pasarán a estado "En despacho".'],
-  8 => ['label' => 'Marcar como Despachado', 'icon' => 'bi-truck',
+  8 => ['label' => 'Marcar como Entregado', 'icon' => 'bi-truck',
         'endpoint' => 'php/generar_lote_entrega_muestreo.php', 'download' => false,
-        'confirm_title' => '¿Marcar como Despachado?',
-        'confirm_text'  => 'Los muestreos seleccionados quedarán marcados como "Despachado".'],
+        'confirm_title' => '¿Marcar como Entregado?',
+        'confirm_text'  => 'Los muestreos seleccionados quedarán marcados como "Entregado".'],
 ];
 
 // tp=6 (Procesando): cuántos muestreos quedaron guardados en

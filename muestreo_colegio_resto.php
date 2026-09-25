@@ -6,7 +6,7 @@
   <?php
     if (isset($_GET["id_pedido"])) {
       if ($_GET["tp"] == 3)      echo '<title>Inkpulse - Muestreo aprobado</title>';
-      elseif ($_GET["tp"] == 4)  echo '<title>Inkpulse - Muestreo despachado</title>';
+      elseif ($_GET["tp"] == 4)  echo '<title>Inkpulse - Muestreo entregado</title>';
       elseif ($_GET["tp"] == 6)  echo '<title>Inkpulse - Muestreo procesando</title>';
       elseif ($_GET["tp"] == 7)  echo '<title>Inkpulse - Muestreo en facturación</title>';
       else                       echo '<title>Inkpulse - Muestreo anulado</title>';
@@ -198,7 +198,7 @@
           // ── Título y breadcrumb por tp ───────────────────────────
           if (isset($_GET["id_pedido"])) {
             if ($_GET["tp"] == 3)     { $titulo = 'Muestreo aprobado';   $bc = 'Aprobado';   $icon = 'bi-check-circle-fill'; $icon_color = '#15803d'; }
-            elseif ($_GET["tp"] == 4) { $titulo = 'Muestreo despachado'; $bc = 'Despachado'; $icon = 'bi-truck';             $icon_color = '#1d4ed8'; }
+            elseif ($_GET["tp"] == 4) { $titulo = 'Muestreo entregado'; $bc = 'Entregado'; $icon = 'bi-truck';             $icon_color = '#1d4ed8'; }
             elseif ($_GET["tp"] == 6) { $titulo = 'Muestreo procesando'; $bc = 'Procesando'; $icon = 'bi-shuffle';             $icon_color = '#1d4ed8'; }
             elseif ($_GET["tp"] == 7) { $titulo = 'Muestreo en facturación'; $bc = 'Facturación'; $icon = 'bi-file-earmark-text';             $icon_color = '#1d4ed8'; }
             elseif ($_GET["tp"] == 8) { $titulo = 'Muestreo en despacho'; $bc = 'En despacho'; $icon = 'bi-box-seam';         $icon_color = '#7c3aed'; }
@@ -212,7 +212,7 @@
           // para todos los estados desde Aprobado en adelante.
           require_once(__DIR__ . "/includes/historial_estados.php");
           $tp_estado_map   = [3 => 2, 4 => 4, 5 => 3, 6 => 5, 7 => 6, 8 => 7];
-          $tp_estado_label = [3 => 'Aprobado', 4 => 'Despachado', 5 => 'Anulado', 6 => 'Procesando', 7 => 'Facturación', 8 => 'En despacho'];
+          $tp_estado_label = [3 => 'Aprobado', 4 => 'Entregado', 5 => 'Anulado', 6 => 'Procesando', 7 => 'Facturación', 8 => 'En despacho'];
           $procesado_info  = null;
           if (isset($_GET['id_pedido']) && isset($tp_estado_map[intval($_GET['tp'] ?? 0)])) {
             crear_tabla_historial_estados($bdd);
@@ -541,7 +541,7 @@
             </button>
           <?php elseif (isset($_GET["id_pedido"]) && $_GET["tp"] == 8): ?>
             <button type="button" id="entregar" class="mc-btn mc-btn-green">
-              <i class="bi bi-truck"></i> Despachar
+              <i class="bi bi-truck"></i> Marcar como Entregado
             </button>
           <?php endif; ?>
         </div>
@@ -559,10 +559,10 @@
     $("#entregar").click(function(){
       var factura = $("#factura").val();
       inkConfirm({
-        title: '¿Despachar este muestreo?',
-        text:  'El muestreo pasará al estado Despachado.',
+        title: '¿Marcar este muestreo como entregado?',
+        text:  'El muestreo pasará al estado Entregado.',
         type:  'info',
-        btnOk: 'Sí, despachar'
+        btnOk: 'Sí, entregado'
       }, function(){
         window.location = "php/accion_muestreo.php?entregado=<?= $_GET['id_pedido'] ?? '' ?>&factura=" + factura;
       });

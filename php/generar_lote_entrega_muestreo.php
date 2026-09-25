@@ -1,7 +1,7 @@
 <?php
 /**
  * Acción masiva desde lista_muestreo.php?tp=8 (En despacho): marca los
- * muestreos seleccionados como "Despachado" (estado=4). Mismo patrón que
+ * muestreos seleccionados como "Entregado" (estado=4). Mismo patrón que
  * php/generar_lote_entrega.php (pedidos con adopción).
  */
 require_once("../php/aut.php");
@@ -35,7 +35,7 @@ if (($_SESSION['tipo'] ?? null) != 10) {
     }));
 }
 
-if (empty($rows)) lem_redirect('error', 'Ninguno de los muestreos seleccionados está disponible para marcar como despachado.');
+if (empty($rows)) lem_redirect('error', 'Ninguno de los muestreos seleccionados está disponible para marcar como entregado.');
 
 $bdd->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 crear_tabla_historial_estados($bdd);
@@ -63,7 +63,7 @@ try {
     $bdd->commit();
 } catch (Exception $e) {
     if ($bdd->inTransaction()) $bdd->rollBack();
-    lem_redirect('error', 'Error al marcar como despachado: ' . $e->getMessage());
+    lem_redirect('error', 'Error al marcar como entregado: ' . $e->getMessage());
 }
 
-lem_redirect('ok', $n . ' muestreo(s) marcado(s) como Despachado.');
+lem_redirect('ok', $n . ' muestreo(s) marcado(s) como Entregado.');

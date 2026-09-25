@@ -46,6 +46,6 @@
     $req = $bdd->prepare($sql);
     $req->execute();
     registrar_historial_estado($bdd, 'muestreos', $_GET["entregado"], 4, $id_usuario_accion);
-    header("location: ../lista_muestreo.php?tp=8&ink_status=ok&ink_msg=".urlencode('Muestreo despachado correctamente.'));
+    header("location: ../lista_muestreo.php?tp=8&ink_status=ok&ink_msg=".urlencode('Muestreo entregado correctamente.'));
   }
 ?>

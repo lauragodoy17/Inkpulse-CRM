@@ -33,7 +33,7 @@ $estado_badge = [
   1 => 'eb-1', // Pendiente  → amarillo
   2 => 'eb-2', // Aprobado   → verde
   3 => 'eb-3', // Anulado    → rojo
-  4 => 'eb-4', // Despachado → azul
+  4 => 'eb-4', // Entregado → azul
 ];
 ?>
 <!DOCTYPE html>
