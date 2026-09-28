@@ -249,6 +249,12 @@ if ($n_cole > 0) {
         </div>
       </div>
 
+      <?php if ($eid == 3) {
+        require_once(__DIR__ . "/includes/historial_estados.php");
+        crear_tabla_historial_estados($bdd);
+        echo html_motivo_anulacion(obtener_historial_estado($bdd, 'devoluciones_v', $id_pedido, ESTADO_ANULADO), 'Devolución anulada');
+      } ?>
+
       <!-- Info cards -->
       <div class="mc-cards">
         <div class="mc-card">
@@ -514,11 +520,10 @@ $(document).ready(function () {
 });
 
 $('#rechazar').on('click', function () {
-  inkConfirm({
-    type: 'danger', title: '¿Anular devolución?',
-    text: 'Esta acción no se puede deshacer.', btnOk: 'Sí, anular'
-  }, function () {
-    window.location = 'php/accion_devol_v.php?rechazar=<?= $id_pedido ?>&tipo=<?= intval($_GET['tipo'] ?? 0) ?>';
+  inkMotivoAnulacion({
+    title: '¿Anular devolución?', text: 'Esta acción no se puede deshacer.', btnOk: 'Sí, anular'
+  }, function (motivo) {
+    window.location = 'php/accion_devol_v.php?rechazar=<?= intval($id_pedido) ?>&tipo=<?= intval($_GET['tipo'] ?? 0) ?>&motivo=' + encodeURIComponent(motivo);
   });
 });
 
@@ -567,5 +572,6 @@ window.addEventListener('beforeprint', function () {
 });
 <?php endif; ?>
 </script>
+<script src="src/motivo-anulacion.js"></script>
 </body>
 </html>

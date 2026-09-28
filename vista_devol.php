@@ -268,6 +268,12 @@ if (isset($n_op['estado']) && $n_op['estado'] == 2) {
         </div>
       </div>
 
+      <?php if ($eid == 3) {
+        require_once(__DIR__ . "/includes/historial_estados.php");
+        crear_tabla_historial_estados($bdd);
+        echo html_motivo_anulacion(obtener_historial_estado($bdd, $tipo == 1 ? 'devoluciones' : 'devoluciones_prov', $id_devol, ESTADO_ANULADO), 'Devolución anulada');
+      } ?>
+
       <!-- Info cards -->
       <div class="mc-cards">
         <div class="mc-card">
@@ -602,13 +608,12 @@ if (isset($n_op['estado']) && $n_op['estado'] == 2) {
 <script src="src/ink-alerts.js"></script>
 <script>
   $("#rechazar").click(function(){
-    inkConfirm({
-      type: 'danger',
+    inkMotivoAnulacion({
       title: '¿Anular devolución?',
       text: 'Esta acción no se puede deshacer.',
       btnOk: 'Sí, anular'
-    }, function(){
-      window.location = "php/accion_devol.php?rechazar=<?= $id_devol ?>&tipo=<?= $tipo ?>";
+    }, function(motivo){
+      window.location = "php/accion_devol.php?rechazar=<?= intval($id_devol) ?>&tipo=<?= intval($tipo) ?>&motivo=" + encodeURIComponent(motivo);
     });
   });
 
@@ -747,5 +752,6 @@ if (isset($n_op['estado']) && $n_op['estado'] == 2) {
   <?php endforeach; ?>
 </script>
 <script src="src/contador-caracteres.js"></script>
+<script src="src/motivo-anulacion.js"></script>
 </body>
 </html>

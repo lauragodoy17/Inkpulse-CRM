@@ -456,13 +456,13 @@
   <script src="vendors/scripts/layout-settings.js"></script>
   <script>
     $("#rechazar").click(function(){
-      inkConfirm({
+      inkMotivoAnulacion({
         title: '¿Rechazar este muestreo?',
         text:  'El muestreo pasará al estado Rechazado.',
-        type:  'danger',
+        label: 'Motivo del rechazo',
         btnOk: 'Sí, rechazar'
-      }, function(){
-        window.location = "php/accion_muestreo.php?rechazar=<?= $_GET['id_pedido'] ?? '' ?>";
+      }, function(motivo){
+        window.location = "php/accion_muestreo.php?rechazar=<?= intval($_GET['id_pedido'] ?? 0) ?>&motivo=" + encodeURIComponent(motivo);
       });
     });
 
@@ -494,5 +494,6 @@
   </script>
 <script src="src/ink-alerts.js"></script>
 <script src="src/contador-caracteres.js"></script>
+<script src="src/motivo-anulacion.js"></script>
 </body>
 </html>

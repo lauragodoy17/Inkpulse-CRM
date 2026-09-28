@@ -375,6 +375,11 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
         </div>
       </div>
 
+      <?php if (intval($pedido['eid'] ?? 0) == ESTADO_ANULADO) {
+        crear_tabla_historial_estados($bdd);
+        echo html_motivo_anulacion(obtener_historial_estado($bdd, 'pedidos', $id_pedido, ESTADO_ANULADO), 'Pedido anulado');
+      } ?>
+
       <center id="impre"></center>
 
       <?php if ($show_stock): ?>
@@ -700,13 +705,13 @@ window.addEventListener('afterprint', function () {
 $('#imprimir').on('click', function () { window.print(); });
 
 $('#rechazar').on('click', function () {
-  inkConfirm({
+  inkMotivoAnulacion({
     title: '¿<?= $rechazar_label ?> este pedido?',
     text:  'Esta acción no se puede deshacer.',
-    type:  'danger',
+    label: 'Motivo <?= $rechazar_label === 'Rechazar' ? 'del rechazo' : 'de la anulación' ?>',
     btnOk: 'Sí, <?= strtolower($rechazar_label) ?>'
-  }, function () {
-    window.location = 'php/accion_pedidos.php?rechazar=<?= $id_pedido ?>';
+  }, function (motivo) {
+    window.location = 'php/accion_pedidos.php?rechazar=<?= intval($id_pedido) ?>&motivo=' + encodeURIComponent(motivo);
   });
 });
 $('#entregar').on('click', function () {
@@ -788,5 +793,6 @@ $('#btn-aprobar').on('click', function () {
 </script>
 <script src="src/ink-alerts.js"></script>
 <script src="src/contador-caracteres.js"></script>
+<script src="src/motivo-anulacion.js"></script>
 </body>
 </html>

@@ -329,6 +329,11 @@
         </div>
         <?php endif; ?>
 
+        <?php if (isset($_GET['id_pedido']) && intval($_GET['tp'] ?? 0) == 5) {
+          crear_tabla_historial_estados($bdd);
+          echo html_motivo_anulacion(obtener_historial_estado($bdd, 'muestreos', intval($_GET['id_pedido']), ESTADO_ANULADO), 'Muestreo anulado');
+        } ?>
+
         <!-- Tarjetas informativas -->
         <div class="mc-cards">
           <div class="mc-card">
@@ -580,13 +585,12 @@
     });
 
     $("#rechazar").click(function(){
-      inkConfirm({
+      inkMotivoAnulacion({
         title: '¿Anular este muestreo?',
         text:  'Esta acción no se puede deshacer.',
-        type:  'danger',
         btnOk: 'Sí, anular'
-      }, function(){
-        window.location = "php/accion_muestreo.php?rechazar=<?= $_GET['id_pedido'] ?? '' ?>";
+      }, function(motivo){
+        window.location = "php/accion_muestreo.php?rechazar=<?= intval($_GET['id_pedido'] ?? 0) ?>&motivo=" + encodeURIComponent(motivo);
       });
     });
 
@@ -631,5 +635,6 @@
     });
   </script>
 <script src="src/ink-alerts.js"></script>
+<script src="src/motivo-anulacion.js"></script>
 </body>
 </html>

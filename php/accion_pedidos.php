@@ -16,11 +16,17 @@ $id_usuario_accion = intval($_SESSION['id'] ?? 0);
 try {
     if (isset($_GET['rechazar'])) {
         $id = intval($_GET['rechazar']);
-        $bdd->prepare("UPDATE pedidos SET estado = '3' WHERE id = ?")->execute([$id]);
-        registrar_historial_estado($bdd, 'pedidos', $id, 3, $id_usuario_accion);
-        $titulo   = '¡Pedido rechazado!';
-        $mensaje  = "El pedido #$id fue rechazado/anulado correctamente.";
-        $redirect = '../lista_pedidos.php?tp=2';
+        // El motivo es obligatorio (se pide en la ventana de anulación de pedido_colegio.php).
+        $motivo = leer_motivo_anulacion($_GET['motivo'] ?? '');
+        if ($motivo === '') {
+            $error = 'Para anular o rechazar el pedido debes escribir el motivo. No se hizo ningún cambio.';
+        } else {
+            $bdd->prepare("UPDATE pedidos SET estado = '3' WHERE id = ?")->execute([$id]);
+            registrar_historial_estado($bdd, 'pedidos', $id, ESTADO_ANULADO, $id_usuario_accion, $motivo);
+            $titulo   = '¡Pedido rechazado!';
+            $mensaje  = "El pedido #$id fue rechazado/anulado correctamente.";
+            $redirect = '../lista_pedidos.php?tp=2';
+        }
 
     } elseif (isset($_GET['aprobar'])) {
         $id = intval($_GET['aprobar']);

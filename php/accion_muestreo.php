@@ -8,9 +8,16 @@
 
   if (isset($_GET["rechazar"])) {
     $id_rechazar = intval($_GET["rechazar"]);
+    // El motivo es obligatorio (se pide en la ventana de anulación del muestreo).
+    $motivo = leer_motivo_anulacion($_GET["motivo"] ?? '');
+    if ($motivo === '') {
+      $volver = $_SERVER['HTTP_REFERER'] ?? '../lista_muestreo.php?tp=2';
+      header("location: " . $volver . (strpos($volver, '?') === false ? '?' : '&') . "ink_status=error&ink_msg=" . urlencode('Para anular el muestreo debes escribir el motivo. No se hizo ningún cambio.'));
+      exit;
+    }
     $req = $bdd->prepare("UPDATE muestreos SET estado='3' WHERE id=?");
     $req->execute([$id_rechazar]);
-    registrar_historial_estado($bdd, 'muestreos', $id_rechazar, 3, $id_usuario_accion);
+    registrar_historial_estado($bdd, 'muestreos', $id_rechazar, ESTADO_ANULADO, $id_usuario_accion, $motivo);
     header("location: ../lista_muestreo.php?tp=2&ink_status=ok&ink_msg=".urlencode('Muestreo rechazado correctamente.'));
 
   } elseif (isset($_GET["aprobar"])) {
