@@ -216,7 +216,7 @@ $mostrar_tipo = ($_SESSION['tipo'] == 3 || $_SESSION['zona'] == '5656');
           </div>
           <div class="px-4 py-3">
             <textarea name="observaciones" id="observaciones" class="form-control" rows="4"
-              placeholder="Sin observaciones..."></textarea>
+              placeholder="Sin observaciones..." maxlength="300" data-contador></textarea>
           </div>
         </div>
 
@@ -291,5 +291,6 @@ window.addEventListener('afterprint', function () {
   });
 });
 </script>
+<script src="src/contador-caracteres.js"></script>
 </body>
 </html>

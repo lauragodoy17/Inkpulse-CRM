@@ -535,7 +535,7 @@ if (isset($n_op['estado']) && $n_op['estado'] == 2) {
           </div>
           <div class="px-4 py-3">
             <textarea name="observaciones" id="observaciones" class="form-control" rows="3"
-              placeholder="Sin observaciones..."><?= htmlspecialchars($pedido['observaciones']) ?></textarea>
+              placeholder="Sin observaciones..." maxlength="300" data-contador><?= htmlspecialchars($pedido['observaciones']) ?></textarea>
           </div>
         </div>
 
@@ -746,5 +746,6 @@ if (isset($n_op['estado']) && $n_op['estado'] == 2) {
   <?php endif; ?>
   <?php endforeach; ?>
 </script>
+<script src="src/contador-caracteres.js"></script>
 </body>
 </html>

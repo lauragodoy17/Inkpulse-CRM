@@ -608,7 +608,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
         <!-- Observaciones -->
         <div class="mc-obs-wrap">
           <p class="mc-obs-label"><i class="bi bi-chat-text"></i> Observaciones</p>
-          <textarea name="observaciones" id="observaciones"><?= htmlspecialchars($pedido['observaciones'] ?? '') ?></textarea>
+          <textarea name="observaciones" id="observaciones" maxlength="300" data-contador><?= htmlspecialchars($pedido['observaciones'] ?? '') ?></textarea>
         </div>
 
         <!-- Acciones -->
@@ -885,5 +885,6 @@ $('#btn-aprobar').on('click', function () {
   }
 });
 </script>
+<script src="src/contador-caracteres.js"></script>
 </body>
 </html>

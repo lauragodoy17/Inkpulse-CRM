@@ -316,7 +316,7 @@
               <div class="col-md-8 col-12">
                 <div class="form-group mb-3">
                   <label for="observaciones" class="control-label">Observaciones</label>
-                  <textarea name="observaciones" id="observaciones" class="form-control" rows="3" placeholder="Escribe observaciones opcionales..."></textarea>
+                  <textarea name="observaciones" id="observaciones" class="form-control" rows="3" placeholder="Escribe observaciones opcionales..." maxlength="300" data-contador></textarea>
                 </div>
               </div>
             </div>
@@ -492,5 +492,6 @@
   });
 </script>
 
+<script src="src/contador-caracteres.js"></script>
 </body>
 </html>

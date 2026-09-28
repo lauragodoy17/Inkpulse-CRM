@@ -268,7 +268,7 @@ $materias = $req->fetchAll();
               <div class="col-md-8 col-12">
                 <div class="form-group">
                   <label for="observaciones" class="control-label">Observaciones</label>
-                  <textarea name="observaciones" id="observaciones" rows="4" class="form-control"></textarea>
+                  <textarea name="observaciones" id="observaciones" rows="4" class="form-control" maxlength="300" data-contador></textarea>
                 </div>
               </div>
             </div>
@@ -522,5 +522,6 @@ $materias = $req->fetchAll();
     $('#miFormulario').submit();
   });
 </script>
+<script src="src/contador-caracteres.js"></script>
 </body>
 </html>

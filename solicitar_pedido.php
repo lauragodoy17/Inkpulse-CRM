@@ -393,7 +393,7 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
               </div>
               <div class="sop-field sop-full">
                 <label class="sop-label">Observaciones</label>
-                <textarea class="sop-textarea" name="observaciones" id="observaciones" placeholder="Escribe las observaciones..."></textarea>
+                <textarea class="sop-textarea" name="observaciones" id="observaciones" placeholder="Escribe las observaciones..." maxlength="300" data-contador></textarea>
               </div>
             </div>
 
@@ -480,5 +480,6 @@ $('form[action="php/pedido.php"]').on('submit', function () {
   });
 });
 </script>
+<script src="src/contador-caracteres.js"></script>
 </body>
 </html>
