@@ -111,6 +111,79 @@ function listar_recibos_caja_wo($pagina = 0, $registrosPorPagina = 20) {
     return hacer_peticion_api_ventas('/contabilidad/filtrarPaginado', $cuerpo);
 }
 
+/**
+ * Órdenes de compra (documentoTipo "OC"): mismo host y misma ruta que las devoluciones de venta
+ * (`/ventas/filtrarPaginado`), verificado en vivo 2026-09-28. Ojo: "FC" en esa misma ruta es
+ * FACTURA de compra (175 docs: editoriales, servicios como COMCEL/UNE, compras menores "DSEL"),
+ * no orden de compra; el usuario eligió listar solo OC.
+ */
+function listar_ordenes_compra_wo($pagina = 0, $registrosPorPagina = 100) {
+    $cuerpo = [
+        "columnaOrdenar" => "id",
+        "pagina" => (int)$pagina,
+        "registrosPorPagina" => (int)$registrosPorPagina,
+        "orden" => "DESC",
+        "filtros" => [[
+            "atributo" => "documentoTipo.codigoDocumento", "valor" => "OC", "valor2" => null,
+            "tipoFiltro" => 0, "tipoDato" => 0, "nombreColumna" => null, "valores" => null,
+            "clase" => null, "operador" => 0, "subGrupo" => "filtro",
+        ]],
+        "canal" => 0,
+        "registroInicial" => (int)$pagina * (int)$registrosPorPagina,
+    ];
+    return hacer_peticion_api_ventas('/ventas/filtrarPaginado', $cuerpo);
+}
+
+/**
+ * Detalle "de impresión" de un documento de inventario de World Office: encabezado, renglones
+ * (`detalles`: código/ISBN, descripción, bodega, cantidad, valor unitario, descuento, IVA, total) y
+ * totales (`piePagina`). Sirve para los tipos que la API principal rechaza con
+ * TIPO_DOCUMENTO_NO_ADMITO_API (getRenglonesByDocumentoEncabezado): devoluciones de venta (DREM) y
+ * órdenes de compra (OC), verificado en vivo 2026-09-28 con la OC id 5774.
+ *
+ * Vive en el microservicio de reportes (wo-reportes-...), pero esta acción SÍ acepta el token
+ * permanente de apis_externas (a diferencia del reporte de ventas por producto de
+ * includes/api_wo_reportes.php, que exige token de sesión). El `codigo` es el formato de
+ * impresión: "DEV_REMV_EST" (el que se encontró para DREM) también sirve para OC — WO arma la
+ * respuesta según el tipo real del documento (encabezado.docTipo = "OC").
+ * Un id inexistente responde HTTP 200 con un arreglo que trae `codigoError`.
+ */
+function obtener_detalle_impresion_wo($idDocumento, $codigo = 'DEV_REMV_EST') {
+    $ch = curl_init('https://wo-reportes-prodinst1-dufecyb8a4cbejdx.eastus2-01.azurewebsites.net/reporte/mensaje');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: text/plain',   // así lo manda la propia interfaz de WO
+        'Accept: application/json',
+        'Authorization: ' . API_TOKEN,
+        'Origin: https://worldoffice.cloud',
+    ]);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+        'accion' => 'obtenerInformacionImpresionInventarios',
+        'codigo' => $codigo,
+        'id' => (string)(int)$idDocumento,
+    ]));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_ENCODING, '');
+
+    $respuesta = curl_exec($ch);
+    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    if (curl_errno($ch)) {
+        $error = curl_error($ch);
+        curl_close($ch);
+        return ['status' => 'error', 'mensaje_interno' => 'Error de conexión cURL: ' . $error];
+    }
+    curl_close($ch);
+
+    $data = json_decode($respuesta, true);
+    if (!is_array($data)) return ['status' => 'error', 'mensaje_interno' => 'La API no devolvió un JSON válido (HTTP ' . $http . ')'];
+    $error = $data['codigoError'] ?? ($data[0]['codigoError'] ?? null);
+    if ($error !== null || !isset($data['detalles'])) {
+        return ['status' => 'error', 'mensaje_interno' => 'World Office no devolvió el documento' . ($error !== null ? " (código $error)" : " (HTTP $http)") . '.', 'respuesta_cruda' => $data];
+    }
+    return ['status' => 'OK', 'data' => $data];
+}
+
 function listar_facturas_pos_wo($pagina = 0, $registrosPorPagina = 20) {
     $cuerpo = [
         "columnaOrdenar" => "fecha,id",

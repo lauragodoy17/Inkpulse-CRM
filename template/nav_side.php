@@ -13,6 +13,7 @@ $pedidos_sa_active   = in_array($current_page, ['solicitar_pedido_sa.php','ver_p
 $presupuesto_active  = $current_page === 'colegios_presup.php';
 $atenciones_active   = $current_page === 'lista_atenciones.php';
 $ops_active          = in_array($current_page, ['solicitar_op.php','lista_op.php','clientes_op.php']);
+$empaque_active      = in_array($current_page, ['lista_empaque.php','listas_empaque.php','lista_empaque_ver.php']);
 $opds_active         = in_array($current_page, ['solicitar_orden_pd.php','ver_opds.php','reporte_opd.php']);
 $oe_active           = in_array($current_page, ['solicitar_orden_externa.php','ver_ordenes_externas.php','oe_solicitada.php']);
 $reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_stock.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php','reporte_paquetes.php','reporte_backorders.php','reporte_editorial.php','reporte_planillas_procesamiento.php']);
@@ -521,6 +522,27 @@ $periodos_active     = $current_page === 'periodos.php';
 								<span class="micon bi bi-search"></span
 								><span class="mtext">Backorders por pedido</span>
 							</a>
+						</li>
+						<li class="dropdown <?= $empaque_active ? 'show' : '' ?>">
+							<a href="javascript:;" class="dropdown-toggle <?= $empaque_active ? 'active' : '' ?>">
+								<span class="micon bi bi-box-seam"></span
+								><span class="mtext">Listas de empaque</span>
+							</a>
+							<ul class="submenu">
+								<li><a href="lista_empaque.php">Nueva lista</a></li>
+								<li><a href="listas_empaque.php">Historial</a></li>
+							</ul>
+						</li>
+						<?php $oc_active = in_array($current_page, ['ordenes_compra.php', 'orden_compra.php', 'oc_backorders.php']); ?>
+						<li class="dropdown <?= $oc_active ? 'show' : '' ?>">
+							<a href="javascript:;" class="dropdown-toggle <?= $oc_active ? 'active' : '' ?>">
+								<span class="micon bi bi-cart-check"></span
+								><span class="mtext">Órdenes de compra</span>
+							</a>
+							<ul class="submenu">
+								<li><a href="ordenes_compra.php">Órdenes de compra</a></li>
+								<li><a href="oc_backorders.php">Backorders</a></li>
+							</ul>
 						</li>
 						<?php }?>
 
