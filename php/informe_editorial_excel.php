@@ -34,6 +34,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 require_once("../includes/periodos_fechas.php");
 require_once("../includes/informe_editorial_datos.php");
 
@@ -78,38 +79,16 @@ $hoja->getPageSetup()->setFitToHeight(0);
 
 // ── Encabezado: logo, título, filtro de período y fecha — mismo patrón ya usado en
 // php/backorders_excel.php ────────────────────────────────────────────────────────────
-$drawing = new Drawing();
-$drawing->setName('logo');
-$drawing->setDescription('logo');
-$drawing->setPath('../vendors/images/logo_eureka.png');
-$drawing->setHeight(70);
-$drawing->setCoordinates('A1');
-$drawing->setWorksheet($hoja);
-
-$estiloTitulo   = ['font' => ['bold' => true, 'size' => 14]];
-$estiloEtiqueta = ['font' => ['bold' => true]];
-
-$hoja->mergeCells('D1:L1');
-$hoja->getStyle('D1')->applyFromArray($estiloTitulo);
-$hoja->setCellValue('D1', 'INFORME CUMPLIMIENTO ' . $periodoLabel);
-
-$hoja->getStyle('D2')->applyFromArray($estiloEtiqueta);
-$hoja->setCellValue('D2', 'Período:');
-$hoja->setCellValue('E2', $periodoLabel);
-$hoja->getStyle('D3')->applyFromArray($estiloEtiqueta);
-$hoja->setCellValue('D3', 'Fecha:');
-$hoja->setCellValue('E3', date('Y-m-d'));
-$hoja->getStyle('D4')->applyFromArray($estiloEtiqueta);
-$hoja->setCellValue('D4', 'Objetivo:');
-$hoja->setCellValue('E4', 'Pasar de un 100% en cumplimiento');
+excel_encabezado($hoja, $bdd, 'INFORME CUMPLIMIENTO ' . $periodoLabel, 'Periodo: ' . $periodoLabel);
+$hoja->setCellValue('D4', 'Objetivo: Pasar de un 100% en cumplimiento');
 
 // ── Encabezados de la tabla (2 filas: grupo + columna) ──────────────────────────────────
 // Layout de columnas (2026-09-22, con la nueva B insertada, todo lo demás corrido +1 letra
 // respecto a la versión anterior): A=Asesores, B=Venta real temporada anterior,
 // C-F=ADOPCIONES, G-J=PRESUPUESTO ASIGNADO, K=Presupuesto por temporada (manual), L-N=Cumplimientos,
 // O-T=métricas de cumplimiento/variación/meta.
-$filaGrupo = 8;
-$filaCol   = 9;
+$filaGrupo = EXCEL_FILA_ENCABEZADOS;
+$filaCol   = EXCEL_FILA_ENCABEZADOS + 1;
 $filaInicioTabla = $filaGrupo;
 
 $estiloGrupo = [
@@ -378,7 +357,7 @@ $hoja->getColumnDimension('Q')->setWidth(14);
 $hoja->getColumnDimension('R')->setWidth(22);
 $hoja->getColumnDimension('S')->setWidth(16);
 $hoja->getColumnDimension('T')->setWidth(22);
-// Sin freezePane: las filas 8-9 (encabezado) quedaban inmovilizadas al hacer scroll hacia abajo y
+// Sin freezePane: las filas del encabezado quedaban inmovilizadas al hacer scroll hacia abajo y
 // tapaban/recortaban la vista de las filas de datos reales — pedido por el usuario 2026-09-18
 // ("quita el inmovilizar de esas [filas]").
 

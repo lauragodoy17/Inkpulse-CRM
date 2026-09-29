@@ -27,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -54,40 +55,7 @@ $estilo_negrita = array(
 
 $fecha_hoy=date("Y-m-d");
 
-//poner imagen
-$drawing = new Drawing();
-$drawing->setName('test_img');
-$drawing->setDescription('test_img');
-$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
-$drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
-$drawing->setCoordinates('A1'); // Posición en la hoja
-$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
-
-$objSpreadsheet->getActiveSheet()->mergeCells('A1:B2');
-
-
-$objSpreadsheet->getActiveSheet()->mergeCells('E1:F1');
-
-
-
-$objSpreadsheet->getActiveSheet()->getStyle('E1')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('E1')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->SetCellValue("E1", "OPs Anuladas");
-$objSpreadsheet->getActiveSheet()->mergeCells('B3:D3');
-$objSpreadsheet->getActiveSheet()->mergeCells('B4:D4');
-$objSpreadsheet->getActiveSheet()->getStyle('B3')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('B3')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->getStyle('B4')->applyFromArray($estilo_centrar);
-
-$objSpreadsheet->getActiveSheet()->getStyle('E3')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('E3')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->getStyle('E4')->applyFromArray($estilo_centrar);
-
-//~ Ingreo de datos en la hojda de excel
-$objSpreadsheet->getActiveSheet()->SetCellValue("B3", "Estado");
-$objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Pendiente");
-$objSpreadsheet->getActiveSheet()->SetCellValue("E3", "Fecha");
-$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "$fecha_hoy");
+excel_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "OPs Anuladas");
 $objSpreadsheet->getActiveSheet()->SetCellValue("A6", "# OP");
 $objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Fecha");
 $objSpreadsheet->getActiveSheet()->SetCellValue("C6", "Usuario");

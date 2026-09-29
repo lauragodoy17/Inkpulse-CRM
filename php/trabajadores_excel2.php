@@ -27,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -95,6 +96,8 @@ foreach (range('A', 'Z') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 
+
+excel_insertar_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "Reporte de trabajadores");
 
 $objWriter = new Xlsx($objSpreadsheet); //Escribir archivo
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

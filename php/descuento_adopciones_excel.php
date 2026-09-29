@@ -20,6 +20,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 
 require_once("aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 
 $tipo_sesion = intval($_SESSION["tipo"] ?? 0);
 if (!in_array($tipo_sesion, [1, 3, 6, 10], true)) {
@@ -122,27 +123,20 @@ $objSpreadsheet->getActiveSheet()->getPageSetup()->setFitToHeight(0);
 
 $estilo_negrita = ['font' => ['bold' => true]];
 
-$objSpreadsheet->getActiveSheet()->getStyle('A1')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->SetCellValue("A1", "Colegios con más descuento");
-$objSpreadsheet->getActiveSheet()->getStyle('A2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->SetCellValue("A2", "Período");
-$objSpreadsheet->getActiveSheet()->SetCellValue("B2", $nombre_periodo);
-$objSpreadsheet->getActiveSheet()->getStyle('A3')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->SetCellValue("A3", "Fecha");
-$objSpreadsheet->getActiveSheet()->SetCellValue("B3", date("Y-m-d"));
+excel_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "Colegios con más descuento", "Periodo: $nombre_periodo");
 
-$objSpreadsheet->getActiveSheet()->SetCellValue("A5", "Zona");
-$objSpreadsheet->getActiveSheet()->SetCellValue("B5", "Encargado");
-$objSpreadsheet->getActiveSheet()->SetCellValue("C5", "Colegio");
-$objSpreadsheet->getActiveSheet()->SetCellValue("D5", "Descuento");
-$objSpreadsheet->getActiveSheet()->SetCellValue("E5", "Consecutivo de adopción");
+$objSpreadsheet->getActiveSheet()->SetCellValue("A6", "Zona");
+$objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Encargado");
+$objSpreadsheet->getActiveSheet()->SetCellValue("C6", "Colegio");
+$objSpreadsheet->getActiveSheet()->SetCellValue("D6", "Descuento");
+$objSpreadsheet->getActiveSheet()->SetCellValue("E6", "Consecutivo de adopción");
 
-$objSpreadsheet->getActiveSheet()->getStyle('A5:E5')->applyFromArray([
+$objSpreadsheet->getActiveSheet()->getStyle('A6:E6')->applyFromArray([
     'font' => ['bold' => true],
     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '00FF84']],
 ]);
 
-$conta = 6;
+$conta = 7;
 foreach ($filas as $fila) {
     $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", $fila['zona'] ?: 'Sin asesor asignado');
     $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", $fila['encargado'] ?: 'Sin asesor asignado');
@@ -152,10 +146,10 @@ foreach ($filas as $fila) {
     $conta++;
 }
 
-$objSpreadsheet->getActiveSheet()->getStyle("D6:D" . ($conta - 1))
+$objSpreadsheet->getActiveSheet()->getStyle("D7:D" . ($conta - 1))
     ->getNumberFormat()->setFormatCode('0.00"%"');
 
-$objSpreadsheet->getActiveSheet()->getStyle("A5:E" . ($conta - 1))->applyFromArray([
+$objSpreadsheet->getActiveSheet()->getStyle("A6:E" . ($conta - 1))->applyFromArray([
     'borders' => [
         'top' => ['style' => Border::BORDER_THIN],
         'right' => ['style' => Border::BORDER_THIN],

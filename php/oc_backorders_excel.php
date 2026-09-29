@@ -32,6 +32,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
 require_once("../conexion/bdd.php");
 require_once("../includes/ordenes_compra_datos.php");
+require_once("../includes/excel_formato.php");
 oc_crear_tablas($bdd);
 
 // ── Filtros (mismo criterio que la vista) ──────────────────────────
@@ -61,8 +62,8 @@ function oc_fecha_excel($f, $conHora = false) {
 }
 
 $estiloEncabezado = [
-    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1E40AF']],
+    'font' => ['bold' => true],
+    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '00FF84']],
     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
 ];
 $coloresEstado = ['pendiente' => 'FEF3C7', 'parcial' => 'DBEAFE', 'completado' => 'DCFCE7', 'excedente' => 'FEE2E2'];
@@ -73,16 +74,14 @@ $libro->getProperties()->setCreator("Inkpulse CRM")->setTitle("Backorders de ór
 // ── Hoja 1: backorders ─────────────────────────────────────────────
 $hoja = $libro->getActiveSheet();
 $hoja->setTitle('Backorders');
-$hoja->setCellValue('A1', 'Backorders de órdenes de compra');
-$hoja->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-$hoja->setCellValue('A2', 'Generado: ' . date('d/m/Y H:i') . '   ·   ' . implode('   ·   ', $filtrosTxt));
-$hoja->getStyle('A2')->getFont()->setItalic(true)->getColor()->setRGB('64748B');
+excel_encabezado($hoja, $bdd, 'Backorders de órdenes de compra');
+$hoja->setCellValue('D4', implode('   ·   ', $filtrosTxt));
 
 // Una sola columna de código: el de World Office (en los libros es el mismo ISBN).
 $columnas = ['Orden de compra', 'Fecha orden', 'Proveedor', 'Código', 'Producto', 'Unidad',
              'Cantidad solicitada', 'Cantidad recibida', 'Cantidad pendiente', 'Estado',
              'Fecha de generación', 'Última actualización', 'Generado por'];
-$filaEnc = 4;
+$filaEnc = EXCEL_FILA_ENCABEZADOS;
 foreach ($columnas as $i => $c) $hoja->setCellValueByColumnAndRow($i + 1, $filaEnc, $c);
 $hoja->getStyle("A$filaEnc:M$filaEnc")->applyFromArray($estiloEncabezado);
 $hoja->getRowDimension($filaEnc)->setRowHeight(30);
@@ -157,6 +156,7 @@ else {
 foreach (range('A', 'J') as $col) $hist->getColumnDimension($col)->setAutoSize(true);
 $hist->getColumnDimension('D')->setAutoSize(false)->setWidth(45);
 $hist->freezePane('A2');
+excel_insertar_encabezado($hist, $bdd, 'Historial de recepciones');
 
 $libro->setActiveSheetIndex(0);
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

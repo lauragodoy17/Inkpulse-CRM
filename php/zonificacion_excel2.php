@@ -25,6 +25,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 require_once("aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -60,15 +61,6 @@ $fecha=date("Y-m-d");
 
 
 
-list($empresa,$n_zona) = explode("/", $zona["zona"]);
-$objSpreadsheet->getActiveSheet()->SetCellValue("A1", "Zona");
-$objSpreadsheet->getActiveSheet()->SetCellValue("A2", "$zona[zona]");
-$objSpreadsheet->getActiveSheet()->SetCellValue("B1", "Asesor");
-$objSpreadsheet->getActiveSheet()->SetCellValue("B2", "$nombre_completo");
-
-
-$objSpreadsheet->getActiveSheet()->SetCellValue("C1", "Fecha Reporte");
-$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "$fecha");
 $objSpreadsheet->getActiveSheet()->SetCellValue("A4", "Dane");
 $objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Colegio");
 $objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Calendario");
@@ -90,11 +82,6 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("H4", "Dirección");
 $objSpreadsheet->getActiveSheet()->SetCellValue("I4", "Teléfono");
 $objSpreadsheet->getActiveSheet()->SetCellValue("J4", "Status");
 $objSpreadsheet->getActiveSheet()->SetCellValue("K4", "Propuesta comercial");
-$objSpreadsheet->getActiveSheet()->getStyle("A1:K1")->getFont()->getColor()->applyFromArray(
-	array(
-	'rgb' => '#251919'
-	)
-);
 
 $objSpreadsheet->getActiveSheet()->getStyle('A4:K4')->applyFromArray([
     'fill' => [
@@ -105,7 +92,7 @@ $objSpreadsheet->getActiveSheet()->getStyle('A4:K4')->applyFromArray([
     ]
 ]);
 
-$sql_periodo="SELECT id, id_calendario FROM periodos WHERE id='".$_POST["periodo"]."'";
+$sql_periodo="SELECT id, id_calendario, periodo FROM periodos WHERE id='".$_POST["periodo"]."'";
 $req_periodo = $bdd->prepare($sql_periodo);
 $req_periodo->execute();
 $gp_periodo = $req_periodo->fetch();
@@ -184,6 +171,9 @@ foreach (range('A', 'Z') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 
+
+excel_insertar_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "Reporte de zonificación", "Periodo: $gp_periodo[periodo]", 'E', 4);
+$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Zona: $zona[zona]");
 
 $objWriter = new Xlsx($objSpreadsheet); //Escribir archivo
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

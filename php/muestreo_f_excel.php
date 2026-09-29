@@ -60,10 +60,9 @@ $drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
 $drawing->setCoordinates('A1'); // Posición en la hoja
 $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
-$objSpreadsheet->getActiveSheet()->mergeCells('C2:D2');
-$objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "Muestras solicitadas");
+$objSpreadsheet->getActiveSheet()->getStyle('E2')->applyFromArray($estilo_negrita);
+$objSpreadsheet->getActiveSheet()->getStyle('E2')->applyFromArray($estilo_centrar);
+$objSpreadsheet->getActiveSheet()->SetCellValue("E2", "Muestras solicitadas");
 	
 $fecha=date("Y-m-d H:i:s");
 $sql = "SELECT CONCAT(nombres, ' ', apellidos) as nombre_u FROM usuarios WHERE id='".$_SESSION['id']."'";
@@ -71,9 +70,9 @@ $req = $bdd->prepare($sql);
 $req->execute();
 $usuario_desc = $req->fetch();
 
-$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Fecha: $fecha");
+$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "Fecha: $fecha");
 $objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Rango: $_POST[desde] - $_POST[hasta]");
-$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Usuario: $usuario_desc[nombre_u]");
+$objSpreadsheet->getActiveSheet()->SetCellValue("G4", "Usuario: $usuario_desc[nombre_u]");
 
 	if ($_POST["usuario"]==0) {
 		
@@ -96,7 +95,7 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("F4", "Usuario: $usuario_desc[no
 		$req->execute();
 		$usuario = $req->fetch();
 
-		$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Asesor o Distribuidor: $usuario[nombre_c]");
+		$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Asesor o Distribuidor: $usuario[nombre_c]");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("A6", "#");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Fecha");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("C6", "Colegio");

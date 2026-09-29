@@ -27,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 ini_set('memory_limit', '512M');
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -70,24 +71,6 @@ $estilo_borde = [
 
 ];
 
-//poner imagen
-$drawing = new Drawing();
-$drawing->setName('test_img');
-$drawing->setDescription('test_img');
-$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
-$drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
-$drawing->setCoordinates('A1'); // Posición en la hoja
-$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
-
-
-$objSpreadsheet->getActiveSheet()->mergeCells('E2:G2');
-$objSpreadsheet->getActiveSheet()->getStyle('E2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('E2')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->getStyle('H2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('H2')->applyFromArray($estilo_centrar);
-
-$objSpreadsheet->getActiveSheet()->SetCellValue("E2", "REPORTE de seguimiento gerencia");
-
 $sql_periodo="SELECT periodo, id_calendario FROM periodos WHERE id='".$_POST["periodo"]."'";
 
 $req_periodo = $bdd->prepare($sql_periodo);
@@ -120,8 +103,6 @@ $ownerJoin_g = "LEFT JOIN (
     ) pz ON pz.id_colegio = c.id AND pz.id_periodo = p.id_periodo
     LEFT JOIN usuarios owner ON owner.cod_zona = COALESCE(pz.cod_zona, c.cod_zona) AND owner.cod_zona <> '' AND owner.act = 1 AND (owner.tipo IN (3, 6) OR owner.id = 69)";
 
-$objSpreadsheet->getActiveSheet()->SetCellValue("H2", "Periodo $gp_periodo[periodo]");
-
 $mostrar_ia_g = ($gp_periodo["periodo"] >= 2027) && $_SESSION['tipo'] == 1;
 
 // Las 4 columnas propias de este reporte (última visita / muestras despachadas / propuesta
@@ -133,11 +114,7 @@ $col_propuesta = $mostrar_ia_g ? 'T' : 'R';
 $col_acuerdo   = $mostrar_ia_g ? 'U' : 'S';
 $col_fin       = $col_acuerdo;
 
-$objSpreadsheet->getActiveSheet()->getStyle('C4')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('D4')->applyFromArray($estilo_negrita);
-
-$objSpreadsheet->getActiveSheet()->SetCellValue("E4", "Fecha");
-$objSpreadsheet->getActiveSheet()->SetCellValue("F4", "$fecha");
+excel_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "REPORTE de seguimiento gerencia", "Periodo: $gp_periodo[periodo]");
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("A6", "#");
 $objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Empresa");

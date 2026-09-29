@@ -21,6 +21,7 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
 
 require_once("../conexion/bdd.php");
 require_once("../includes/colocacion_datos.php");
+require_once("../includes/excel_formato.php");
 include("../lib/autoload-phpspreadsheet.php");
 require_once("../lib/ZipStream/src/Option/Archive.php");
 require_once("../lib/MyCLabs/Enum/Enum.php");
@@ -132,8 +133,8 @@ foreach ($encabezados as $i => $titulo) {
 }
 $ultimaColumna = Coordinate::stringFromColumnIndex($totalColumnas);
 $hoja->getStyle("A1:{$ultimaColumna}1")->applyFromArray([
-    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1D4ED8']],
+    'font' => ['bold' => true],
+    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '00FF84']],
 ]);
 $hoja->freezePane('A2');
 
@@ -371,8 +372,8 @@ function escribir_hoja_resumen_colocacion(Spreadsheet $objSpreadsheet, $titulo, 
         $hoja->setCellValue(Coordinate::stringFromColumnIndex($i + 1) . '1', $t);
     }
     $hoja->getStyle('A1:J1')->applyFromArray([
-        'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1D4ED8']],
+        'font' => ['bold' => true],
+        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '00FF84']],
     ]);
     $hoja->freezePane('A2');
 
@@ -418,6 +419,10 @@ function escribir_hoja_resumen_colocacion(Spreadsheet $objSpreadsheet, $titulo, 
 
 escribir_hoja_resumen_colocacion($objSpreadsheet, 'Totales por Empresa', 'Empresa', agrupar_totales_colocacion($filas, 'empresa', 'Sin asignar'));
 escribir_hoja_resumen_colocacion($objSpreadsheet, 'Totales por Cliente', 'Cliente', agrupar_totales_colocacion($filas, 'cliente', 'Sin cliente'));
+foreach ($objSpreadsheet->getAllSheets() as $hojaExcel) {
+    $tituloExcel = 'Colocación Calendario ' . $datos['calendario'] . ($hojaExcel->getTitle() !== 'Colocacion' ? ' - ' . $hojaExcel->getTitle() : '');
+    excel_insertar_encabezado($hojaExcel, $bdd, $tituloExcel, 'Periodo: ' . $datos['periodo']);
+}
 $objSpreadsheet->setActiveSheetIndex(0);
 
 $objWriter = new Xlsx($objSpreadsheet);

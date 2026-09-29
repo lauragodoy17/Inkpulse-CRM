@@ -26,6 +26,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 	$objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
 $objSpreadsheet->getProperties()->setTitle("Devoluciones de muestras");
@@ -52,9 +53,6 @@ $estilo_negrita = array(
 
 
 	
-	$objSpreadsheet->getActiveSheet()->SetCellValue("E1", "Reporte devoluciones de muestras");
-	$objSpreadsheet->getActiveSheet()->getStyle('E1')->applyFromArray($estilo_negrita);
-	$objSpreadsheet->getActiveSheet()->getStyle('E1')->applyFromArray($estilo_centrar);
 
 	$fecha=date("Y-m-d");
 	//~ Ingreo de datos en la hojda de excel
@@ -63,8 +61,6 @@ $estilo_negrita = array(
 
 		/*$objSpreadsheet->getActiveSheet()->SetCellValue("B1", "Ascesor");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("B2", "$usuario[nombre_c]");*/
-		$objSpreadsheet->getActiveSheet()->SetCellValue("F1", "Fecha");
-		$objSpreadsheet->getActiveSheet()->SetCellValue("F2", "$fecha");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("A4", "# Devolución");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("B4", "# Colegio");
 		$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Usuario");
@@ -106,11 +102,6 @@ $estilo_negrita = array(
 
 	
 
-	$objSpreadsheet->getActiveSheet()->getStyle("A1:J1")->getFont()->getColor()->applyFromArray(
-		array(
-		'rgb' => '#251919'
-		)
-	);
 	$objSpreadsheet->getActiveSheet()->getStyle("A4:J4")->getFont()->getColor()->applyFromArray(
 		array(
 		'rgb' => '#251919'
@@ -260,6 +251,8 @@ foreach (range('A', 'Z') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 
+
+excel_insertar_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "Reporte devoluciones de muestras", "Rango: $_POST[desde] - $_POST[hasta]", 'E', 4);
 
 $objWriter = new Xlsx($objSpreadsheet); //Escribir archivo
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

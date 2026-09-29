@@ -28,6 +28,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
 require_once("aut.php");
 require_once("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 require_once("../includes/reporte_stock_datos.php");
 
 if (!in_array($_SESSION['tipo'] ?? null, [1, 2], true)) {
@@ -84,11 +85,8 @@ $hoja->getPageSetup()->setFitToHeight(0);
 
 $estiloNegrita = ['font' => ['bold' => true]];
 
-$hoja->setCellValue('A1', 'Reporte de stock — ' . ($origen === 'pedidos2' ? 'Pedidos sin adopción' : 'Pedidos de venta') . ($detallado ? ' (detallado por colegio)' : ''));
-$hoja->getStyle('A1')->applyFromArray($estiloNegrita);
-$hoja->setCellValue('A2', 'Usuario: ' . $usuarioNombre);
-$hoja->setCellValue('A3', 'Periodo: ' . $periodoNombre);
-$hoja->setCellValue('A4', 'Fecha: ' . date('Y-m-d'));
+excel_encabezado($hoja, $bdd, 'Reporte de stock — ' . ($origen === 'pedidos2' ? 'Pedidos sin adopción' : 'Pedidos de venta') . ($detallado ? ' (detallado por colegio)' : ''), 'Periodo: ' . $periodoNombre);
+$hoja->setCellValue('D4', 'Asesor: ' . $usuarioNombre);
 
 if ($detallado) {
     $encabezados = ['Empresa', 'Zona', 'Asesor', 'Colegio', 'Libro', 'Cantidad pedida', 'Existencias', 'Stock bajo'];

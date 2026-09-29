@@ -24,6 +24,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -63,18 +64,9 @@ $objSpreadsheet->getActiveSheet()->getPageSetup()->setFitToHeight(0);
 
 
 //~ Ingreo de datos en la hojda de excel
+$filtro_excel = '';
 if ($_POST["promo"] !="todos") {
-
-	$objSpreadsheet->getActiveSheet()->SetCellValue("B1", "Zona");
-	if (!empty($zona["zona"])) {
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B2", "$zona[zona]");
-	}else{
-		$objSpreadsheet->getActiveSheet()->SetCellValue("B2", "");
-	}
-	
-	$objSpreadsheet->getActiveSheet()->SetCellValue("C1", "Promotor");
-	$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "$nombre_completo");
-
+	$filtro_excel = "Zona: " . ($zona["zona"] ?? '') . " - Promotor: $nombre_completo";
 }
 
 if ($_POST["promo"] =="todos") {
@@ -350,6 +342,11 @@ foreach (range('A', 'N') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);
 }
 
+
+excel_insertar_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "Reporte de visitas", "Rango: $_POST[desde] - $_POST[hasta]", 'E', 4);
+if ($filtro_excel !== '') {
+    $objSpreadsheet->getActiveSheet()->SetCellValue("D4", $filtro_excel);
+}
 
 $objWriter = new Xlsx($objSpreadsheet); //Escribir archivo
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

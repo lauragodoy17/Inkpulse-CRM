@@ -23,6 +23,7 @@ require_once("aut.php");
 
 require_once("../conexion/bdd.php");
 require_once("../includes/colocacion_datos.php");
+require_once("../includes/excel_formato.php");
 include("../lib/autoload-phpspreadsheet.php");
 require_once("../lib/ZipStream/src/Option/Archive.php");
 require_once("../lib/MyCLabs/Enum/Enum.php");
@@ -148,25 +149,7 @@ $hoja->getPageSetup()->setFitToHeight(0);
 $estilo_negrita = ['font' => ['bold' => true]];
 $estilo_centrar = ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]];
 
-$drawing = new Drawing();
-$drawing->setName('logo');
-$drawing->setDescription('logo');
-$drawing->setPath('../vendors/images/logo_eureka.png');
-$drawing->setHeight(100);
-$drawing->setCoordinates('A1');
-$drawing->setWorksheet($hoja);
-
-$hoja->mergeCells('E2:G2');
-$hoja->getStyle('E2')->applyFromArray($estilo_negrita);
-$hoja->getStyle('E2')->applyFromArray($estilo_centrar);
-$hoja->getStyle('H2')->applyFromArray($estilo_negrita);
-$hoja->getStyle('H2')->applyFromArray($estilo_centrar);
-$hoja->setCellValue('E2', 'REPORTE de colocación');
-$hoja->setCellValue('H2', 'Periodo ' . $datos['periodo'] . ' (Calendario ' . $datos['calendario'] . ')');
-
-$hoja->setCellValue('E4', 'Fecha');
-$hoja->setCellValue('F4', date('Y-m-d'));
-$hoja->getStyle('E4')->applyFromArray($estilo_negrita);
+excel_encabezado($hoja, $bdd, 'REPORTE de colocación', 'Periodo: ' . $datos['periodo'] . ' (Calendario ' . $datos['calendario'] . ')');
 
 $filaEncabezado = 6;
 foreach ($encabezados as $i => $titulo) {

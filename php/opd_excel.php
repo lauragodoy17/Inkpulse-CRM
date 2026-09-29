@@ -27,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
 $objSpreadsheet->getProperties()->setTitle("Reporte - Ordenes de Producción");
@@ -69,31 +70,7 @@ $estilo_borde = [
     
 ];
 
-//poner imagen
-$drawing = new Drawing();
-$drawing->setName('test_img');
-$drawing->setDescription('test_img');
-$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
-$drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
-$drawing->setCoordinates('A1'); // Posición en la hoja
-$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
-
-$objSpreadsheet->getActiveSheet()->mergeCells('A1:B4');
-
-
-$objSpreadsheet->getActiveSheet()->mergeCells('D2:F2');
-$objSpreadsheet->getActiveSheet()->getStyle('D2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('D2')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->SetCellValue("D2", "Reporte - Ordenes de Producción");
-
-
-$fecha=date("Y-m-d");
-
-$objSpreadsheet->getActiveSheet()->getStyle('C4')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('D4')->applyFromArray($estilo_negrita);
-
-$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Fecha reporte");
-$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "$fecha");
+excel_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "Reporte - Ordenes de Producción", "Rango: $_POST[desde] - $_POST[hasta]");
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("A6", "Consecutivo");
 $objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Fecha solicitud");

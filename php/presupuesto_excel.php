@@ -27,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -72,14 +73,6 @@ $estilo_borde = [
 
 
 
-//poner imagen
-$drawing = new Drawing();
-$drawing->setName('test_img');
-$drawing->setDescription('test_img');
-$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
-$drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
-$drawing->setCoordinates('A1'); // Posición en la hoja
-$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
 	$sql_cole="SELECT colegio, cod_zona FROM colegios WHERE id='".$_GET["cole"]."'";
 
@@ -104,7 +97,8 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
 	$req_periodo_ia = $bdd->prepare("SELECT periodo FROM periodos WHERE id=?");
 	$req_periodo_ia->execute([$_GET['periodo']]);
-	$mostrar_ia = ($req_periodo_ia->fetch()['periodo'] ?? 0) >= 2027 && $_SESSION['tipo'] == 1;
+	$periodo_label_excel = $req_periodo_ia->fetch()['periodo'] ?? '';
+	$mostrar_ia = ($periodo_label_excel ?: 0) >= 2027 && $_SESSION['tipo'] == 1;
 
 	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia, mt.costo_almacenamiento
 	                  FROM ia_modelos m
@@ -150,10 +144,6 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
 //~ Ingreo de datos en la hojda de excel
 
-$objSpreadsheet->getActiveSheet()->mergeCells('F2:H2');
-$objSpreadsheet->getActiveSheet()->getStyle('F2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('F2')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->SetCellValue("F2", "REPORTE DE PRESUPUESTO");
 
 $objSpreadsheet->getActiveSheet()->getStyle('B5')->applyFromArray($estilo_negrita);
 $objSpreadsheet->getActiveSheet()->getStyle('B5')->applyFromArray($estilo_centrar);
@@ -604,6 +594,14 @@ $objSpreadsheet->getActiveSheet()->getRowDimension(10)->setRowHeight(20);
 foreach (range('A', 'Z') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
+
+// Encabezado estándar (includes/excel_formato.php): se corre todo el formato 2 filas hacia abajo
+// para dejar libres las filas de título/fecha/usuario; la tabla queda en las filas 13-14
+// (la fila 12 es el separador en blanco que se inserta arriba de la tabla).
+$hojaPresupuesto = $objSpreadsheet->getActiveSheet();
+excel_insertar_filas($hojaPresupuesto, 1, 2);
+excel_encabezado($hojaPresupuesto, $bdd, "REPORTE DE PRESUPUESTO", "Periodo: $periodo_label_excel");
+excel_estilo_encabezados($hojaPresupuesto, 'A13:' . $hojaPresupuesto->getHighestDataColumn(13) . '14');
 
 $objWriter = new Xlsx($objSpreadsheet); //Escribir archivo
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

@@ -25,6 +25,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 require_once("aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -57,25 +58,17 @@ $fecha=date("Y-m-d");
 
 
 //~ Ingreo de datos en la hojda de excel
+$filtro_excel = '';
 if ($_POST['promo']!=0) {
 
   if ($usuario["tipo"]==3 || $usuario["tipo"]==1 || $usuario["tipo"]==10) {
-    list($empresa,$n_zona) = explode("/", $zona["zona"]);
-    $objSpreadsheet->getActiveSheet()->SetCellValue("A1", "Zona");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("A2", "$zona[zona]");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("B1", "Asesor");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("B2", "$nombre_completo");
+    $filtro_excel = "Zona: $zona[zona] - Asesor: $nombre_completo";
   }else{
-    $objSpreadsheet->getActiveSheet()->SetCellValue("A1", "Empresa");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("A2", "$zona[zona]");
+    $filtro_excel = "Empresa: $zona[zona]";
   }
 
 }
 
-
-
-$objSpreadsheet->getActiveSheet()->SetCellValue("C1", "Fecha Reporte");
-$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "$fecha");
 $objSpreadsheet->getActiveSheet()->SetCellValue("A4", "Dane");
 $objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Colegio");
 $objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Calendario");
@@ -108,11 +101,6 @@ $objSpreadsheet->getActiveSheet()->SetCellValue("Q4", "Propuesta comercial");
 $objSpreadsheet->getActiveSheet()->SetCellValue("R4", "Segmento");
 $objSpreadsheet->getActiveSheet()->SetCellValue("S4", "Estado del cliente");
 $objSpreadsheet->getActiveSheet()->SetCellValue("T4", "Fecha de último contacto");
-$objSpreadsheet->getActiveSheet()->getStyle("A1:T1")->getFont()->getColor()->applyFromArray(
-  array(
-  'rgb' => '#251919'
-  )
-);
 
 $objSpreadsheet->getActiveSheet()->getStyle('A4:T4')->applyFromArray([
     'fill' => [
@@ -123,7 +111,7 @@ $objSpreadsheet->getActiveSheet()->getStyle('A4:T4')->applyFromArray([
     ]
 ]);
 
-$sql_periodo="SELECT id, id_calendario FROM periodos WHERE id='".$_POST["periodo"]."'";
+$sql_periodo="SELECT id, id_calendario, periodo FROM periodos WHERE id='".$_POST["periodo"]."'";
 $req_periodo = $bdd->prepare($sql_periodo);
 $req_periodo->execute();
 $gp_periodo = $req_periodo->fetch();
@@ -263,6 +251,11 @@ foreach (range('A', 'T') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);
 }
 
+
+excel_insertar_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "Reporte de cubrimiento", "Periodo: $gp_periodo[periodo]", 'E', 4);
+if ($filtro_excel !== '') {
+    $objSpreadsheet->getActiveSheet()->SetCellValue("D4", $filtro_excel);
+}
 
 $objWriter = new Xlsx($objSpreadsheet); //Escribir archivo
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

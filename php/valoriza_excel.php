@@ -28,6 +28,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 ini_set('memory_limit', '512M');
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -72,20 +73,6 @@ $estilo_borde = [
     
 ];
 
-//poner imagen
-$drawing = new Drawing();
-$drawing->setName('test_img');
-$drawing->setDescription('test_img');
-$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
-$drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
-$drawing->setCoordinates('A1'); // Posición en la hoja
-$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
-
-$objSpreadsheet->getActiveSheet()->mergeCells('C2:D2');
-$objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "REPORTE DE VALORIZACIÓN");
-
 $sql_periodo="SELECT periodo, id_calendario FROM periodos WHERE id='".$_POST["periodo"]."'";
 
 $req_periodo = $bdd->prepare($sql_periodo);
@@ -99,11 +86,7 @@ $fecha=date("Y-m-d");
 // que ya usan php/dashboard_adopciones_stats.php y php/valoriza_global_excel.php.
 $calendario_periodo_v = intval($gp_periodo["id_calendario"]);
 
-$objSpreadsheet->getActiveSheet()->getStyle('C4')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('D4')->applyFromArray($estilo_negrita);
-
-$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Fecha");
-$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "$fecha");
+excel_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "REPORTE DE VALORIZACIÓN", "Periodo: $gp_periodo[periodo]");
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("A6", "Empresa");
 $objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Asesor");

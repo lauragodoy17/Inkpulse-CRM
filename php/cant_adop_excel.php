@@ -27,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -70,18 +71,7 @@ $estilo_borde = [
     
 ];
 
-//poner imagen
-$drawing = new Drawing();
-$drawing->setName('test_img');
-$drawing->setDescription('test_img');
-$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
-$drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
-$drawing->setCoordinates('A1'); // Posición en la hoja
-$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
-
-$objSpreadsheet->getActiveSheet()->mergeCells('A1:B4');
-
-
+$nombre_completo = '';
 if ($_POST['promotor']!=0) {
 
     $sql = "SELECT nombres, apellidos FROM usuarios WHERE id='".$_POST['promotor']."'";
@@ -91,21 +81,6 @@ if ($_POST['promotor']!=0) {
     $usuario = $req->fetch();
 
     $nombre_completo=$usuario["nombres"]." ".$usuario["apellidos"];
-    $objSpreadsheet->getActiveSheet()->SetCellValue("E4", "$nombre_completo");
-}
-
-
-
-
-
-$objSpreadsheet->getActiveSheet()->mergeCells('C2:D2');
-$objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "Reporte Cantidades adopciones");
-
-if (isset($_POST['desde']) ) {
-    $objSpreadsheet->getActiveSheet()->getStyle('E2')->applyFromArray($estilo_negrita);
-    $objSpreadsheet->getActiveSheet()->SetCellValue("E2", "Desde # $_POST[desde] Hasta # $_POST[hasta]");
 }
 
 $sql_periodo="SELECT periodo FROM periodos WHERE id='".$_POST["periodo"]."'";
@@ -113,13 +88,15 @@ $sql_periodo="SELECT periodo FROM periodos WHERE id='".$_POST["periodo"]."'";
 $req_periodo = $bdd->prepare($sql_periodo);
 $req_periodo->execute();
 $gp_periodo = $req_periodo->fetch();
-$fecha=date("Y-m-d");
 
-$objSpreadsheet->getActiveSheet()->getStyle('C4')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('D4')->applyFromArray($estilo_negrita);
-
-$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Fecha");
-$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "$fecha");
+$rango_excel = "Periodo: $gp_periodo[periodo]";
+if (isset($_POST['desde']) ) {
+    $rango_excel .= " - Desde # $_POST[desde] Hasta # $_POST[hasta]";
+}
+excel_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "Reporte Cantidades adopciones", $rango_excel);
+if ($nombre_completo !== '') {
+    $objSpreadsheet->getActiveSheet()->SetCellValue("D4", "Asesor: $nombre_completo");
+}
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("A6", "Libro");
 $objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Etiqueta");

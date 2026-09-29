@@ -27,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
 $objSpreadsheet->getProperties()->setTitle("Devoluciones");
@@ -59,8 +60,6 @@ $estilo_negrita = array(
 
 	/*$objSpreadsheet->getActiveSheet()->SetCellValue("B1", "Distribuidor");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("B2", "$usuario[nombre_c]");*/
-	$objSpreadsheet->getActiveSheet()->SetCellValue("D1", "Fecha");
-	$objSpreadsheet->getActiveSheet()->SetCellValue("D2", "$fecha");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("A4", "# Devolución");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("B4", "Usuario");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Fecha");
@@ -174,6 +173,8 @@ foreach (range('A', 'Z') as $columnID) {
   $objSpreadsheet->getActiveSheet()->getColumnDimension($columnID)->setAutoSize(true);  
 }
 
+
+excel_insertar_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "Reporte devoluciones de ventas - Libro a libro", "Rango: $_POST[desde] - $_POST[hasta]", 'E', 4);
 
 $objWriter = new Xlsx($objSpreadsheet); //Escribir archivo
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

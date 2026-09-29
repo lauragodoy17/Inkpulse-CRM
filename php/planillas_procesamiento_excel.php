@@ -33,6 +33,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 require_once("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 require_once("../includes/planillas_procesamiento_datos.php");
 
 ini_set('memory_limit', '512M');
@@ -65,38 +66,16 @@ $hoja->getPageSetup()->setFitToHeight(0);
 
 // ── Encabezado: logo, título, filtros y fecha — mismo patrón ya usado en los demás reportes
 // Excel del CRM (ver php/backorders_excel.php, php/informe_editorial_excel.php) ─────────────
-$drawing = new Drawing();
-$drawing->setName('logo');
-$drawing->setDescription('logo');
-$drawing->setPath('../vendors/images/logo_eureka.png');
-$drawing->setHeight(70);
-$drawing->setCoordinates('A1');
-$drawing->setWorksheet($hoja);
-
-$estiloTitulo   = ['font' => ['bold' => true, 'size' => 14]];
-$estiloEtiqueta = ['font' => ['bold' => true]];
-
-$hoja->mergeCells('D1:H1');
-$hoja->getStyle('D1')->applyFromArray($estiloTitulo);
-$hoja->setCellValue('D1', 'PLANILLAS GENERADAS');
-
-$hoja->getStyle('D2')->applyFromArray($estiloEtiqueta);
-$hoja->setCellValue('D2', 'Rango de fechas:');
-$hoja->setCellValue('E2', $rangoLabel);
-$hoja->getStyle('D3')->applyFromArray($estiloEtiqueta);
-$hoja->setCellValue('D3', 'Tipo:');
-$hoja->setCellValue('E3', $filtroLabel);
-$hoja->getStyle('D4')->applyFromArray($estiloEtiqueta);
-$hoja->setCellValue('D4', 'Fecha del reporte:');
-$hoja->setCellValue('E4', date('Y-m-d H:i'));
+excel_encabezado($hoja, $bdd, 'PLANILLAS GENERADAS', 'Rango: ' . $rangoLabel);
+$hoja->setCellValue('D4', 'Tipo: ' . $filtroLabel);
 
 // ── Tabla ────────────────────────────────────────────────────────────────────────────────────
-$filaInicioTabla = 7;
+$filaInicioTabla = EXCEL_FILA_ENCABEZADOS;
 $fila = $filaInicioTabla;
 
 $estiloCol = [
-    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1D4ED8']],
+    'font' => ['bold' => true],
+    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '00FF84']],
 ];
 $hoja->fromArray(['Consecutivo', 'Tipo', 'Fecha de generación', 'Generada por', '# Pedidos', 'Colegio (detalle)', 'Responsable (detalle)', 'Fecha del pedido (detalle)'], null, 'A' . $fila);
 $hoja->getStyle('A' . $fila . ':H' . $fila)->applyFromArray($estiloCol);

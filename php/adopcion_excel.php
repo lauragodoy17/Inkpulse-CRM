@@ -28,6 +28,7 @@ use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -92,14 +93,6 @@ $estilo_derecha = [
 
 
 
-//poner imagen
-$drawing = new Drawing();
-$drawing->setName('test_img');
-$drawing->setDescription('test_img');
-$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
-$drawing->setHeight(80); // Puedes ajustar el tamaño si deseas
-$drawing->setCoordinates('A1'); // Posición en la hoja
-$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
 	$sql_cole="SELECT colegio, cod_zona, sub_zona, responsable FROM colegios WHERE id='".$_GET["cole"]."'";
 
@@ -130,7 +123,8 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
 	$req_periodo_ia = $bdd->prepare("SELECT periodo FROM periodos WHERE id=?");
 	$req_periodo_ia->execute([$_GET['periodo']]);
-	$mostrar_ia = ($req_periodo_ia->fetch()['periodo'] ?? 0) >= 2027 && $_SESSION['tipo'] == 1;
+	$periodo_label_excel = $req_periodo_ia->fetch()['periodo'] ?? '';
+	$mostrar_ia = ($periodo_label_excel ?: 0) >= 2027 && $_SESSION['tipo'] == 1;
 
 	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia, mt.costo_almacenamiento
 	                  FROM ia_modelos m
@@ -176,15 +170,6 @@ $drawing->setWorksheet($objSpreadsheet->getActiveSheet());
 
 //~ Ingreo de datos en la hojda de excel
 
-$objSpreadsheet->getActiveSheet()->mergeCells('D2:F2');
-$objSpreadsheet->getActiveSheet()->getStyle('D2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('D2')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->SetCellValue("D2", "REPORTE DE ADOPCION");
-$objSpreadsheet->getActiveSheet()->getStyle('G2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('G2')->applyFromArray($estilo_centrar);
-if (!empty($recurso["fecha"])) {
-	$objSpreadsheet->getActiveSheet()->SetCellValue("G2", "$recurso[fecha]");
-}
 
 
 $objSpreadsheet->getActiveSheet()->getStyle('B5')->applyFromArray($estilo_negrita);
@@ -776,8 +761,6 @@ $req_conse->execute();
 $conse = $req_conse->fetch();
 
 $conse_f =$conse["year"]."-".$conse["conse"];
-$objSpreadsheet->getActiveSheet()->getStyle('C2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->SetCellValue("C2", "# $conse_f");
 $objSpreadsheet->getActiveSheet()->SetCellValue("G5", "Potencial compra preescolar %");
 $objSpreadsheet->getActiveSheet()->getStyle('I5')->applyFromArray($estilo_borde);
 $objSpreadsheet->getActiveSheet()->SetCellValue("I5", "$p_pre");
@@ -1721,6 +1704,17 @@ if ($paquetes_excel) {
 		}
 	}
 }
+
+// Encabezado estándar (includes/excel_formato.php) en la hoja principal: se corre todo el
+// formato 2 filas hacia abajo para dejar libres las filas de título/fecha/usuario; la tabla
+// queda en las filas 13-14 (la fila 12 es el separador en blanco que se inserta arriba de la tabla).
+$hojaAdopcion = $objSpreadsheet->getSheet(0);
+excel_insertar_filas($hojaAdopcion, 1, 2);
+excel_encabezado($hojaAdopcion, $bdd, "REPORTE DE ADOPCION # $conse_f", "Periodo: $periodo_label_excel");
+if (!empty($recurso["fecha"])) {
+	$hojaAdopcion->SetCellValue("D4", "Fecha adopción: $recurso[fecha]");
+}
+excel_estilo_encabezados($hojaAdopcion, 'A13:' . $hojaAdopcion->getHighestDataColumn(13) . '14');
 
 $objSpreadsheet->setActiveSheetIndex(0);
 

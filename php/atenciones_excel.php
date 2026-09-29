@@ -28,6 +28,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
 require_once("../includes/materializar_atenciones_pendientes.php");
+require_once("../includes/excel_formato.php");
 
 // Si alguna solicitud distribuida en años (ver php/solicitud_recurso.php) tenía una cuota
 // pendiente justo para el período que se está reportando, y ese período ya existe (por eso se
@@ -73,20 +74,6 @@ $estilo_borde = [
     ]
 ];
 
-//poner imagen
-$drawing = new Drawing();
-$drawing->setName('test_img');
-$drawing->setDescription('test_img');
-$drawing->setPath('../vendors/images/logo_eureka.png'); // Ruta relativa o absoluta a la imagen
-$drawing->setHeight(100); // Puedes ajustar el tamaño si deseas
-$drawing->setCoordinates('A1'); // Posición en la hoja
-$drawing->setWorksheet($objSpreadsheet->getActiveSheet());
-
-$objSpreadsheet->getActiveSheet()->mergeCells('D2:F2');
-$objSpreadsheet->getActiveSheet()->getStyle('D2')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('D2')->applyFromArray($estilo_centrar);
-$objSpreadsheet->getActiveSheet()->SetCellValue("D2", "REPORTE DE ATENCIONES A CLIENTES");
-
 $sql_periodo = "SELECT periodo, SUBSTRING(periodo, 3, 2) AS anio_corto
         FROM periodos
         WHERE id = '".$_POST["periodo"]."'";
@@ -96,11 +83,7 @@ $req_periodo->execute();
 $gp_periodo = $req_periodo->fetch();
 $fecha=date("Y-m-d");
 
-$objSpreadsheet->getActiveSheet()->getStyle('C4')->applyFromArray($estilo_negrita);
-$objSpreadsheet->getActiveSheet()->getStyle('D4')->applyFromArray($estilo_negrita);
-
-$objSpreadsheet->getActiveSheet()->SetCellValue("C4", "Fecha");
-$objSpreadsheet->getActiveSheet()->SetCellValue("D4", "$fecha");
+excel_encabezado($objSpreadsheet->getActiveSheet(), $bdd, "REPORTE DE ATENCIONES A CLIENTES", "Periodo: $gp_periodo[periodo]");
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("A6", "Consecutivo");
 $objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Usuario");

@@ -22,6 +22,7 @@ use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
 require_once("../php/aut.php");
 include("../conexion/bdd.php");
+require_once("../includes/excel_formato.php");
 require_once(__DIR__ . "/../includes/paquetes_colegio.php");
 
 if (!puede_usar_tipo_adopcion()) {
@@ -73,17 +74,8 @@ $hoja->getPageSetup()->setFitToPage(true);
 $hoja->getPageSetup()->setFitToWidth(1);
 $hoja->getPageSetup()->setFitToHeight(0);
 
-$hoja->mergeCells('A1:K1');
-$hoja->getStyle('A1')->applyFromArray($estilo_negrita);
-$hoja->getStyle('A1')->applyFromArray($estilo_centrar);
-$hoja->SetCellValue('A1', 'REPORTE PAQUETES');
-
-$hoja->getStyle('A2')->applyFromArray($estilo_negrita);
-$hoja->SetCellValue('A2', 'Usuario:');
-$hoja->SetCellValue('B2', $usuario_label);
-$hoja->getStyle('D2')->applyFromArray($estilo_negrita);
-$hoja->SetCellValue('D2', 'Periodo:');
-$hoja->SetCellValue('E2', $periodo_label);
+excel_encabezado($hoja, $bdd, 'REPORTE PAQUETES', 'Periodo: ' . $periodo_label);
+$hoja->SetCellValue('D4', 'Asesor: ' . $usuario_label);
 
 $encabezados = [
 	'Zona', 'Responsable', 'DANE', 'Colegio', 'Grado', 'Código del paquete',
@@ -91,14 +83,15 @@ $encabezados = [
 ];
 $col = 'A';
 foreach ($encabezados as $enc) {
-	$hoja->SetCellValue($col . '4', $enc);
-	$hoja->getStyle($col . '4')->applyFromArray($estilo_negrita);
-	$hoja->getStyle($col . '4')->applyFromArray($estilo_centrar);
-	$hoja->getStyle($col . '4')->applyFromArray($estilo_borde);
+	$hoja->SetCellValue($col . EXCEL_FILA_ENCABEZADOS, $enc);
+	$hoja->getStyle($col . EXCEL_FILA_ENCABEZADOS)->applyFromArray($estilo_negrita);
+	$hoja->getStyle($col . EXCEL_FILA_ENCABEZADOS)->applyFromArray($estilo_centrar);
+	$hoja->getStyle($col . EXCEL_FILA_ENCABEZADOS)->applyFromArray($estilo_borde);
 	$col++;
 }
+excel_estilo_encabezados($hoja, 'A' . EXCEL_FILA_ENCABEZADOS . ':K' . EXCEL_FILA_ENCABEZADOS);
 
-$fila = 5;
+$fila = EXCEL_FILA_ENCABEZADOS + 1;
 foreach ($datos as $d) {
 	$hoja->SetCellValue('A' . $fila, $d['zona']);
 	$hoja->SetCellValue('B' . $fila, $d['responsable']);
@@ -125,13 +118,13 @@ foreach ($datos as $d) {
 }
 
 // Mismo formato de moneda (separador de miles + símbolo $) que el resto del módulo.
-if ($fila > 5) {
-	$hoja->getStyle('G5:I' . ($fila - 1))
+if ($fila > EXCEL_FILA_ENCABEZADOS + 1) {
+	$hoja->getStyle('G' . (EXCEL_FILA_ENCABEZADOS + 1) . ':I' . ($fila - 1))
 		->getNumberFormat()
 		->setFormatCode('_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)');
 }
 
-$hoja->getStyle('A1:K' . max($fila - 1, 4))->applyFromArray($estilo_fuente);
+$hoja->getStyle('A' . EXCEL_FILA_ENCABEZADOS . ':K' . max($fila - 1, EXCEL_FILA_ENCABEZADOS))->applyFromArray($estilo_fuente);
 foreach (range('A', 'K') as $columnID) {
 	$hoja->getColumnDimension($columnID)->setAutoSize(true);
 }
