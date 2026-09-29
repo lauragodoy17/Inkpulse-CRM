@@ -35,8 +35,13 @@
      * @return array Respuesta de la API decodificada, con los renglones en data.content[].
      */
     function obtener_renglones_documento($id_documento_encabezado, $pagina = 0, $registrosPorPagina = 50) {
-        $endpoint = '/documentos/getRenglonesByDocumentoEncabezado/' . $id_documento_encabezado;
-        $cuerpo = [
+        return hacer_peticion_api('/documentos/getRenglonesByDocumentoEncabezado/' . $id_documento_encabezado, 'POST',
+            cuerpo_renglones_documento($pagina, $registrosPorPagina));
+    }
+
+    /** Cuerpo de obtener_renglones_documento(), aparte para usarlo con hacer_peticiones_api_paralelo(). */
+    function cuerpo_renglones_documento($pagina = 0, $registrosPorPagina = 50) {
+        return [
             "columnaOrdenar" => "id",
             "pagina" => (int)$pagina,
             "registrosPorPagina" => (int)$registrosPorPagina,
@@ -46,7 +51,6 @@
             "registroInicial" => (int)$pagina * (int)$registrosPorPagina,
             "filtros" => []
         ];
-        return hacer_peticion_api($endpoint, 'POST', $cuerpo);
     }
 
 ?>

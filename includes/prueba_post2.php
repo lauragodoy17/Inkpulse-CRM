@@ -15,14 +15,20 @@
      * @return array Respuesta de la API decodificada como array de PHP.
      */
     function listar_documentos_salida_almacen($filtros_aplicados = [], $pagina = 0, $registros_por_pagina = 10) {
-        $endpoint = '/inventarios/listarDocumentoSalidaAlmacen';
-        $metodo = 'POST';
-        
+        return hacer_peticion_api('/inventarios/listarDocumentoSalidaAlmacen', 'POST',
+            cuerpo_listar_documentos_salida_almacen($filtros_aplicados, $pagina, $registros_por_pagina));
+    }
+
+    /**
+     * Cuerpo de la petición de listar_documentos_salida_almacen(), aparte para poder mandar varias
+     * a la vez con hacer_peticiones_api_paralelo().
+     */
+    function cuerpo_listar_documentos_salida_almacen($filtros_aplicados = [], $pagina = 0, $registros_por_pagina = 10) {
         // MEJORA: Resetea los índices (0, 1, 2...) para asegurar que json_encode genere un arreglo [] válido
         $filtros_limpios = array_values($filtros_aplicados);
-        
+
         // Estructura base de la petición idéntica a World Office
-        $cuerpo_peticion = [
+        return [
             "columnaOrdenar"     => "fecha,id",
             "pagina"             => (int)$pagina,
             "registrosPorPagina" => (int)$registros_por_pagina,
@@ -34,8 +40,6 @@
             "registroInicial"    => (int)$pagina * (int)$registros_por_pagina,
             "filtros"            => $filtros_limpios // Inyectamos el arreglo de filtros dinámicos asegurados
         ];
-        
-        return hacer_peticion_api($endpoint, $metodo, $cuerpo_peticion);
     }
 
 ?>

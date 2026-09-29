@@ -5,7 +5,10 @@
  */
 
 // 1. Cargamos de forma segura la configuración usando la ruta absoluta del archivo actual (__DIR__)
-require_once("../conexion/api_wo_config.php");
+// — antes era una ruta relativa a secas ("../conexion/..."), que solo resolvía bien cuando el
+// script de entrada vivía en /php (un nivel bajo la raíz); para un script de entrada en la raíz
+// del proyecto (ej. reporte_backorders_pedido.php) se rompía. Reportado por el usuario 2026-09-18.
+require_once(__DIR__ . "/../conexion/api_wo_config.php");
 
 /**
  * Realiza una petición HTTP a la API externa de World Office.
@@ -16,32 +19,8 @@ require_once("../conexion/api_wo_config.php");
  * @return array La respuesta de la API decodificada como un array de PHP.
  */
 function hacer_peticion_api($endpoint, $metodo = 'GET', $datos = null) {
-    // Construimos la URL completa uniendo la base y el endpoint
-    $url_completa = API_URL_BASE . $endpoint;
-    
-    // Inicializamos cURL
-    $ch = curl_init($url_completa);
-    
-    // Configuramos las cabeceras exactas que solicita World Office
-    $cabeceras = [
-        'Content-Type: application/json',
-        'Authorization: ' . API_TOKEN
-    ];
-    
-    // Configuración estructural base de cURL
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); // Devuelve la respuesta como string en vez de imprimirla
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $cabeceras); // Inyecta los headers configurados
-    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($metodo)); // Define el método (GET, POST, etc.)
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Tiempo límite de espera de 30 segundos
-    curl_setopt($ch, CURLOPT_ENCODING, ''); // Maneja la compresión de datos nativamente
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Sigue redirecciones si la API cambia de servidor
-    curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1); // Fuerza el protocolo HTTP requerido
-    
-    // Si la petición envía datos, los transformamos a formato JSON string
-    if ($datos !== null) {
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($datos));
-    }
-    
+    $ch = wo_crear_handle($endpoint, $metodo, $datos);
+
     // Ejecutamos la petición de red
     $respuesta = curl_exec($ch);
     
@@ -71,6 +50,83 @@ function hacer_peticion_api($endpoint, $metodo = 'GET', $datos = null) {
     }
     
     return $resultado;
+}
+
+/** Handle de cURL listo para una petición a World Office (URL, cabeceras, método y cuerpo JSON). */
+function wo_crear_handle($endpoint, $metodo = 'GET', $datos = null) {
+    // Construimos la URL completa uniendo la base y el endpoint
+    $ch = curl_init(API_URL_BASE . $endpoint);
+
+    // Configuramos las cabeceras exactas que solicita World Office
+    $cabeceras = [
+        'Content-Type: application/json',
+        'Authorization: ' . API_TOKEN
+    ];
+
+    // Configuración estructural base de cURL
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); // Devuelve la respuesta como string en vez de imprimirla
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $cabeceras); // Inyecta los headers configurados
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($metodo)); // Define el método (GET, POST, etc.)
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Tiempo límite de espera de 30 segundos
+    curl_setopt($ch, CURLOPT_ENCODING, ''); // Maneja la compresión de datos nativamente
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Sigue redirecciones si la API cambia de servidor
+    curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1); // Fuerza el protocolo HTTP requerido
+
+    // Si la petición envía datos, los transformamos a formato JSON string
+    if ($datos !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($datos));
+    }
+    return $ch;
+}
+
+/**
+ * Varias peticiones a World Office A LA VEZ (curl_multi), con como máximo $simultaneas abiertas.
+ * $peticiones: [clave => ['endpoint' => ..., 'metodo' => ..., 'datos' => ...]].
+ * Devuelve [clave => respuesta], cada una igual a lo que devolvería hacer_peticion_api().
+ */
+function hacer_peticiones_api_paralelo(array $peticiones, $simultaneas = 8) {
+    $resultados = [];
+    if (!$peticiones) return $resultados;
+    // En PHP 8 el handle es un objeto y en PHP 7 un recurso.
+    $idHandle = fn($ch) => is_object($ch) ? spl_object_id($ch) : (int)$ch;
+    $mh = curl_multi_init();
+    $activos = []; // id del handle => [clave, handle]
+    $cola = $peticiones;
+    $lanzar = function () use (&$cola, &$activos, $mh, $simultaneas, $idHandle) {
+        while ($cola && count($activos) < $simultaneas) {
+            reset($cola);
+            $clave = key($cola);
+            $p = $cola[$clave];
+            unset($cola[$clave]);
+            $ch = wo_crear_handle($p['endpoint'], $p['metodo'] ?? 'GET', $p['datos'] ?? null);
+            curl_multi_add_handle($mh, $ch);
+            $activos[$idHandle($ch)] = [$clave, $ch];
+        }
+    };
+    $lanzar();
+    do {
+        curl_multi_exec($mh, $corriendo);
+        if ($corriendo && curl_multi_select($mh, 1.0) === -1) usleep(2000);
+        while ($info = curl_multi_info_read($mh)) {
+            $ch = $info['handle'];
+            $id = $idHandle($ch);
+            [$clave] = $activos[$id];
+            if ($info['result'] !== CURLE_OK) {
+                $resultados[$clave] = ['status' => 'error', 'mensaje_interno' => 'Error de conexión cURL: ' . curl_strerror($info['result'])];
+            } else {
+                $respuesta = curl_multi_getcontent($ch);
+                $json = json_decode($respuesta, true);
+                $resultados[$clave] = $json !== null ? $json
+                    : ['status' => 'error', 'mensaje_interno' => 'La API externa no devolvió un JSON válido', 'respuesta_cruda' => $respuesta];
+            }
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+            unset($activos[$id]);
+            $lanzar();
+        }
+    } while ($corriendo || $activos);
+    curl_multi_close($mh);
+    return $resultados;
 }
 
 /**
