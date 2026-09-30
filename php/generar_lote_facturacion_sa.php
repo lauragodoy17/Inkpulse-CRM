@@ -16,7 +16,7 @@ function lfs_redirect($status, $msg) {
     exit;
 }
 
-$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? []))));
+$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? explode(',', $_POST['ids_csv'] ?? '')))));
 if (empty($ids)) lfs_redirect('error', 'No se seleccionó ningún pedido.');
 
 $in_ph = implode(',', array_fill(0, count($ids), '?'));

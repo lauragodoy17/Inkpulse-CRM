@@ -14,7 +14,7 @@ function le_redirect($status, $msg) {
     exit;
 }
 
-$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? []))));
+$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? explode(',', $_POST['ids_csv'] ?? '')))));
 if (empty($ids)) le_redirect('error', 'No se seleccionó ningún pedido.');
 
 // Solo pedidos "En despacho" (estado=7, tp=8) y dentro del mismo alcance de

@@ -140,6 +140,8 @@ if ($tp == 6) {
 
     /* ── Columna Acciones: checkbox + Ver detalle en línea ──────────── */
     .lp-acciones-cell { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .lp-chk-all-wrap { display: inline-flex; align-items: center; gap: 6px; margin: 0 10px 0 0; cursor: pointer; font-weight: 600; }
+    #lp-chk-all { width: 16px; height: 16px; margin: 0; accent-color: #fff; cursor: pointer; }
     .lp-chk-pedido {
       width: 16px; height: 16px; margin: 0; flex-shrink: 0;
       accent-color: <?= $ac['accent'] ?>; cursor: pointer;
@@ -285,7 +287,14 @@ if ($tp == 6) {
                 <th>Colegio</th>
                 <th>Tipo</th>
                 <?php if ($show_stock): ?><th>Stock</th><?php endif; ?>
-                <th>Acciones</th>
+                <th>
+                  <?php if (isset($bulk_cfg[$tp])): ?>
+                  <label class="lp-chk-all-wrap" title="Seleccionar todos los registros del filtro actual (todas las páginas)">
+                    <input type="checkbox" id="lp-chk-all">
+                  </label>
+                  <?php endif; ?>
+                  Acciones
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -347,11 +356,45 @@ $(document).ready(function () {
   // se guarda en un objeto {id: true} y se vuelve a marcar el checkbox
   // correspondiente cada vez que se pinta una página nueva.
   var selectedIds = {};
+  var lpRecordsFiltered = 0; // total de filas del filtro actual (lo manda el server en cada draw)
   function lpUpdateSelBar() {
     var n = Object.keys(selectedIds).length;
     $('#lp-sel-count').text(n);
     $('#lp-btn-procesar').prop('disabled', n === 0);
+    // El checkbox general queda marcado solo si están seleccionadas todas
+    // las filas del filtro actual (incluidas las de otras páginas).
+    var $vis = $('#lps-table .lp-chk-pedido');
+    var todos = n > 0 && n === lpRecordsFiltered && $vis.length === $vis.filter(':checked').length;
+    $('#lp-chk-all').prop('checked', todos);
   }
+  // Checkbox general: trae del server los ids de TODAS las filas que cumplen
+  // los filtros actuales (no solo la página visible) y los selecciona.
+  $('#lp-chk-all').on('change', function () {
+    var $chk = $(this);
+    if (!this.checked) {
+      selectedIds = {};
+      $('#lps-table .lp-chk-pedido').prop('checked', false);
+      lpUpdateSelBar();
+      return;
+    }
+    $chk.prop('disabled', true);
+    $.ajax({
+      url: 'ajax/lista_pedidos_sa_data.php',
+      type: 'POST',
+      data: $.extend({}, table.ajax.params(), { solo_ids: 1 }),
+      dataType: 'json'
+    }).done(function (resp) {
+      selectedIds = {};
+      (resp.ids || []).forEach(function (id) { selectedIds[id] = true; });
+      $('#lps-table .lp-chk-pedido').prop('checked', true);
+    }).fail(function () {
+      $chk.prop('checked', false);
+      if (window.inkToast) window.inkToast('No se pudieron seleccionar todos los registros.', 'error');
+    }).always(function () {
+      $chk.prop('disabled', false);
+      lpUpdateSelBar();
+    });
+  });
   $('#lps-table').on('change', '.lp-chk-pedido', function () {
     var id = $(this).data('id');
     if (this.checked) selectedIds[id] = true;
@@ -365,9 +408,9 @@ $(document).ready(function () {
     confirmar(bulkCfg.confirm_title, ids.length + ' pedido(s). ' + bulkCfg.confirm_text, function () {
       var $form = $('<form>', { method: 'POST', action: bulkCfg.endpoint });
       if (bulkCfg.download) $form.attr('target', '_blank');
-      ids.forEach(function (id) {
-        $form.append($('<input>', { type: 'hidden', name: 'ids[]', value: id }));
-      });
+      // Un solo campo con los ids separados por coma: con "seleccionar todos"
+      // pueden ser miles y como ids[] chocarían con max_input_vars.
+      $form.append($('<input>', { type: 'hidden', name: 'ids_csv', value: ids.join(',') }));
       $('body').append($form);
       $form.submit();
 
@@ -408,6 +451,7 @@ $(document).ready(function () {
         d.fecha_hasta = $('#lps-fecha-hasta').val();
       },
       dataSrc: function (json) {
+        lpRecordsFiltered = json.recordsFiltered;
         $('.lm-count-badge').text(json.recordsFiltered + ' registros');
         return json.data;
       }
@@ -431,6 +475,7 @@ $(document).ready(function () {
         $('.lp-chk-pedido').each(function () {
           $(this).prop('checked', !!selectedIds[$(this).data('id')]);
         });
+        lpUpdateSelBar();
       }
     }
   });

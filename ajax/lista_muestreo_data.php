@@ -136,9 +136,18 @@ if ($tp == 1) {
   // c.colegio y cal.calendario deben estar en el SELECT de esta subconsulta:
   // MySQL exige que HAVING solo vea columnas del GROUP BY, agregadas, o
   // presentes en el SELECT — nunca columnas "sueltas" de las tablas unidas.
-  $req = $bdd->prepare("SELECT COUNT(*) FROM (SELECT p.id, c.colegio, cal.calendario, $select_calc $from $where GROUP BY p.id $having_sql) t");
+  $req = $bdd->prepare("SELECT COUNT(*) FROM (SELECT p.id, p.fecha, c.colegio, cal.calendario, $select_calc $from $where GROUP BY p.id $having_sql) t");
   $req->execute($all_params);
   $records_filtered = intval($req->fetchColumn());
+
+  // solo_ids=1: checkbox "seleccionar todos" de la barra masiva — devuelve
+  // los ids de TODAS las filas que cumplen los filtros actuales (sin paginar).
+  if (!empty($_POST['solo_ids'])) {
+    $req = $bdd->prepare("SELECT p.id, p.fecha, c.colegio, cal.calendario, $select_calc $from $where GROUP BY p.id $having_sql");
+    $req->execute($all_params);
+    echo json_encode(['ids' => array_map('intval', $req->fetchAll(PDO::FETCH_COLUMN, 0))]);
+    exit;
+  }
 
   $order_map     = ['id' => 'p.id', 'fecha_d' => 'p.fecha', 'colegio' => 'c.colegio',
                      'calendario' => 'cal.calendario', 'empresa' => 'empresa_calc', 'responsable' => 'resp_calc'];

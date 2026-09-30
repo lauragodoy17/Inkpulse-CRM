@@ -20,7 +20,7 @@ function ld_redirect($status, $msg, $tp = 7) {
     exit;
 }
 
-$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? []))));
+$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? explode(',', $_POST['ids_csv'] ?? '')))));
 if (empty($ids)) ld_redirect('error', 'No se seleccionó ningún pedido.');
 
 // Solo pedidos "Facturación" (estado=6, tp=7) y dentro del mismo alcance de

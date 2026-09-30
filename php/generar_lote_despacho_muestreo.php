@@ -17,7 +17,7 @@ function ldm_redirect($status, $msg, $tp = 7) {
     exit;
 }
 
-$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? []))));
+$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? explode(',', $_POST['ids_csv'] ?? '')))));
 if (empty($ids)) ldm_redirect('error', 'No se seleccionó ningún muestreo.');
 
 $in_ph = implode(',', array_fill(0, count($ids), '?'));

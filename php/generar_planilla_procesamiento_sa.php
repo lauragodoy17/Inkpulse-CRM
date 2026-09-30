@@ -29,7 +29,7 @@ function lps_error($msg) {
 
 $cols = planilla_pdf_columnas();
 
-$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? []))));
+$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? explode(',', $_POST['ids_csv'] ?? '')))));
 if (empty($ids)) lps_error('No se seleccionó ningún pedido.');
 
 // pedidos2.colegio es texto directo (no hay FK a colegios), y "responsable"

@@ -25,7 +25,7 @@ function lp_error($msg) {
 
 $cols = planilla_pdf_columnas();
 
-$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? []))));
+$ids = array_values(array_unique(array_filter(array_map('intval', $_POST['ids'] ?? explode(',', $_POST['ids_csv'] ?? '')))));
 if (empty($ids)) lp_error('No se seleccionó ningún pedido.');
 
 // Solo pedidos "Aprobados" (estado=2, tp=3) y dentro del mismo alcance de zona

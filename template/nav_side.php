@@ -426,7 +426,7 @@ $periodos_active     = $current_page === 'periodos.php';
 											<a href="lista_pedidos.php?tp=2" >Pendientes</a>
 											<a href="lista_pedidos.php?tp=3" >Aprobados</a>
 											<a href="lista_pedidos.php?tp=6" >Procesando</a>
-											<a href="lista_pedidos.php?tp=7" >En facturacioón</a>
+											<a href="lista_pedidos.php?tp=7" >En facturación</a>
 											<a href="lista_pedidos.php?tp=8" >En despacho</a>
 											<a href="lista_pedidos.php?tp=4" >Entregados</a>
 											<a href="agrupar_pedidos.php" >Agrupar pedidos</a>
@@ -522,6 +522,17 @@ $periodos_active     = $current_page === 'periodos.php';
 								<span class="micon bi bi-search"></span
 								><span class="mtext">Backorders por pedido</span>
 							</a>
+						</li>
+						<?php $bsa_active = in_array($current_page, ['backorders_sa.php', 'backorders_sa_informe.php']); ?>
+						<li class="dropdown <?= $bsa_active ? 'show' : '' ?>">
+							<a href="javascript:;" class="dropdown-toggle <?= $bsa_active ? 'active' : '' ?>">
+								<span class="micon bi bi-journal-plus"></span
+								><span class="mtext">Backorders sin adopción</span>
+							</a>
+							<ul class="submenu">
+								<li><a href="backorders_sa.php">Administrar</a></li>
+								<li><a href="backorders_sa_informe.php">Informe</a></li>
+							</ul>
 						</li>
 						<li class="dropdown <?= $empaque_active ? 'show' : '' ?>">
 							<a href="javascript:;" class="dropdown-toggle <?= $empaque_active ? 'active' : '' ?>">
