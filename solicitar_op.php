@@ -526,14 +526,19 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
             <!-- Tipo de documento -->
             <div class="sop-field">
               <label class="sop-label">Tipo de documento<span class="req">*</span></label>
-              <select class="sop-select" name="tipo_doc" id="tipo_doc" required>
-                <option value="">Seleccionar</option>
-                <?php
-                  $sql = "SELECT * FROM tipo_doc WHERE act=1";
-                  $req = $bdd->prepare($sql); $req->execute();
-                  foreach ($req->fetchAll() as $td):
-                ?>
-                <option value="<?= $td['id'] ?>"><?= htmlspecialchars($td['tipo'].' ('.$td['descrip'].')') ?></option>
+              <?php
+                // Tipos de documento según el origen de la OP (ver includes/tipos_doc_op.php): en
+                // muestreo y devoluciones queda uno solo, fijo; en pedidos, FVE o REM RCEUR.
+                require_once(__DIR__ . "/includes/tipos_doc_op.php");
+                $origen_op = $_GET;
+                if (isset($_POST['pedidos_agp'])) $origen_op['pedidos_agp'] = $_POST['pedidos_agp'];
+                $tipos_doc_op = tipos_doc_op_opciones($bdd, $origen_op);
+                $tipo_doc_fijo = count($tipos_doc_op) === 1;
+              ?>
+              <select class="sop-select" name="tipo_doc" id="tipo_doc" required data-fijo="<?= $tipo_doc_fijo ? '1' : '0' ?>">
+                <?php if (!$tipo_doc_fijo): ?><option value="">Seleccionar</option><?php endif; ?>
+                <?php foreach ($tipos_doc_op as $td): ?>
+                <option value="<?= $td['id'] ?>"<?= $tipo_doc_fijo ? ' selected' : '' ?>><?= htmlspecialchars(trim($td['tipo']).' ('.$td['descrip'].')') ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -561,10 +566,10 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
               </select>
             </div>
 
-            <!-- Contacto -->
+            <!-- Responsable -->
             <div class="sop-field">
-              <label class="sop-label">Contacto</label>
-              <input type="text" class="sop-input" name="solicitante" id="solicitante" placeholder="Contacto" value="<?= isset($_GET['id_muestreo']) ? htmlspecialchars($pedido['responsable'] ?? '') : '' ?>" />
+              <label class="sop-label">Responsable</label>
+              <input type="text" class="sop-input" name="solicitante" id="solicitante" placeholder="Responsable" value="<?= isset($_GET['id_muestreo']) ? htmlspecialchars($pedido['responsable'] ?? '') : '' ?>" />
             </div>
 
             <?php if ($show_archivo): ?>
@@ -653,6 +658,7 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
 <script src="vendors/scripts/script.min.js"></script>
 <script src="vendors/scripts/process.js"></script>
 <script src="vendors/scripts/layout-settings.js"></script>
+<script src="src/ink-alerts.js"></script>
 
 <script>
   $(document).ready(function () {
@@ -677,7 +683,7 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
 
     $('#tipo_doc').select2({
       placeholder: 'Seleccionar',
-      allowClear: true,
+      allowClear: $('#tipo_doc').data('fijo') != 1, // tipo fijo: no se puede quitar
       minimumResultsForSearch: 0,
       width: '100%',
       language: {
