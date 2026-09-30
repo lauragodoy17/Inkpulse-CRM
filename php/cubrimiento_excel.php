@@ -50,6 +50,9 @@ if ($_POST['promo']!=0) {
   $req_zona = $bdd->prepare($sql_zona);
   $req_zona->execute();
   $zona = $req_zona->fetch();
+  if (!$zona) $zona = ['zona' => '']; // usuario sin zona: sin esto cada acceso deja un Warning dentro del Excel
+  // Empresa = parte de la zona antes del "/" (columna Empresa del Excel).
+  $empresa = trim(explode('/', $zona['zona'])[0]);
 }
 
 
