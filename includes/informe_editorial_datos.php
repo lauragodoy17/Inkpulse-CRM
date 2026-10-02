@@ -28,6 +28,27 @@ function calcular_bucket_editorial_informe($idEditorial) {
     return 'otra';
 }
 
+// Asesores cuyo informe se limita a una lista fija de colegios (por DANE), sin importar qué otros
+// colegios tenga su zona — pedido por el usuario 2026-10-02: Mariana Castañeda (id=57) solo cuenta
+// Colegio Espiritu Santo Marianistas Girardot, Gimnasio Academico Regional, Liceo Nuestra Señora De
+// Torcoroma y Gimnasio Superior Nuevos Andes. Aplica a presupuesto, adopción y venta real.
+const COLEGIOS_RESTRINGIDOS_INFORME_EDITORIAL = [
+    57 => ['325307000501', '311769004268', '311001033439', '311001109168'],
+];
+
+/**
+ * Condición SQL (para un WHERE que ya tenga los alias `owner` y `c`) que descarta los colegios de
+ * los asesores restringidos que no estén en su lista.
+ */
+function filtro_colegios_restringidos_informe_sql() {
+    $condiciones = [];
+    foreach (COLEGIOS_RESTRINGIDOS_INFORME_EDITORIAL as $idAsesor => $danes) {
+        $lista = implode(',', array_map(fn($d) => "'" . preg_replace('/[^0-9]/', '', $d) . "'", $danes));
+        $condiciones[] = "(owner.id = " . (int)$idAsesor . " AND c.dane NOT IN ($lista))";
+    }
+    return $condiciones ? ' AND NOT (' . implode(' OR ', $condiciones) . ')' : '';
+}
+
 /**
  * Tabla donde se guarda el "Presupuesto asignado por temporada" (columna J del Excel) que se
  * escribe a mano — antes vivía SOLO dentro del archivo descargado y se perdía en la siguiente
@@ -198,7 +219,7 @@ function calcular_datos_editorial_un_periodo($bdd, $idPeriodo) {
         JOIN presupuestos p ON c.id = p.id_colegio
         $ownerJoin
         WHERE (p.pre_definido=1 OR p.definido=1) AND p.id_periodo = ? AND c.id_calendario = ?
-              AND owner.id IS NOT NULL
+              AND owner.id IS NOT NULL" . filtro_colegios_restringidos_informe_sql() . "
         GROUP BY c.id, owner.id");
     $stmtColegios->execute([$idPeriodo, $idCalendario]);
     $colegios = $stmtColegios->fetchAll(PDO::FETCH_ASSOC);
@@ -474,22 +495,30 @@ function venta_real_por_asesor_un_periodo($bdd, $idPeriodo) {
         LEFT JOIN usuarios owner ON owner.cod_zona = COALESCE(pz.cod_zona, c.cod_zona) AND owner.cod_zona <> ''
              AND (owner.tipo = 3 OR owner.id = 69)";
 
-    $stmtCalc = $bdd->prepare("SELECT c.id as id_colegio, owner.id as id_asesor,
+    $filtroRestringidos = filtro_colegios_restringidos_informe_sql();
+
+    // Desglosada por editorial del libro (pedido por el usuario 2026-10-02: la venta real se
+    // distribuye en Eureka / McGraw Hill / Otra igual que presupuesto y adopciones).
+    $stmtCalc = $bdd->prepare("SELECT c.id as id_colegio, owner.id as id_asesor, l.editorial,
             SUM(CASE WHEN p.tasa_compra_d = 0
                 THEN (p.precio - p.precio * p.descuento) * p.uni_vr
                 ELSE (p.precio - p.precio * p.descuento_d) * p.uni_vr END) as venta_calculada
         FROM presupuestos p
         JOIN colegios c ON p.id_colegio = c.id
+        JOIN libros l ON p.id_libro = l.id
         $ownerJoin
         WHERE p.id_periodo = ? AND p.definido != 0 AND c.id_calendario = ?
               AND p.probabilidad != 3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00)
-              AND owner.id IS NOT NULL
-        GROUP BY c.id, owner.id");
+              AND owner.id IS NOT NULL $filtroRestringidos
+        GROUP BY c.id, owner.id, l.editorial");
     $stmtCalc->execute([$idPeriodo, $idCalendario]);
 
-    $ventaPorColegio = []; // id_colegio => ['id_asesor'=>, 'total'=>]
+    $vacio = ['eureka' => 0.0, 'mcgraw' => 0.0, 'otra' => 0.0];
+    $ventaPorColegio = []; // id_colegio => ['id_asesor'=>, 'eureka'=>, 'mcgraw'=>, 'otra'=>]
     foreach ($stmtCalc->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $ventaPorColegio[(int)$row['id_colegio']] = ['id_asesor' => (int)$row['id_asesor'], 'total' => (float)$row['venta_calculada']];
+        $idColegio = (int)$row['id_colegio'];
+        if (!isset($ventaPorColegio[$idColegio])) $ventaPorColegio[$idColegio] = ['id_asesor' => (int)$row['id_asesor']] + $vacio;
+        $ventaPorColegio[$idColegio][calcular_bucket_editorial_informe($row['editorial'])] += (float)$row['venta_calculada'];
     }
 
     $stmtManual = $bdd->prepare("SELECT r.id_colegio, owner.id as id_asesor, MAX(r.venta_real) as venta_real
@@ -497,18 +526,35 @@ function venta_real_por_asesor_un_periodo($bdd, $idPeriodo) {
         JOIN colegios c ON r.id_colegio = c.id
         JOIN presupuestos p ON p.id_colegio = c.id AND p.id_periodo = r.id_periodo
         $ownerJoin
-        WHERE r.id_periodo = ? AND r.venta_real > 0 AND c.id_calendario = ? AND owner.id IS NOT NULL
+        WHERE r.id_periodo = ? AND r.venta_real > 0 AND c.id_calendario = ? AND owner.id IS NOT NULL $filtroRestringidos
         GROUP BY r.id_colegio, owner.id");
     $stmtManual->execute([$idPeriodo, $idCalendario]);
     foreach ($stmtManual->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        // El manual reemplaza al calculado para ese colegio, sin importar si ya había uno.
-        $ventaPorColegio[(int)$row['id_colegio']] = ['id_asesor' => (int)$row['id_asesor'], 'total' => (float)$row['venta_real']];
+        // El manual reemplaza al calculado para ese colegio, sin importar si ya había uno. Como
+        // recursos.venta_real es un solo monto por colegio (sin editorial), se reparte en la misma
+        // proporción por editorial que tenga la venta calculada del colegio; si no hay calculada
+        // para repartir, va completa a Eureka.
+        $idColegio = (int)$row['id_colegio'];
+        $manual = (float)$row['venta_real'];
+        $calc = $ventaPorColegio[$idColegio] ?? $vacio;
+        $totalCalc = $calc['eureka'] + $calc['mcgraw'] + $calc['otra'];
+        $fila = ['id_asesor' => (int)$row['id_asesor']] + $vacio;
+        if ($totalCalc > 0) {
+            foreach (['eureka', 'mcgraw', 'otra'] as $bucket) $fila[$bucket] = $manual * $calc[$bucket] / $totalCalc;
+        } else {
+            $fila['eureka'] = $manual;
+        }
+        $ventaPorColegio[$idColegio] = $fila;
     }
 
-    $porAsesor = [];
+    $porAsesor = []; // id_asesor => ['eureka','mcgraw','otra','total']
     foreach ($ventaPorColegio as $fila) {
-        if ($fila['total'] <= 0) continue;
-        $porAsesor[$fila['id_asesor']] = ($porAsesor[$fila['id_asesor']] ?? 0.0) + $fila['total'];
+        $total = $fila['eureka'] + $fila['mcgraw'] + $fila['otra'];
+        if ($total <= 0) continue;
+        $id = $fila['id_asesor'];
+        if (!isset($porAsesor[$id])) $porAsesor[$id] = $vacio + ['total' => 0.0];
+        foreach (['eureka', 'mcgraw', 'otra'] as $bucket) $porAsesor[$id][$bucket] += $fila[$bucket];
+        $porAsesor[$id]['total'] += $total;
     }
     return $porAsesor;
 }
@@ -542,8 +588,9 @@ function obtener_venta_real_temporada_anterior($bdd, $idPeriodo) {
 
     $porAsesor = [];
     foreach ($temporadaAnterior['idsIncluidos'] as $idPeriodoParte) {
-        foreach (venta_real_por_asesor_un_periodo($bdd, $idPeriodoParte) as $idAsesor => $monto) {
-            $porAsesor[$idAsesor] = ($porAsesor[$idAsesor] ?? 0.0) + $monto;
+        foreach (venta_real_por_asesor_un_periodo($bdd, $idPeriodoParte) as $idAsesor => $montos) {
+            if (!isset($porAsesor[$idAsesor])) $porAsesor[$idAsesor] = ['eureka' => 0.0, 'mcgraw' => 0.0, 'otra' => 0.0, 'total' => 0.0];
+            foreach ($montos as $k => $v) $porAsesor[$idAsesor][$k] += $v;
         }
     }
 
