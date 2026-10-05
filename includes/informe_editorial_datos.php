@@ -18,13 +18,112 @@
 // pero de negocio son una sola) — confirmado por el usuario 2026-09-18, sus valores se suman al
 // bucket "eureka" en vez de caer en "Otra". Ojo: NO se incluye "EUREKA BB" (id=48) aquí — el
 // usuario solo confirmó Eureka+EEE, esa otra queda en "Otra" hasta que se confirme lo mismo.
-const IDS_EDITORIAL_EUREKA_INFORME = [1, 45];
-const ID_EDITORIAL_MCGRAW_INFORME = 14;
+// SM (id=2) también se suma a Eureka (pedido por el usuario 2026-10-05: "Eureka = Eureka + SM"),
+// así que deja de salir en el desglose de "Otra".
+// Reclasificación pedida por el usuario 2026-10-05, tras revisar qué había en cada categoría:
+// - EUREKA BB (id=48, serie Brady) suma a Eureka.
+// - EDIARTE (id=17, packs "All Sorts", etiqueta "INGLES - MGH") y la editorial "OTRA" (id=31,
+//   New Interactions / Ellevate / Discovering Our Past) suman a McGraw Hill, salvo los libros de
+//   Pearson que estaban en "OTRA" (ver RECLASIFICACION_ISBN_INFORME_EDITORIAL).
+// - Algunos libros sin editorial ("NINGUNA", id=0) se reasignan por ISBN (ver abajo) y los libros
+//   propios del colegio San José de la Anunciación se excluyen (ver
+//   filtro_libros_excluidos_informe_sql()).
+// Solo cambia cómo se agrupan en ESTE informe; el catálogo `libros` no se toca.
+const IDS_EDITORIAL_EUREKA_INFORME = [1, 45, 2, 48];
+const IDS_EDITORIAL_MCGRAW_INFORME = [14, 17, 31];
+
+// "PL" no existe en `editoriales`: id ficticio solo para el desglose de este informe (cae en "Otra").
+const ID_EDITORIAL_PL_INFORME = -1;
+
+// ISBN => editorial con la que cuenta en el informe. Solo se aplica a libros con editorial
+// NINGUNA (0) u OTRA (31) en el catálogo — pedido por el usuario 2026-10-05.
+const RECLASIFICACION_ISBN_INFORME_EDITORIAL = [
+    // OTRA → PEARSON: Exploring Science International 7 y 8
+    '9781292294100' => 11,
+    '9781292294148' => 11,
+    // NINGUNA → PL: El tucán y el pájaro carpintero, La danza de la libertad, Entre lo bello y lo
+    // profundo, Amorfinos y otros cantos divinos, Mi hermana Juana y las ballenas del fin del mundo,
+    // De taquito antología de fútbol
+    '9789582010867' => ID_EDITORIAL_PL_INFORME,
+    '9789585675315' => ID_EDITORIAL_PL_INFORME,
+    '9789978483381' => ID_EDITORIAL_PL_INFORME,
+    '9789978485491' => ID_EDITORIAL_PL_INFORME,
+    '9789584261663' => ID_EDITORIAL_PL_INFORME,
+    '9786287591295' => ID_EDITORIAL_PL_INFORME,
+    // NINGUNA → PLANETA: Mi primer Quijote, El perfume, Clásicos en escena, Las aventuras de Ráquira
+    '9789584290335' => 20,
+    '9789584232083' => 20,
+    '9789584241108' => 20,
+    '9786280002798' => 20,
+    // NINGUNA → VICENS VIVES: Prisma K comprensión lectora (Prisma G-J ya están en Vicens Vives)
+    '9789588421889' => 37,
+    // NINGUNA → ILS: Trazos y letras / Lógica y números preescolar 1, 2 y 3
+    '9789585325142' => 34,
+    '9789585325128' => 34,
+    '9789585325159' => 34,
+    '9789585325173' => 34,
+    '9786076960233' => 34,
+    '9786076960240' => 34,
+];
+
+/** Editorial con la que cuenta un libro en este informe (aplica RECLASIFICACION_ISBN_INFORME_EDITORIAL). */
+function editorial_efectiva_informe($idEditorial, $isbn) {
+    $idEditorial = (int)$idEditorial;
+    if (in_array($idEditorial, [0, 31], true)) {
+        $isbn = preg_replace('/[^0-9X]/i', '', (string)$isbn);
+        if (isset(RECLASIFICACION_ISBN_INFORME_EDITORIAL[$isbn])) return RECLASIFICACION_ISBN_INFORME_EDITORIAL[$isbn];
+    }
+    return $idEditorial;
+}
+
+/**
+ * Condición SQL (alias `l` = libros) que excluye del informe los ~40 libros propios del colegio San
+ * José de la Anunciación (sin editorial ni ISBN): no son de los asesores de Eureka y no deben contar
+ * en venta real, presupuesto ni adopciones — pedido por el usuario 2026-10-05.
+ */
+function filtro_libros_excluidos_informe_sql() {
+    return " AND NOT (l.editorial = 0 AND l.libro LIKE '%SAN JOSE DE LA ANUNCIACION%')";
+}
+
+
+// Presupuesto OFICIAL de la gerencia por asesor (Eureka / McGraw Hill), tomado de la imagen
+// "presupuesto.jpeg" que pasó el usuario 2026-10-05 ("PPTO 25-26"); va en el informe de
+// 2027 + 2026B ("eso tiene que aparecer sí o sí"), comparado con el bloque PRESUPUESTO ASIGNADO.
+// id_usuario null = fila sin asesor en el CRM ("Dirección comercial", confirmado por el usuario).
+const PRESUPUESTO_OFICIAL_PPTO_25_26_INFORME = [
+    ['id_usuario' => 11,   'nombre' => 'MANUEL CORREA',        'mcgraw' => 14746689,  'eureka' => 665253312],
+    ['id_usuario' => 16,   'nombre' => 'MARIO HERRERA',        'mcgraw' => 136053900, 'eureka' => 423946100],
+    ['id_usuario' => 55,   'nombre' => 'BERNARDO OSORIO',      'mcgraw' => 38988905,  'eureka' => 411011095],
+    ['id_usuario' => 69,   'nombre' => 'HECTOR MORALES',       'mcgraw' => 35000000,  'eureka' => 415000000],
+    ['id_usuario' => 72,   'nombre' => 'JAIRO RICO',           'mcgraw' => 53972625,  'eureka' => 326027375],
+    ['id_usuario' => 56,   'nombre' => 'SARA BERRIO',          'mcgraw' => 35000000,  'eureka' => 315000000],
+    ['id_usuario' => 51,   'nombre' => 'WILSON SUAREZ',        'mcgraw' => 72681875,  'eureka' => 327318125],
+    ['id_usuario' => 49,   'nombre' => 'WILSON VARGAS',        'mcgraw' => 218656053, 'eureka' => 581343947],
+    ['id_usuario' => 13,   'nombre' => 'YIMMI FORERO',         'mcgraw' => 83267438,  'eureka' => 496732563],
+    ['id_usuario' => 14,   'nombre' => 'YOLANDA MONTENEGRO',   'mcgraw' => 76332375,  'eureka' => 573667625],
+    ['id_usuario' => null, 'nombre' => 'DIRECCION COMERCIAL',  'mcgraw' => 109158060, 'eureka' => 390841940],
+];
+// Clave = período de Calendario A (id canónico de la temporada). Para una temporada nueva, agregar
+// otra entrada con su lista.
+const PRESUPUESTO_OFICIAL_INFORME_EDITORIAL = [
+    '2027' => PRESUPUESTO_OFICIAL_PPTO_25_26_INFORME,
+];
+
+/**
+ * Presupuesto oficial (ver PRESUPUESTO_OFICIAL_INFORME_EDITORIAL) de la temporada de $idPeriodo, o
+ * [] si no hay uno cargado para esa temporada.
+ */
+function obtener_presupuesto_oficial_informe_editorial($bdd, $idPeriodo) {
+    $idCanonico = resolver_temporada_informe_editorial($bdd, $idPeriodo)['idCanonico'];
+    $stmt = $bdd->prepare("SELECT periodo FROM periodos WHERE id = ?");
+    $stmt->execute([$idCanonico]);
+    return PRESUPUESTO_OFICIAL_INFORME_EDITORIAL[(string)$stmt->fetchColumn()] ?? [];
+}
 
 function calcular_bucket_editorial_informe($idEditorial) {
     $idEditorial = (int)$idEditorial;
     if (in_array($idEditorial, IDS_EDITORIAL_EUREKA_INFORME, true)) return 'eureka';
-    if ($idEditorial === ID_EDITORIAL_MCGRAW_INFORME) return 'mcgraw';
+    if (in_array($idEditorial, IDS_EDITORIAL_MCGRAW_INFORME, true)) return 'mcgraw';
     return 'otra';
 }
 
@@ -231,6 +330,11 @@ function calcular_datos_editorial_un_periodo($bdd, $idPeriodo) {
     $vacio = ['eureka' => 0.0, 'mcgraw' => 0.0, 'otra' => 0.0];
     $presupuestoPorAsesor = []; // id_asesor => ['eureka'=>, 'mcgraw'=>, 'otra'=>]
     $adopcionPorAsesor = [];
+    // Detalle del bucket "Otra" por editorial (id_asesor => id_editorial => monto) — para el
+    // cuadro de desglose debajo del informe (pedido por el usuario 2026-10-05: ver cuánto de
+    // "Otra" es Altiva y cuánto de las demás editoriales).
+    $presupuestoOtraPorEditorial = [];
+    $adopcionOtraPorEditorial = [];
 
     if (!empty($idsColegio)) {
         $ph = implode(',', array_fill(0, count($idsColegio), '?'));
@@ -240,10 +344,11 @@ function calcular_datos_editorial_un_periodo($bdd, $idPeriodo) {
         // "Perdida" y líneas sin ninguna tasa de compra asignada, que no representan una venta
         // proyectable).
         $stmtPres = $bdd->prepare("SELECT p.id_colegio, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d,
-                                           p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id_grado, l.editorial
+                                           p.precio, p.pre_definido, p.definido, p.cod_area, p.uni_vr, l.id_grado, l.editorial, l.isbn
                                     FROM presupuestos p JOIN libros l ON p.id_libro = l.id
                                     WHERE p.id_colegio IN ($ph) AND (p.pre_definido=1 OR p.definido=1) AND p.id_periodo = ?
-                                          AND p.probabilidad != 3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00)");
+                                          AND p.probabilidad != 3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00)"
+                                          . filtro_libros_excluidos_informe_sql());
         $stmtPres->execute(array_merge($idsColegio, [$idPeriodo]));
         $lineasPorColegio = [];
         foreach ($stmtPres->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -283,7 +388,8 @@ function calcular_datos_editorial_un_periodo($bdd, $idPeriodo) {
                 $grado_lookup = ($cod_area !== '' && isset($aoMap[$idColegio][$cod_area]))
                     ? $aoMap[$idColegio][$cod_area] : $l['id_grado'];
                 $alumnos = $gpMap[$idColegio][$grado_lookup] ?? 0;
-                $bucket = calcular_bucket_editorial_informe($l['editorial']);
+                $idEdEfectiva = editorial_efectiva_informe($l['editorial'], $l['isbn']);
+                $bucket = calcular_bucket_editorial_informe($idEdEfectiva);
 
                 if ($l['pre_definido'] == 1) {
                     // round() antes de floor(): mismo motivo que valoriza_global_excel.php
@@ -292,6 +398,10 @@ function calcular_datos_editorial_un_periodo($bdd, $idPeriodo) {
                     $alumnos_tasa = floor(round($alumnos * $l['tasa_compra'], 6));
                     $precio_neto  = $l['precio'] - ($l['precio'] * $l['descuento']);
                     $presupuestoPorAsesor[$idAsesor][$bucket] += $precio_neto * $alumnos_tasa;
+                    if ($bucket === 'otra') {
+                        $idEd = $idEdEfectiva;
+                        $presupuestoOtraPorEditorial[$idAsesor][$idEd] = ($presupuestoOtraPorEditorial[$idAsesor][$idEd] ?? 0.0) + $precio_neto * $alumnos_tasa;
+                    }
                 }
                 if ($l['definido'] != 0) {
                     if ($l['tasa_compra_d'] == 0.00) {
@@ -302,12 +412,39 @@ function calcular_datos_editorial_un_periodo($bdd, $idPeriodo) {
                         $precio_neto_d  = $l['precio'] - ($l['precio'] * $l['descuento_d']);
                     }
                     $adopcionPorAsesor[$idAsesor][$bucket] += $precio_neto_d * $alumnos_tasa_d;
+                    if ($bucket === 'otra') {
+                        $idEd = $idEdEfectiva;
+                        $adopcionOtraPorEditorial[$idAsesor][$idEd] = ($adopcionOtraPorEditorial[$idAsesor][$idEd] ?? 0.0) + $precio_neto_d * $alumnos_tasa_d;
+                    }
                 }
             }
         }
     }
 
-    return ['presupuestoPorAsesor' => $presupuestoPorAsesor, 'adopcionPorAsesor' => $adopcionPorAsesor];
+    return [
+        'presupuestoPorAsesor' => $presupuestoPorAsesor, 'adopcionPorAsesor' => $adopcionPorAsesor,
+        'presupuestoOtraPorEditorial' => $presupuestoOtraPorEditorial, 'adopcionOtraPorEditorial' => $adopcionOtraPorEditorial,
+    ];
+}
+
+/** Suma $origen (id => monto) dentro de $destino (id => monto). */
+function sumar_montos_por_id_informe(array &$destino, array $origen) {
+    foreach ($origen as $id => $monto) $destino[$id] = ($destino[$id] ?? 0.0) + $monto;
+}
+
+/** [id_editorial => nombre] de los ids pedidos (id 0 = libros sin editorial). */
+function nombres_editoriales_informe($bdd, array $ids) {
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+    $nombres = [];
+    if (!empty($ids)) {
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $bdd->prepare("SELECT id, editorial FROM editoriales WHERE id IN ($ph)");
+        $stmt->execute($ids);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) $nombres[(int)$row['id']] = trim($row['editorial']);
+    }
+    $nombres[ID_EDITORIAL_PL_INFORME] = 'PL';
+    foreach ($ids as $id) if (!isset($nombres[$id])) $nombres[$id] = 'SIN EDITORIAL';
+    return $nombres;
 }
 
 /**
@@ -326,8 +463,18 @@ function obtener_datos_informe_editorial($bdd, $idPeriodo) {
     $vacio = ['eureka' => 0.0, 'mcgraw' => 0.0, 'otra' => 0.0];
     $presupuestoPorAsesor = [];
     $adopcionPorAsesor = [];
+    $presOtraEd = [];
+    $adopOtraEd = [];
     foreach ($temporada['idsIncluidos'] as $idPeriodoParte) {
         $parcial = calcular_datos_editorial_un_periodo($bdd, $idPeriodoParte);
+        foreach ($parcial['presupuestoOtraPorEditorial'] as $idAsesor => $porEd) {
+            if (!isset($presOtraEd[$idAsesor])) $presOtraEd[$idAsesor] = [];
+            sumar_montos_por_id_informe($presOtraEd[$idAsesor], $porEd);
+        }
+        foreach ($parcial['adopcionOtraPorEditorial'] as $idAsesor => $porEd) {
+            if (!isset($adopOtraEd[$idAsesor])) $adopOtraEd[$idAsesor] = [];
+            sumar_montos_por_id_informe($adopOtraEd[$idAsesor], $porEd);
+        }
         foreach ($parcial['presupuestoPorAsesor'] as $idAsesor => $montos) {
             if (!isset($presupuestoPorAsesor[$idAsesor])) $presupuestoPorAsesor[$idAsesor] = $vacio;
             foreach (['eureka', 'mcgraw', 'otra'] as $bucket) $presupuestoPorAsesor[$idAsesor][$bucket] += $montos[$bucket];
@@ -358,6 +505,9 @@ function obtener_datos_informe_editorial($bdd, $idPeriodo) {
             'activo' => (bool)($nombresPorId[$id]['act'] ?? 1),
             'presupuesto' => $pres,
             'adopcion' => $adop,
+            // Detalle de "Otra": [id_editorial => monto]
+            'presupuesto_otra_ed' => $presOtraEd[$id] ?? [],
+            'adopcion_otra_ed' => $adopOtraEd[$id] ?? [],
         ];
     }
     usort($asesores, fn($a, $b) => strcmp($a['nombre'], $b['nombre']));
@@ -499,7 +649,7 @@ function venta_real_por_asesor_un_periodo($bdd, $idPeriodo) {
 
     // Desglosada por editorial del libro (pedido por el usuario 2026-10-02: la venta real se
     // distribuye en Eureka / McGraw Hill / Otra igual que presupuesto y adopciones).
-    $stmtCalc = $bdd->prepare("SELECT c.id as id_colegio, owner.id as id_asesor, l.editorial,
+    $stmtCalc = $bdd->prepare("SELECT c.id as id_colegio, owner.id as id_asesor, l.editorial, l.isbn,
             SUM(CASE WHEN p.tasa_compra_d = 0
                 THEN (p.precio - p.precio * p.descuento) * p.uni_vr
                 ELSE (p.precio - p.precio * p.descuento_d) * p.uni_vr END) as venta_calculada
@@ -510,15 +660,22 @@ function venta_real_por_asesor_un_periodo($bdd, $idPeriodo) {
         WHERE p.id_periodo = ? AND p.definido != 0 AND c.id_calendario = ?
               AND p.probabilidad != 3 AND (p.tasa_compra != 0.00 OR p.tasa_compra_d != 0.00)
               AND owner.id IS NOT NULL $filtroRestringidos
-        GROUP BY c.id, owner.id, l.editorial");
+              " . filtro_libros_excluidos_informe_sql() . "
+        GROUP BY c.id, owner.id, l.editorial, l.isbn");
     $stmtCalc->execute([$idPeriodo, $idCalendario]);
 
-    $vacio = ['eureka' => 0.0, 'mcgraw' => 0.0, 'otra' => 0.0];
-    $ventaPorColegio = []; // id_colegio => ['id_asesor'=>, 'eureka'=>, 'mcgraw'=>, 'otra'=>]
+    $vacio = ['eureka' => 0.0, 'mcgraw' => 0.0, 'otra' => 0.0, 'otra_ed' => []];
+    $ventaPorColegio = []; // id_colegio => ['id_asesor'=>, 'eureka'=>, 'mcgraw'=>, 'otra'=>, 'otra_ed' => [id_editorial => monto]]
     foreach ($stmtCalc->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $idColegio = (int)$row['id_colegio'];
         if (!isset($ventaPorColegio[$idColegio])) $ventaPorColegio[$idColegio] = ['id_asesor' => (int)$row['id_asesor']] + $vacio;
-        $ventaPorColegio[$idColegio][calcular_bucket_editorial_informe($row['editorial'])] += (float)$row['venta_calculada'];
+        $idEdEfectiva = editorial_efectiva_informe($row['editorial'], $row['isbn']);
+        $bucket = calcular_bucket_editorial_informe($idEdEfectiva);
+        $ventaPorColegio[$idColegio][$bucket] += (float)$row['venta_calculada'];
+        if ($bucket === 'otra') {
+            $idEd = $idEdEfectiva;
+            $ventaPorColegio[$idColegio]['otra_ed'][$idEd] = ($ventaPorColegio[$idColegio]['otra_ed'][$idEd] ?? 0.0) + (float)$row['venta_calculada'];
+        }
     }
 
     $stmtManual = $bdd->prepare("SELECT r.id_colegio, owner.id as id_asesor, MAX(r.venta_real) as venta_real
@@ -541,13 +698,14 @@ function venta_real_por_asesor_un_periodo($bdd, $idPeriodo) {
         $fila = ['id_asesor' => (int)$row['id_asesor']] + $vacio;
         if ($totalCalc > 0) {
             foreach (['eureka', 'mcgraw', 'otra'] as $bucket) $fila[$bucket] = $manual * $calc[$bucket] / $totalCalc;
+            foreach ($calc['otra_ed'] as $idEd => $monto) $fila['otra_ed'][$idEd] = $manual * $monto / $totalCalc;
         } else {
             $fila['eureka'] = $manual;
         }
         $ventaPorColegio[$idColegio] = $fila;
     }
 
-    $porAsesor = []; // id_asesor => ['eureka','mcgraw','otra','total']
+    $porAsesor = []; // id_asesor => ['eureka','mcgraw','otra','total','otra_ed']
     foreach ($ventaPorColegio as $fila) {
         $total = $fila['eureka'] + $fila['mcgraw'] + $fila['otra'];
         if ($total <= 0) continue;
@@ -555,6 +713,7 @@ function venta_real_por_asesor_un_periodo($bdd, $idPeriodo) {
         if (!isset($porAsesor[$id])) $porAsesor[$id] = $vacio + ['total' => 0.0];
         foreach (['eureka', 'mcgraw', 'otra'] as $bucket) $porAsesor[$id][$bucket] += $fila[$bucket];
         $porAsesor[$id]['total'] += $total;
+        sumar_montos_por_id_informe($porAsesor[$id]['otra_ed'], $fila['otra_ed']);
     }
     return $porAsesor;
 }
@@ -589,8 +748,9 @@ function obtener_venta_real_temporada_anterior($bdd, $idPeriodo) {
     $porAsesor = [];
     foreach ($temporadaAnterior['idsIncluidos'] as $idPeriodoParte) {
         foreach (venta_real_por_asesor_un_periodo($bdd, $idPeriodoParte) as $idAsesor => $montos) {
-            if (!isset($porAsesor[$idAsesor])) $porAsesor[$idAsesor] = ['eureka' => 0.0, 'mcgraw' => 0.0, 'otra' => 0.0, 'total' => 0.0];
-            foreach ($montos as $k => $v) $porAsesor[$idAsesor][$k] += $v;
+            if (!isset($porAsesor[$idAsesor])) $porAsesor[$idAsesor] = ['eureka' => 0.0, 'mcgraw' => 0.0, 'otra' => 0.0, 'total' => 0.0, 'otra_ed' => []];
+            foreach (['eureka', 'mcgraw', 'otra', 'total'] as $k) $porAsesor[$idAsesor][$k] += $montos[$k];
+            sumar_montos_por_id_informe($porAsesor[$idAsesor]['otra_ed'], $montos['otra_ed']);
         }
     }
 

@@ -33,6 +33,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 require_once("../conexion/bdd.php");
 require_once("../includes/excel_formato.php");
@@ -63,9 +64,10 @@ $presupuestoTemporadaGuardado = obtener_presupuesto_temporada_informe_editorial(
 // Venta real de la temporada ANTERIOR por asesor (ej. pedir 2027 trae 2026+2025B) — pedido por el
 // usuario 2026-09-22 para la nueva columna B, de referencia frente a lo que se está adoptando hoy.
 $ventaRealAnterior = obtener_venta_real_temporada_anterior($bdd, $idPeriodo);
-$labelVentaRealAnterior = $ventaRealAnterior['anioAnterior'] !== null
-    ? 'VENTA REAL TEMPORADA ' . $ventaRealAnterior['anioAnterior']
-    : 'VENTA REAL TEMPORADA ANTERIOR';
+// Títulos pedidos por el usuario 2026-10-05: el bloque se llama "Temporada {año}" y su desglose
+// "Venta real por editorial {año}".
+$anioVentaReal = $ventaRealAnterior['anioAnterior'] !== null ? (string)$ventaRealAnterior['anioAnterior'] : 'anterior';
+$labelVentaRealAnterior = 'Temporada ' . $anioVentaReal;
 
 $objSpreadsheet = new Spreadsheet();
 $objSpreadsheet->getProperties()->setCreator("Ing. Alejandro Rangel");
@@ -85,9 +87,11 @@ $hoja->setCellValue('D4', 'Objetivo: Pasar de un 100% en cumplimiento');
 
 // ── Encabezados de la tabla (2 filas: grupo + columna) ──────────────────────────────────
 // Layout de columnas (2026-10-02: la venta real pasó de una sola columna B a B-E desglosada por
-// editorial, todo lo demás corrido +3 letras): A=Asesores, B-E=Venta real temporada anterior,
-// F-I=ADOPCIONES, J-M=PRESUPUESTO ASIGNADO, N=Presupuesto por temporada (manual), O-Q=Cumplimientos,
-// R-W=métricas de cumplimiento/variación/meta.
+// editorial, todo lo demás corrido +3 letras; 2026-10-05: el usuario pidió el orden Venta real →
+// Presupuesto → Adopciones): A=Asesores, B-E=Venta real temporada anterior, F-I=PRESUPUESTO
+// ASIGNADO, J-M=ADOPCIONES, N=Presupuesto por temporada (manual), O-Q=Cumplimientos, R-W=métricas
+// de cumplimiento/variación/meta. Debajo: desglose de "Otra" por editorial y, si la temporada
+// tiene presupuesto oficial cargado, la comparación oficial vs. CRM.
 $filaGrupo = EXCEL_FILA_ENCABEZADOS;
 $filaCol   = EXCEL_FILA_ENCABEZADOS + 1;
 $filaInicioTabla = $filaGrupo;
@@ -99,7 +103,7 @@ $estiloGrupo = [
     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'FFFFFF']]],
 ];
 $estiloCol = [
-    'font' => ['bold' => true],
+    'font' => ['bold' => true, 'color' => ['rgb' => '1F2937']],
     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DCE6F1']],
     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'B7C6E0']]],
@@ -109,8 +113,8 @@ $estiloCol = [
 $grupos = [
     ['A', 'A', "INFORME CUMPLIMIENTO {$periodoLabel}"],
     ['B', 'E', $labelVentaRealAnterior],
-    ['F', 'I', "ADOPCIONES {$periodoLabel}"],
-    ['J', 'M', "PRESUPUESTO ASIGNADO {$periodoLabel}"],
+    ['F', 'I', 'Presupuesto'],
+    ['J', 'M', 'Adopciones por editorial'],
     ['O', 'Q', "CUMPLIMIENTOS"],
 ];
 foreach ($grupos as [$colIni, $colFin, $titulo]) {
@@ -134,8 +138,8 @@ $fechaUltimoLabel = $ultimo['fecha'] ? date('d/m/Y', strtotime($ultimo['fecha'])
 $titulosCol = [
     'A' => 'Asesores',
     'B' => 'Eureka', 'C' => 'McGraw Hill', 'D' => 'Otra', 'E' => 'Total venta real',
-    'F' => 'Eureka', 'G' => 'McGraw Hill', 'H' => 'Otra', 'I' => 'Total adopciones',
-    'J' => 'Eureka', 'K' => 'McGraw Hill', 'L' => 'Otra', 'M' => 'Total PPTO',
+    'F' => 'Eureka', 'G' => 'McGraw Hill', 'H' => 'Otra', 'I' => 'Total PPTO',
+    'J' => 'Eureka', 'K' => 'McGraw Hill', 'L' => 'Otra', 'M' => 'Total adopciones',
     'N' => 'Presupuesto asignado por temporada',
     'O' => 'Eureka', 'P' => 'McGraw Hill', 'Q' => 'Otra',
     'R' => 'TOTAL CUMPLIMIENTO (Informe a Hoy)',
@@ -176,6 +180,10 @@ $fmtMoney = '_("$"* #,##0_);_("$"* \(#,##0\);_("$"* "-"??_);_(@_)';
 $fmtPctYaEscalado = '0.00"%"';
 $fila = $filaCol + 1;
 $inicioDatos = $fila;
+$filaPorAsesor = []; // id_usuario => fila del cuadro principal
+// "PPTO 25-26" por asesor (ver PRESUPUESTO_OFICIAL_INFORME_EDITORIAL, imagen "presupuesto.jpeg" del
+// usuario 2026-10-05). Vacío si la temporada no lo tiene cargado: el informe queda como siempre.
+$presupuestoOficial = obtener_presupuesto_oficial_informe_editorial($bdd, $idPeriodo);
 
 $totales = [
     'adopcion' => ['eureka' => 0.0, 'mcgraw' => 0.0, 'otra' => 0.0, 'total' => 0.0],
@@ -194,6 +202,7 @@ foreach ($asesores as $a) {
     $nombreFila = $a['nombre'];
     if (!$a['activo']) $nombreFila .= ' (inactivo)';
     $hoja->setCellValue("A{$fila}", $nombreFila);
+    $filaPorAsesor[$a['id_usuario']] = $fila;
     if (!$a['activo']) $hoja->getStyle("A{$fila}")->applyFromArray(['font' => ['color' => ['rgb' => 'C0392B']]]);
 
     // B-E: Venta real de la temporada ANTERIOR por editorial (referencia, no forma parte de ningún
@@ -207,14 +216,14 @@ foreach ($asesores as $a) {
     $hoja->setCellValue("E{$fila}", $venta['total']);
     $hoja->getStyle("B{$fila}:E{$fila}")->getNumberFormat()->setFormatCode($fmtMoney);
 
-    $hoja->setCellValue("F{$fila}", $adop['eureka']);
-    $hoja->setCellValue("G{$fila}", $adop['mcgraw']);
-    $hoja->setCellValue("H{$fila}", $adop['otra']);
-    $hoja->setCellValue("I{$fila}", $adop['total']);
-    $hoja->setCellValue("J{$fila}", $pres['eureka']);
-    $hoja->setCellValue("K{$fila}", $pres['mcgraw']);
-    $hoja->setCellValue("L{$fila}", $pres['otra']);
-    $hoja->setCellValue("M{$fila}", $pres['total']);
+    $hoja->setCellValue("F{$fila}", $pres['eureka']);
+    $hoja->setCellValue("G{$fila}", $pres['mcgraw']);
+    $hoja->setCellValue("H{$fila}", $pres['otra']);
+    $hoja->setCellValue("I{$fila}", $pres['total']);
+    $hoja->setCellValue("J{$fila}", $adop['eureka']);
+    $hoja->setCellValue("K{$fila}", $adop['mcgraw']);
+    $hoja->setCellValue("L{$fila}", $adop['otra']);
+    $hoja->setCellValue("M{$fila}", $adop['total']);
     $hoja->getStyle("F{$fila}:M{$fila}")->getNumberFormat()->setFormatCode($fmtMoney);
 
     // N: "Presupuesto asignado por temporada" — se PRECARGA con lo ya guardado (ver
@@ -238,9 +247,9 @@ foreach ($asesores as $a) {
 
     // R: TOTAL CUMPLIMIENTO (Informe a Hoy) — fórmula EN VIVO pedida por el usuario 2026-09-18: si
     // se llena a mano la columna N, el cumplimiento se recalcula contra ESE presupuesto
-    // (I÷N×100); mientras N esté vacío sigue usando el presupuesto ya cargado en el CRM (I÷M×100,
-    // el mismo cálculo de siempre). Se envuelve en IFERROR por si M llega a ser 0.
-    $hoja->setCellValue("R{$fila}", "=IF(N{$fila}=\"\",IFERROR(I{$fila}/M{$fila}*100,0),I{$fila}/N{$fila}*100)");
+    // (M÷N×100); mientras N esté vacío sigue usando el presupuesto ya cargado en el CRM (M÷I×100,
+    // el mismo cálculo de siempre). Se envuelve en IFERROR por si I llega a ser 0.
+    $hoja->setCellValue("R{$fila}", "=IF(N{$fila}=\"\",IFERROR(M{$fila}/I{$fila}*100,0),M{$fila}/N{$fila}*100)");
     $hoja->getStyle("R{$fila}")->getNumberFormat()->setFormatCode($fmtPctYaEscalado);
     $hoja->getStyle("R{$fila}")->applyFromArray(['font' => ['bold' => true]] + $estiloVerde);
 
@@ -290,9 +299,9 @@ foreach ($asesores as $a) {
     // W: Valor Pendiente de adopción para llegar a — EN PESOS (corregido 2026-09-18: la fórmula
     // literal que dio el usuario, Meta-Cumplimiento, daba puntos porcentuales; pidió que se quede
     // en pesos como antes). Es cuánto dinero falta adoptar para llegar a la meta: presupuesto
-    // objetivo (N si está lleno, si no M, el mismo que usa R como denominador) menos lo ya
-    // adoptado (I). En blanco cuando ya se cumplió la meta (R>=100); nunca negativo (MAX 0).
-    $hoja->setCellValue("W{$fila}", "=IF(R{$fila}>=100,\"\",MAX(0,IF(N{$fila}=\"\",M{$fila}-I{$fila},N{$fila}-I{$fila})))");
+    // objetivo (N si está lleno, si no I, el mismo que usa R como denominador) menos lo ya
+    // adoptado (M). En blanco cuando ya se cumplió la meta (R>=100); nunca negativo (MAX 0).
+    $hoja->setCellValue("W{$fila}", "=IF(R{$fila}>=100,\"\",MAX(0,IF(N{$fila}=\"\",I{$fila}-M{$fila},N{$fila}-M{$fila})))");
     $hoja->getStyle("W{$fila}")->getNumberFormat()->setFormatCode($fmtMoney);
     $hoja->getStyle("W{$fila}")->applyFromArray(['font' => ['color' => ['rgb' => 'DC2626']]]);
 
@@ -308,14 +317,14 @@ $hoja->setCellValue("C{$fila}", $totalesVentaReal['mcgraw']);
 $hoja->setCellValue("D{$fila}", $totalesVentaReal['otra']);
 $hoja->setCellValue("E{$fila}", $totalesVentaReal['total']);
 $hoja->getStyle("B{$fila}:E{$fila}")->getNumberFormat()->setFormatCode($fmtMoney);
-$hoja->setCellValue("F{$fila}", $totales['adopcion']['eureka']);
-$hoja->setCellValue("G{$fila}", $totales['adopcion']['mcgraw']);
-$hoja->setCellValue("H{$fila}", $totales['adopcion']['otra']);
-$hoja->setCellValue("I{$fila}", $totales['adopcion']['total']);
-$hoja->setCellValue("J{$fila}", $totales['presupuesto']['eureka']);
-$hoja->setCellValue("K{$fila}", $totales['presupuesto']['mcgraw']);
-$hoja->setCellValue("L{$fila}", $totales['presupuesto']['otra']);
-$hoja->setCellValue("M{$fila}", $totales['presupuesto']['total']);
+$hoja->setCellValue("F{$fila}", $totales['presupuesto']['eureka']);
+$hoja->setCellValue("G{$fila}", $totales['presupuesto']['mcgraw']);
+$hoja->setCellValue("H{$fila}", $totales['presupuesto']['otra']);
+$hoja->setCellValue("I{$fila}", $totales['presupuesto']['total']);
+$hoja->setCellValue("J{$fila}", $totales['adopcion']['eureka']);
+$hoja->setCellValue("K{$fila}", $totales['adopcion']['mcgraw']);
+$hoja->setCellValue("L{$fila}", $totales['adopcion']['otra']);
+$hoja->setCellValue("M{$fila}", $totales['adopcion']['total']);
 $hoja->getStyle("F{$fila}:M{$fila}")->getNumberFormat()->setFormatCode($fmtMoney);
 
 // N de la fila de totales: suma lo que se haya escrito a mano en las filas de arriba (da 0 si
@@ -327,7 +336,7 @@ if ($inicioDatos <= $finDatos) {
 }
 $hoja->getStyle("N{$fila}")->getNumberFormat()->setFormatCode($fmtMoney);
 
-$hoja->setCellValue("R{$fila}", "=IF(N{$fila}=0,IFERROR(I{$fila}/M{$fila}*100,0),I{$fila}/N{$fila}*100)");
+$hoja->setCellValue("R{$fila}", "=IF(N{$fila}=0,IFERROR(M{$fila}/I{$fila}*100,0),M{$fila}/N{$fila}*100)");
 $hoja->getStyle("R{$fila}")->getNumberFormat()->setFormatCode($fmtPctYaEscalado);
 
 $hoja->setCellValue("U{$fila}", "=IF(R{$fila}>=100,\"Esta cumpliendo la meta\",100)");
@@ -336,7 +345,7 @@ $hoja->setCellValue("V{$fila}", "=IFERROR((U{$fila}-R{$fila})/U{$fila},\"\")");
 $hoja->getStyle("V{$fila}")->getNumberFormat()->setFormatCode('0.00%');
 // W en pesos, igual que en las filas de asesor (N aquí es la SUMA de la columna, así que se
 // compara contra 0 en vez de "").
-$hoja->setCellValue("W{$fila}", "=IF(R{$fila}>=100,\"\",MAX(0,IF(N{$fila}=0,M{$fila}-I{$fila},N{$fila}-I{$fila})))");
+$hoja->setCellValue("W{$fila}", "=IF(R{$fila}>=100,\"\",MAX(0,IF(N{$fila}=0,I{$fila}-M{$fila},N{$fila}-M{$fila})))");
 $hoja->getStyle("W{$fila}")->getNumberFormat()->setFormatCode($fmtMoney);
 
 $hoja->getStyle("A{$fila}:W{$fila}")->applyFromArray($estiloTotal);
@@ -349,21 +358,127 @@ $hoja->getStyle("B{$inicioDatos}:W{$fila}")->getAlignment()->setHorizontal(Align
 $hoja->getStyle("A{$inicioDatos}:A{$fila}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
 $hoja->getStyle("A{$filaCol}:W{$fila}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
+// ── PPTO 25-26 dentro de Venta Real ──────────────────────────────────────────────────────
+// Pedido por el usuario 2026-10-05: los valores de su imagen "PPTO 25-26" van en el bloque Venta
+// Real, cada uno al lado de su columna (Eureka → junto a B, McGraw Hill → junto a C, Total → junto
+// a E), SIN columnas de diferencia. Se insertan de derecha a izquierda para usar las letras
+// originales: queda B Eureka | C PPTO | D McGraw Hill | E PPTO | F Otra | G Total | H PPTO, y todo lo
+// que estaba de F en adelante se corre 3 columnas (PhpSpreadsheet ajusta fórmulas y estilos).
+$colsPpto = !empty($presupuestoOficial) ? 3 : 0;
+if ($colsPpto) {
+    $hoja->unmergeCells("B{$filaGrupo}:E{$filaGrupo}");
+    $hoja->insertNewColumnBefore('F', 1);
+    $hoja->insertNewColumnBefore('D', 1);
+    $hoja->insertNewColumnBefore('C', 1);
+    $hoja->mergeCells("B{$filaGrupo}:H{$filaGrupo}");
+    $hoja->setCellValue("B{$filaGrupo}", $labelVentaRealAnterior);
+
+    $pptoPorAsesor = [];
+    foreach ($presupuestoOficial as $of) {
+        if ($of['id_usuario'] !== null) $pptoPorAsesor[$of['id_usuario']] = $of;
+    }
+    $columnasPpto = [
+        'C' => ['Eureka PPTO 25-26', fn($of) => $of['eureka']],
+        'E' => ['McGraw Hill PPTO 25-26', fn($of) => $of['mcgraw']],
+        'H' => ['Total PPTO 25-26', fn($of) => $of['eureka'] + $of['mcgraw']],
+    ];
+    foreach ($columnasPpto as $col => [$tituloPpto, $valor]) {
+        $hoja->setCellValue("{$col}{$filaCol}", $tituloPpto);
+        foreach ($filaPorAsesor as $idUsuario => $f) {
+            if (isset($pptoPorAsesor[$idUsuario])) $hoja->setCellValue("{$col}{$f}", $valor($pptoPorAsesor[$idUsuario]));
+        }
+        $hoja->setCellValue("{$col}{$fila}", "=SUM({$col}{$inicioDatos}:{$col}{$finDatos})");
+    }
+    $hoja->getStyle("B{$filaGrupo}:H{$filaGrupo}")->applyFromArray($estiloGrupo);
+    $hoja->getStyle("B{$filaGrupo}:H{$filaCol}")->applyFromArray(['fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E4DFF7']], 'font' => ['bold' => true]]);
+    $hoja->getStyle("B{$filaCol}:H{$filaCol}")->applyFromArray($estiloCol);
+    $hoja->getStyle("B{$filaCol}:H{$filaCol}")->applyFromArray(['fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E4DFF7']]]);
+    $hoja->getStyle("B{$inicioDatos}:H{$fila}")->getNumberFormat()->setFormatCode($fmtMoney);
+    $hoja->getStyle("B{$inicioDatos}:H{$fila}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    $hoja->getStyle("B{$fila}:H{$fila}")->applyFromArray($estiloTotal);
+}
+// Letra final de una columna del layout original después de insertar las de PPTO 25-26.
+$colFinal = function ($letra) use ($colsPpto) {
+    $idx = Coordinate::columnIndexFromString($letra);
+    if (!$colsPpto || $idx < 3) $desp = 0;
+    elseif ($idx === 3) $desp = 1;      // C (McGraw Hill) → D
+    elseif ($idx <= 5) $desp = 2;       // D (Otra) → F, E (Total) → G
+    else $desp = 3;
+    return Coordinate::stringFromColumnIndex($idx + $desp);
+};
+
+// ── Cuadros debajo de la tabla ──────────────────────────────────────────────────────────
+// Pinta título (fila combinada) + encabezados de un cuadro desde la columna A; devuelve la fila
+// donde empiezan los datos.
+$pintarEncabezadoCuadro = function ($filaTitulo, $titulo, array $encabezados) use ($hoja, $estiloGrupo, $estiloCol) {
+    $ultimaCol = Coordinate::stringFromColumnIndex(count($encabezados));
+    $hoja->mergeCells("A{$filaTitulo}:{$ultimaCol}{$filaTitulo}");
+    $hoja->setCellValue("A{$filaTitulo}", $titulo);
+    $hoja->getStyle("A{$filaTitulo}:{$ultimaCol}{$filaTitulo}")->applyFromArray($estiloGrupo);
+    foreach ($encabezados as $i => $texto) $hoja->setCellValue(Coordinate::stringFromColumnIndex($i + 1) . ($filaTitulo + 1), $texto);
+    $hoja->getStyle("A" . ($filaTitulo + 1) . ":{$ultimaCol}" . ($filaTitulo + 1))->applyFromArray($estiloCol);
+    $hoja->getRowDimension($filaTitulo + 1)->setRowHeight(30);
+    return $filaTitulo + 2;
+};
+
+// Desglose de "Otra" por editorial — un cuadro por cada grupo (venta real, presupuesto, adopciones)
+// para ver de qué editoriales se compone esa columna (ej. cuánto es ALTIVA). Pedido por el usuario
+// 2026-10-05; Altiva va con el mismo formato y orden (por monto) que las demás, a pedido del
+// usuario. Solo salen las editoriales con valor en ese grupo; "Total Otra" cuadra con la columna
+// Otra de cada bloque del cuadro principal.
+$cuadrosOtra = [
+    ["Venta real por editorial {$anioVentaReal}", fn($a) => $ventaRealAnterior['porAsesor'][$a['id_usuario']]['otra_ed'] ?? []],
+    ["Presupuesto por editorial {$periodoLabel}", fn($a) => $a['presupuesto_otra_ed']],
+    ["Adopciones por editorial {$periodoLabel}", fn($a) => $a['adopcion_otra_ed']],
+];
+$fila += 3;
+foreach ($cuadrosOtra as [$tituloCuadro, $obtenerOtraEd]) {
+    $totalPorEd = [];
+    foreach ($asesores as $a) sumar_montos_por_id_informe($totalPorEd, $obtenerOtraEd($a));
+    $totalPorEd = array_filter($totalPorEd, fn($v) => abs($v) >= 0.5);
+    if (empty($totalPorEd)) continue;
+    arsort($totalPorEd);
+    $idsEd = array_keys($totalPorEd);
+    $nombresEd = nombres_editoriales_informe($bdd, $idsEd);
+
+    $encabezados = ['Asesores'];
+    foreach ($idsEd as $idEd) $encabezados[] = $nombresEd[$idEd];
+    $encabezados[] = 'Total Otra';
+    $colTotal = Coordinate::stringFromColumnIndex(count($encabezados));
+    $fila = $pintarEncabezadoCuadro($fila, $tituloCuadro, $encabezados);
+    $iniCuadro = $fila;
+
+    foreach ($asesores as $a) {
+        $porEd = $obtenerOtraEd($a);
+        $hoja->setCellValue("A{$fila}", $a['nombre'] . ($a['activo'] ? '' : ' (inactivo)'));
+        foreach ($idsEd as $i => $idEd) $hoja->setCellValue(Coordinate::stringFromColumnIndex($i + 2) . $fila, $porEd[$idEd] ?? 0);
+        $hoja->setCellValue("{$colTotal}{$fila}", "=SUM(B{$fila}:" . Coordinate::stringFromColumnIndex(count($idsEd) + 1) . "{$fila})");
+        $fila++;
+    }
+    $hoja->setCellValue("A{$fila}", 'Total');
+    for ($c = 2; $c <= count($encabezados); $c++) {
+        $L = Coordinate::stringFromColumnIndex($c);
+        $hoja->setCellValue("{$L}{$fila}", "=SUM({$L}{$iniCuadro}:{$L}" . ($fila - 1) . ")");
+    }
+    $hoja->getStyle("A{$fila}:{$colTotal}{$fila}")->applyFromArray($estiloTotal);
+    $hoja->getStyle("B{$iniCuadro}:{$colTotal}{$fila}")->getNumberFormat()->setFormatCode($fmtMoney);
+    $hoja->getStyle("{$colTotal}{$iniCuadro}:{$colTotal}{$fila}")->getFont()->setBold(true);
+    $fila += 3;
+}
+
 // Autosize solo para las columnas de datos normales (A-M, O-Q): el ancho calculado les queda
 // bien solo. N (manual, vacía) y R-W (encabezados largos + fórmulas) llevan ancho FIJO —
 // setAutoSize(true) pisa cualquier setWidth() puesto después, así que hay que excluirlas del
 // autosize desde el principio en vez de "corregir" su ancho más abajo. Reportado por el usuario 2026-09-18 ("el scroll me permita ver todos los
 // datos").
 foreach (['A','B','C','D','E','F','G','H','I','J','K','L','M','O','P','Q'] as $col) {
-    $hoja->getColumnDimension($col)->setAutoSize(true);
+    $hoja->getColumnDimension($colFinal($col))->setAutoSize(true);
 }
-$hoja->getColumnDimension('N')->setWidth(22);
-$hoja->getColumnDimension('R')->setWidth(20);
-$hoja->getColumnDimension('S')->setWidth(24);
-$hoja->getColumnDimension('T')->setWidth(14);
-$hoja->getColumnDimension('U')->setWidth(22);
-$hoja->getColumnDimension('V')->setWidth(16);
-$hoja->getColumnDimension('W')->setWidth(22);
+foreach (['N' => 22, 'R' => 20, 'S' => 24, 'T' => 14, 'U' => 22, 'V' => 16, 'W' => 22] as $col => $ancho) {
+    $hoja->getColumnDimension($colFinal($col))->setWidth($ancho);
+}
+// Columnas PPTO 25-26 (C, E y H cuando existen).
+if ($colsPpto) foreach (['C', 'E', 'H'] as $col) $hoja->getColumnDimension($col)->setWidth(20);
 // Sin freezePane: las filas del encabezado quedaban inmovilizadas al hacer scroll hacia abajo y
 // tapaban/recortaban la vista de las filas de datos reales — pedido por el usuario 2026-09-18
 // ("quita el inmovilizar de esas [filas]").
