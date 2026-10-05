@@ -64,6 +64,9 @@ const RECLASIFICACION_ISBN_INFORME_EDITORIAL = [
     '9789585325173' => 34,
     '9786076960233' => 34,
     '9786076960240' => 34,
+    // NINGUNA → ILS: Ciudadanía Digital Bachillerato 1 (mismo rango de ISBN que Desempeños.com Plus y
+    // Robótica Genibot) — confirmado por el usuario 2026-10-05
+    '9789978487969' => 34,
 ];
 
 /** Editorial con la que cuenta un libro en este informe (aplica RECLASIFICACION_ISBN_INFORME_EDITORIAL). */
