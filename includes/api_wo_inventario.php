@@ -137,15 +137,15 @@ function clasificar_bodega_bulk(array $idsInventario, $concurrencia = 30) {
 }
 
 /**
- * Igual que existencia_bodega_general() pero para varios productos a la vez,
- * disparando las peticiones GET /inventarios/{id}/existencias/bodega en
- * paralelo (curl_multi) en vez de una por una. Con una lista de pedidos que
- * comparten pocos libros únicos, esto es lo que evita que la consulta tarde
- * "cantidad de libros × ~400ms" — con 20 libros únicos, en serie son ~8s,
- * en paralelo (lotes del tamaño de $concurrencia) baja a ~1-2s.
- * Devuelve [idInventario => cantidad|null] (null = la API falló para ese id).
+ * Existencias de varios productos en TODAS sus bodegas, disparando las peticiones
+ * GET /inventarios/{id}/existencias/bodega en paralelo (curl_multi) en vez de una
+ * por una. Con una lista de pedidos que comparten pocos libros únicos, esto es lo
+ * que evita que la consulta tarde "cantidad de libros × ~400ms" — con 20 libros
+ * únicos, en serie son ~8s, en paralelo (lotes del tamaño de $concurrencia) baja a
+ * ~1-2s.
+ * Devuelve [idInventario => [idBodega => cantidad]|null] (null = la API falló para ese id).
  */
-function existencias_bodega_general_bulk(array $idsInventario, $concurrencia = 30) {
+function existencias_por_bodega_bulk(array $idsInventario, $concurrencia = 30) {
     $ids = array_values(array_unique(array_filter($idsInventario, fn($v) => $v !== null && $v !== '')));
     $resultados = [];
     if (!$ids) return $resultados;
@@ -179,19 +179,49 @@ function existencias_bodega_general_bulk(array $idsInventario, $concurrencia = 3
         foreach ($handles as $id => $ch) {
             $respuesta = curl_multi_getcontent($ch);
             $data = json_decode($respuesta, true);
-            $cantidad = null;
+            $porBodega = null;
             if (is_array($data) && ($data['status'] ?? '') !== 'error') {
-                $cantidad = 0.0;
+                $porBodega = [];
                 foreach ($data['data']['content'] ?? [] as $f) {
-                    if ((int)($f['id'] ?? 0) === 1) { $cantidad = (float)($f['cantidad'] ?? 0); break; }
+                    $porBodega[(int)($f['id'] ?? 0)] = (float)($f['cantidad'] ?? 0);
                 }
             }
-            $resultados[$id] = $cantidad;
+            $resultados[$id] = $porBodega;
             curl_multi_remove_handle($mh, $ch);
             curl_close($ch);
         }
         curl_multi_close($mh);
     }
 
+    return $resultados;
+}
+
+/**
+ * Igual que existencia_bodega_general() pero para varios productos a la vez (ver
+ * existencias_por_bodega_bulk()).
+ * Devuelve [idInventario => cantidad|null] (null = la API falló para ese id).
+ */
+function existencias_bodega_general_bulk(array $idsInventario, $concurrencia = 30) {
+    $resultados = [];
+    foreach (existencias_por_bodega_bulk($idsInventario, $concurrencia) as $id => $porBodega) {
+        $resultados[$id] = $porBodega === null ? null : ($porBodega[1] ?? 0.0);
+    }
+    return $resultados;
+}
+
+/**
+ * Existencias de varios productos en la bodega id=1 "General" y en la id=4 "Muestras
+ * General" — para las solicitudes de muestras, que pueden salir de cualquiera de las
+ * dos (pedido por el usuario 2026-10-05).
+ * Devuelve [idInventario => ['general' => cantidad, 'muestras' => cantidad]|null].
+ */
+function existencias_general_y_muestras_bulk(array $idsInventario, $concurrencia = 30) {
+    $resultados = [];
+    foreach (existencias_por_bodega_bulk($idsInventario, $concurrencia) as $id => $porBodega) {
+        $resultados[$id] = $porBodega === null ? null : [
+            'general'  => $porBodega[1] ?? 0.0,
+            'muestras' => $porBodega[4] ?? 0.0,
+        ];
+    }
     return $resultados;
 }

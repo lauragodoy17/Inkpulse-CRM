@@ -221,6 +221,35 @@
 
 				echo "An error has occurred please try again: {$mail->ErrorInfo}";
 		}
+
+		// Aviso de stock bajo de la solicitud de muestras: bodega General o Muestras General, basta
+		// con que una esté por debajo del umbral (pedido por el usuario 2026-10-05) — ver
+		// includes/correo_stock_bajo.php.
+		try {
+			require_once("../includes/stock_bajo.php");
+			$req_m = $bdd->prepare("SELECT id FROM muestreos WHERE codigo = ?");
+			$req_m->execute([$cod_pedido]);
+			$id_muestreo = (int)$req_m->fetchColumn();
+
+			$req_lm = $bdd->prepare("SELECT DISTINCT id_libro FROM libros_muestreos WHERE cod_muestreo = ? AND cantidad != 0");
+			$req_lm->execute([$cod_pedido]);
+			$libros_bajos = libros_bajo_stock_muestras($bdd, $req_lm->fetchAll(PDO::FETCH_COLUMN));
+
+			if ($libros_bajos) {
+				require_once("../includes/correo_stock_bajo.php");
+				enviar_correo_stock_bajo(
+					'Stock bajo en solicitud de muestras #'.$id_muestreo.' - '.$cole['colegio'],
+					'La solicitud de muestras <strong>#'.$id_muestreo.'</strong>, hecha por '.htmlspecialchars($promo['promotor']).' para el colegio <strong>'.htmlspecialchars($cole['colegio']).'</strong>, incluye libros cuya existencia en la bodega General o en la bodega Muestras General de World Office está por debajo de '.UMBRAL_STOCK_BAJO.' unidades:',
+					$libros_bajos,
+					true,
+					'https://crm.somoseureka.com.co/muestreo_colegio.php?id_muestreo='.$id_muestreo,
+					'La solicitud de muestras #'.$id_muestreo.' para '.$cole['colegio'].' incluye libros con existencia baja en bodega General o Muestras General.',
+					'la solicitud'
+				);
+			}
+		} catch (\Throwable $e) {
+			error_log('No se pudo enviar el aviso de stock bajo de la solicitud de muestras '.$cod_pedido.': '.$e->getMessage());
+		}
 	}
 
 

@@ -62,3 +62,39 @@ function libros_bajo_stock_pedidos(PDO $bdd, array $idsPedido, $origen = 'pedido
 
     return $resultado;
 }
+
+/**
+ * Libros de una solicitud de MUESTRAS (muestreo o pedido sin adopción de tipo Muestras) con
+ * existencia por debajo del umbral en la bodega General O en la bodega Muestras General de World
+ * Office — las muestras pueden salir de cualquiera de las dos (regla pedida por el usuario
+ * 2026-10-05: basta con que una de las dos esté por debajo).
+ * @param array $idsLibro ids de libros.id
+ * @return array [['id_libro'=>, 'libro'=>, 'general'=>, 'muestras'=>], ...] — solo los bajos
+ */
+function libros_bajo_stock_muestras(PDO $bdd, array $idsLibro) {
+    $ids = array_values(array_unique(array_filter(array_map('intval', $idsLibro))));
+    if (!$ids) return [];
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $req = $bdd->prepare("SELECT id AS id_libro, id_wo, libro FROM libros
+                          WHERE id IN ($placeholders) AND id_wo IS NOT NULL ORDER BY libro");
+    $req->execute($ids);
+    $filas = $req->fetchAll();
+
+    $existencias = existencias_general_y_muestras_bulk(array_column($filas, 'id_wo'));
+
+    $resultado = [];
+    foreach ($filas as $f) {
+        $ex = $existencias[$f['id_wo']] ?? null;
+        if ($ex === null) continue;
+        if ($ex['general'] < UMBRAL_STOCK_BAJO || $ex['muestras'] < UMBRAL_STOCK_BAJO) {
+            $resultado[] = [
+                'id_libro' => (int)$f['id_libro'],
+                'libro'    => $f['libro'],
+                'general'  => $ex['general'],
+                'muestras' => $ex['muestras'],
+            ];
+        }
+    }
+    return $resultado;
+}

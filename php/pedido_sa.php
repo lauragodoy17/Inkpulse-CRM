@@ -58,49 +58,9 @@
 	 } while ($cod_pedido=="");
 
 
-	 // 1. Defines el mapa de relaciones [id_libro => cartilla]
-	$relaciones = [
-		4455 => 4083,
-		4458 => 4084,
-		4459 => 4085,
-		4460 => 4086,
-		4461 => 4087,
-		4462 => 4088,
-		4463 => 4089,
-		4464 => 4090,
-		4465 => 4091,
-		4456 => 4092,
-		4457 => 4093,
-		4444 => 4660,
-		4447 => 4659,
-		4448 => 4658,
-		4449 => 4657,
-		4450 => 4656,
-		4451 => 4637,
-		4452 => 4638,
-		4453 => 4639,
-		4454 => 4652,
-		4445 => 4651,
-		4446 => 4650,
-		4435 => 5038,
-		4436 => 5039,
-		4437 => 5040,
-		4438 => 4800,
-		4439 => 4632,
-		4440 => 4633,
-		4441 => 4634,
-		4442 => 4635,
-		4443 => 4636,
-		4466 => 4797,
-		4467 => 4623,
-		4468 => 4624,
-		4469 => 4625,
-		4470 => 4626,
-		4471 => 4627,
-		4472 => 4628,
-		4473 => 4629,
-		4474 => 4630,
-	];
+	 // 1. Mapa de relaciones [id_libro => cartilla] (compartido con Backorders sin adopción)
+	require_once("../includes/pedidos2_cartillas.php");
+	$relaciones = relaciones_cartillas_pedido_sa();
 
 
 	foreach ($_POST["libro_e"] as $libros => $libro) {
@@ -293,56 +253,36 @@
 		echo "An error has occurred please try again: {$mail->ErrorInfo}";
 	}*/
 
-	// Aviso de stock bajo (bodega General, World Office) a facturación
+	// Aviso de stock bajo a facturación. Venta (tipo_p=1): bodega General. Muestras (tipo_p=2): bodega
+	// General o Muestras General, basta con que una esté baja (pedido por el usuario 2026-10-05). El
+	// correo dice el tipo de pedido — ver includes/correo_stock_bajo.php.
 	try {
-		$bajo_stock = libros_bajo_stock_pedidos($bdd, [$pedido['id']], 'pedidos2');
-		$libros_bajos = $bajo_stock[$pedido['id']] ?? [];
+		$esMuestras = (int)($_POST['tipo_p'] ?? 0) === 2;
+		if ($esMuestras) {
+			$req_lm = $bdd->prepare("SELECT DISTINCT lp.id_libro FROM libros_pedidos2 lp WHERE lp.cod_pedido = ? AND lp.cantidad != 0");
+			$req_lm->execute([$cod_pedido]);
+			$libros_bajos = libros_bajo_stock_muestras($bdd, $req_lm->fetchAll(PDO::FETCH_COLUMN));
+			$tipoTexto = 'pedido de muestras sin adopción';
+			$bodegasTexto = 'en la bodega General o en la bodega Muestras General';
+		} else {
+			$bajo_stock = libros_bajo_stock_pedidos($bdd, [$pedido['id']], 'pedidos2');
+			$libros_bajos = $bajo_stock[$pedido['id']] ?? [];
+			$tipoTexto = 'pedido de venta sin adopción';
+			$bodegasTexto = 'en la bodega General';
+		}
 
 		if ($libros_bajos) {
-			$filas_html = '';
-			foreach ($libros_bajos as $lb) {
-				$filas_html .= '<tr><td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;">'.htmlspecialchars($lb['libro']).'</td>'
-					. '<td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">'.$lb['existencia'].' unid.</td></tr>';
-			}
-
-			$mail_stock = new PHPMailer(true);
-			$mail_stock->isSMTP();
-			$mail_stock->Host       = 'somoseureka.com.co';
-			$mail_stock->SMTPAuth   = true;
-			$mail_stock->SMTPAutoTLS = false;
-			$mail_stock->Username   = 'crm@somoseureka.com.co';
-			$mail_stock->Password   = 'cRm14356$';
-			$mail_stock->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-			$mail_stock->Port       = 587;
-			$mail_stock->SMTPOptions = [
-				'ssl' => [
-					'verify_peer' => false,
-					'verify_peer_name' => false,
-					'allow_self_signed' => true
-				]
-			];
-
-			$mail_stock->setFrom('crm@somoseureka.com.co', 'CRM Eureka');
-			$mail_stock->addAddress('felipe.vargas@somoseureka.com.co', 'felipe.vargas@somoseureka.com.co');
-			$mail_stock->addCC('comercial@somoseureka.com.co');
-			$mail_stock->addCC('oltoledo@hotmail.com');
-			$mail_stock->addReplyTo('crm@somoseureka.com.co', 'CRM Eureka');
-
-			$mail_stock->isHTML(true);
-			$mail_stock->CharSet = 'UTF-8';
-			$mail_stock->Subject = 'Stock bajo en pedido sin adopción #'.$pedido['id'].' - '.$_POST['colegio'];
-			$mail_stock->Body =
-				'<p style="font-size:15px;">El pedido sin adopción <strong>#'.$pedido['id'].'</strong>, solicitado por '.htmlspecialchars($promo['promotor']).' para el colegio <strong>'.htmlspecialchars($_POST['colegio']).'</strong>, incluye libros cuya existencia en la bodega General de World Office está por debajo de 50 unidades:</p>'
-				. '<table style="border-collapse:collapse;font-size:14px;"><thead><tr>'
-				. '<th style="padding:4px 10px;text-align:left;border-bottom:2px solid #d1d5db;">Libro</th>'
-				. '<th style="padding:4px 10px;border-bottom:2px solid #d1d5db;">Existencia</th>'
-				. '</tr></thead><tbody>'.$filas_html.'</tbody></table>'
-				. '<p style="font-size:14px;margin-top:14px;">Haz clic <a href="https://crm.somoseureka.com.co/pedido_colegio_sa.php?id_pedido='.$pedido['id'].'">aquí</a> para revisar el pedido.</p>';
-			$mail_stock->AltBody = 'El pedido sin adopción #'.$pedido['id'].' para '.$_POST['colegio'].' incluye libros con existencia baja en bodega General.';
-
-			$mail_stock->send();
+			require_once("../includes/correo_stock_bajo.php");
+			enviar_correo_stock_bajo(
+				'Stock bajo en '.$tipoTexto.' #'.$pedido['id'].' - '.$_POST['colegio'],
+				'El '.$tipoTexto.' <strong>#'.$pedido['id'].'</strong>, solicitado por '.htmlspecialchars($promo['promotor']).' para el colegio <strong>'.htmlspecialchars($_POST['colegio']).'</strong>, incluye libros cuya existencia '.$bodegasTexto.' de World Office está por debajo de '.UMBRAL_STOCK_BAJO.' unidades:',
+				$libros_bajos,
+				$esMuestras,
+				'https://crm.somoseureka.com.co/pedido_colegio_sa.php?id_pedido='.$pedido['id'],
+				'El '.$tipoTexto.' #'.$pedido['id'].' para '.$_POST['colegio'].' incluye libros con existencia baja '.$bodegasTexto.'.'
+			);
 		}
-	} catch (Exception $e) {
+	} catch (\Throwable $e) {
 		error_log('No se pudo enviar el aviso de stock bajo del pedido sin adopción #'.$pedido['id'].': '.$e->getMessage());
 	}
 
