@@ -89,8 +89,8 @@ try {
         $parts    = explode('/', $libro, 2);
         $id_libro = $parts[0] ?? '';
         $cantidad = $parts[1] ?? 0;
-        if ($cantidad <= 0 || trim($id_libro) === '') continue;
-        $tbl = ($tp == 3) ? 'libros_devol_v' : 'libros_devol';
+        if ($cantidad <= 0 || trim($id_libro) === '' || $id_libro == 0) continue;
+                $tbl = ($tp == 3) ? 'libros_devol_v' : 'libros_devol';
         $bdd->prepare("INSERT INTO $tbl(cod_pedido, id_libro, cantidad) VALUES(?, ?, ?)")
             ->execute([$cod_pedido, $id_libro, $cantidad]);
 
@@ -116,8 +116,8 @@ try {
     // Insertar libros primaria/secundaria
     foreach ($_POST['pri_sec'] ?? [] as $index => $id_libro) {
         $cantidad = $_POST['cantidad_pri_sec'][$index] ?? 0;
-        if ($cantidad <= 0) continue;
-        $tbl = ($tp == 3) ? 'libros_devol_v' : 'libros_devol';
+        if ($cantidad <= 0 || $id_libro == 0) continue;
+                $tbl = ($tp == 3) ? 'libros_devol_v' : 'libros_devol';
         $bdd->prepare("INSERT INTO $tbl(cod_pedido, id_libro, cantidad) VALUES(?, ?, ?)")
             ->execute([$cod_pedido, $id_libro, $cantidad]);
 
