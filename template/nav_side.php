@@ -6,9 +6,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 $zonificacion_active = in_array($current_page, ['ver_colegios.php','agregar_colegio.php','colegio.php','colegio2.php']);
 $agenda_active       = $current_page === 'agenda.php';
-$muestreo_active     = in_array($current_page, ['solicitar_muestreo.php','lista_muestreo.php','ver_muestreo.php','muestras_entregadas.php']);
+$muestreo_active     = in_array($current_page, ['solicitar_muestreo.php','legalizaciones_muestras.php','lista_muestreo.php','ver_muestreo.php','muestras_entregadas.php']);
 $pedidos_active      = in_array($current_page, ['ver_pedidos.php','lista_pedidos.php','agrupar_pedidos.php','pedido_colegio.php']);
-$devoluciones_active = in_array($current_page, ['devol_muestras_sa.php','ver_devol_muestras.php','ver_devol_ventas.php','ver_devol_proveedores.php','proveedores.php']);
+$devoluciones_active = in_array($current_page, ['devol_muestras_sa.php','devoluciones_muestras.php','ver_devol_muestras.php','ver_devol_ventas.php','ver_devol_proveedores.php','proveedores.php']);
 $pedidos_sa_active   = in_array($current_page, ['solicitar_pedido_sa.php','ver_pedidos_sa.php','lista_pedidos_sa.php','pedido_colegio_sa.php']);
 $presupuesto_active  = $current_page === 'colegios_presup.php';
 $atenciones_active   = $current_page === 'lista_atenciones.php';
@@ -378,7 +378,7 @@ $periodos_active     = $current_page === 'periodos.php';
 											<a href="lista_muestreo.php?tp=5" id="">Anulados</a>
 										</li>
 										<li>
-											<a href="solicitar_muestreo.php?tp=2" id="">Legalizar muestras</a>
+											<a href="legalizaciones_muestras.php" id="">Legalizar muestras</a>
 										</li>
 										<li>
 											<a href="muestras_entregadas.php" id="">Muestras legalizadas</a>
@@ -391,7 +391,7 @@ $periodos_active     = $current_page === 'periodos.php';
 											<a href="ver_muestreo.php" id="">Muestras solicitadas</a>
 										</li>
 										<li>
-											<a href="solicitar_muestreo.php?tp=2" id="">Legalizar muestras</a>
+											<a href="legalizaciones_muestras.php" id="">Legalizar muestras</a>
 										</li>
 										<li>
 											<a href="muestras_entregadas.php" id="">Muestras legalizadas</a>
@@ -454,7 +454,7 @@ $periodos_active     = $current_page === 'periodos.php';
 									<?php } ?>
 
 									<li class="menu-subgroup-label">Muestras</li>
-									<li><a href="devol_muestras_sa.php?tp=1">Devolución de muestras</a></li>
+									<li><a href="devoluciones_muestras.php">Devolución de muestras</a></li>
 									<li><a href="ver_devol_muestras.php">Ver devoluciones de muestras</a></li>
 
 									<li class="menu-subgroup-label">Ventas</li>
@@ -554,6 +554,12 @@ $periodos_active     = $current_page === 'periodos.php';
 								<li><a href="ordenes_compra.php">Órdenes de compra</a></li>
 								<li><a href="oc_backorders.php">Backorders</a></li>
 							</ul>
+						</li>
+						<li>
+							<a href="guias_web.php" class="dropdown-toggle no-arrow <?= $current_page === 'guias_web.php' ? 'active' : '' ?>">
+								<span class="micon bi bi-truck"></span
+								><span class="mtext">Gestión de guías – Web</span>
+							</a>
 						</li>
 						<?php }?>
 

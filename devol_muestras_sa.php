@@ -1,4 +1,9 @@
-<?php require_once("php/aut.php"); ?>
+<?php require_once("php/aut.php");
+// La devolución de muestras ahora se hace en el módulo devoluciones_muestras.php, que trae los
+// títulos despachados desde World Office (pedido por el usuario 2026-10-05). Este formulario
+// sigue para proveedores (tp=2) y ventas sin adopción (tp=3).
+if (intval($_GET['tp'] ?? 0) === 1) { header('Location: devoluciones_muestras.php'); exit; }
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
