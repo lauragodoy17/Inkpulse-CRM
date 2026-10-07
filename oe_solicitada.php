@@ -86,7 +86,22 @@ $total_cantidad_arr = $total_entregas_arr = $total_valor_arr = [];
       #oe-mat-table { min-width: 0 !important; }
       #oe-mat-table thead { display: table-header-group; }
       #oe-mat-table tr { page-break-inside: avoid; }
+      /* Título impreso como texto: sin borde, flecha ni botón de borrar del selector. */
+      #oe-mat-table .select2-container .select2-selection--single { border: none !important; background: transparent !important; }
+      #oe-mat-table .select2-selection__arrow,
+      #oe-mat-table .select2-selection__clear { display: none !important; }
+      #oe-mat-table .select2-container .select2-selection--single .select2-selection__rendered { padding: 0 !important; }
+      #oe-mat-table .oe-titulo-td { min-width: 0 !important; }
     }
+    /* Título completo del libro en la tabla de materiales (en pantalla y al imprimir): el
+       selector se ajusta en varias líneas en vez de cortar el texto con "…". */
+    #oe-mat-table .oe-titulo-td { min-width: 260px; }
+    #oe-mat-table .select2-container .select2-selection--single { height: auto !important; min-height: 38px; }
+    #oe-mat-table .select2-container .select2-selection--single .select2-selection__rendered {
+      white-space: normal !important; overflow: visible !important; text-overflow: clip !important;
+      word-break: break-word; line-height: 1.35 !important; padding-top: 7px; padding-bottom: 7px;
+    }
+    #oe-mat-table .select2-container .select2-selection--single .select2-selection__arrow { height: 100% !important; }
     input[type=number] { -moz-appearance: textfield; }
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -407,7 +422,7 @@ $total_cantidad_arr = $total_entregas_arr = $total_valor_arr = [];
                 ?>
                 <tr id="<?= $mid ?>" data-mid="<?= $mid ?>">
                   <td><?= $i ?></td>
-                  <td>
+                  <td class="oe-titulo-td">
                     <?php if ($_SESSION['tipo'] != 8): ?>
                       <select class="form-control titulo-select-edit" id="titulo_edit<?= $mid ?>" style="width:100%;min-width:180px">
                         <option value="<?= htmlspecialchars($mat['material']) ?>" selected><?= htmlspecialchars($mat['material']) ?></option>
