@@ -497,11 +497,22 @@ foreach ($solicitudes as $solicitud) {
       // Falta por legalizar = columna I (Valor) menos el total real de entregas (todas las cuotas).
       $falta_legalizar = max(((float)$solicitud["presupuesto"]) - $tot_entrega_r, 0);
 
-      // Fila de total: negrita, con todos los valores numéricos
+      // Fila de total: toda en negrita, con los datos de la solicitud repetidos (como las
+      // sub-filas, pedido por el usuario 2026-10-07) y todos los valores numéricos.
       $conta++;
-      $objSpreadsheet->getActiveSheet()->getStyle("A$conta:T$conta")->applyFromArray(['font' => ['bold' => true]]);
+      $objSpreadsheet->getActiveSheet()->getStyle("A$conta:Z$conta")->applyFromArray(['font' => ['bold' => true]]);
       $objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", $soli_conse);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", $solicitud["promotor"]);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", $solicitud["colegio"]);
+      if (!empty($promo_colegio["promotor"]))
+        $objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", $promo_colegio["promotor"]);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", $solicitud["fecha"]);
       $objSpreadsheet->getActiveSheet()->SetCellValue("F$conta", "  TOTAL  —  " . $solicitud["recurso"]);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("G$conta", $solicitud["tipo"]);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("H$conta", $solicitud["categoria"]);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("J$conta", $solicitud["estado"]);
+      $objSpreadsheet->getActiveSheet()->SetCellValue("L$conta", $tipo_e["tipo"] ?? "");
+      $objSpreadsheet->getActiveSheet()->SetCellValue("N$conta", $solicitud["fecha_e"]);
       $objSpreadsheet->getActiveSheet()->SetCellValue("P$conta", $solicitud["contab"] ? "Si" : "No");
       $objSpreadsheet->getActiveSheet()->getStyle("I$conta")->getNumberFormat()->setFormatCode($fmt_money);
       $objSpreadsheet->getActiveSheet()->SetCellValue("I$conta", $solicitud["presupuesto"]);
