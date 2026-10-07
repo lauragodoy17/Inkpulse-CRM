@@ -299,6 +299,15 @@
             $req = $bdd->prepare($sql); $req->execute();
             $libros = $req->fetchAll();
             $op = 0;
+
+            // Legalizaciones de legalizaciones_muestras.php: pedido de muestras, OP y documentos de WO
+            // de donde salieron. Las del formulario anterior no tienen estas columnas llenas.
+            $origen_legaliz = null;
+            try {
+              $req_ol = $bdd->prepare("SELECT id_muestreo, ops_muestreo, documentos_wo, cierre FROM muestreos_e WHERE id = ? AND id_muestreo IS NOT NULL");
+              $req_ol->execute([intval($_GET["id_muestras_e"])]);
+              $origen_legaliz = $req_ol->fetch(PDO::FETCH_ASSOC) ?: null;
+            } catch (Exception $e) { /* columnas aún no creadas */ }
           }
 
           if ($pedido["tipo"] == 3) {
@@ -326,6 +335,17 @@
           <a href="op_pendiente.php?op=<?= $n_op["id"] ?>" target="_blank">
             # <?= htmlspecialchars($n_op["año"]) ?> — <?= htmlspecialchars($n_op["id"]) ?>
           </a>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($origen_legaliz)): ?>
+        <div class="mc-op-badge">
+          <i class="bi bi-patch-check"></i>
+          Legalizado del pedido de muestras
+          <a href="muestreo_colegio.php?id_muestreo=<?= (int)$origen_legaliz['id_muestreo'] ?>" target="_blank">#<?= (int)$origen_legaliz['id_muestreo'] ?></a>
+          <?php if (!empty($origen_legaliz['ops_muestreo'])): ?> · OP <?= htmlspecialchars($origen_legaliz['ops_muestreo']) ?><?php endif; ?>
+          <?php if (!empty($origen_legaliz['documentos_wo'])): ?> · WO <?= htmlspecialchars($origen_legaliz['documentos_wo']) ?><?php endif; ?>
+          <?php if (!empty($origen_legaliz['cierre'])): ?> · Legalización <strong><?= $origen_legaliz['cierre'] === 'completa' ? 'completa' : 'parcial' ?></strong><?php endif; ?>
         </div>
         <?php endif; ?>
 

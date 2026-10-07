@@ -17,7 +17,11 @@ $pedido_base = $req_pedido->fetch();
 
 // Full data
 if ($tipo == 1) {
-$sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.archivo,pe.codigo, pe.tipo_muestras,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid,co.colegio FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado LEFT JOIN clientes c ON pe.persona=c.id LEFT JOIN colegios co ON pe.id_colegio=co.id WHERE pe.id='".$pedido_base["id"]."'";
+// Devoluciones del módulo devoluciones_muestras.php: traen el pedido de muestras, la OP y los
+// documentos de World Office de origen (columnas creadas por dm_asegurar_columnas).
+require_once(__DIR__ . "/includes/devoluciones_muestras_datos.php");
+dm_asegurar_columnas($bdd);
+$sql_pedido = "SELECT pe.id_muestreo, pe.ops_muestreo, pe.documentos_wo, pe.cierre, pe.fecha,pe.observaciones,pe.archivo,pe.codigo, pe.tipo_muestras,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid,co.colegio FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado LEFT JOIN clientes c ON pe.persona=c.id LEFT JOIN colegios co ON pe.id_colegio=co.id WHERE pe.id='".$pedido_base["id"]."'";
 
 $req_pedido = $bdd->prepare($sql_pedido);
 $req_pedido->execute();
@@ -25,8 +29,11 @@ $pedido = $req_pedido->fetch();
 
 if ($pedido['tipo_muestras'] == 1) {
 $pedido['tipo_muestras']= "Docente";
-}elseif ($p['tipo_muestras'] == 2) {
+}elseif ($pedido['tipo_muestras'] == 2) {
 $pedido['tipo_muestras']= "Estudiante";
+}elseif ($pedido['tipo_muestras'] == 3) {
+// Títulos de docente y de estudiante en la misma devolución (devoluciones_muestras.php).
+$pedido['tipo_muestras']= "Ambos (Docente y Estudiante)";
 }else{
 $pedido['tipo_muestras']= "";
 }
@@ -42,7 +49,7 @@ $pedido = $req_pedido->fetch();
 
 // Libros
 if ($tipo == 1) {
-$sql = "SELECT pe.id, l.id, l.id_grado, l.libro, l.isbn, m.materia, lp.cantidad, lp.id as lpid FROM devoluciones pe LEFT JOIN libros_devol lp ON lp.cod_pedido=pe.codigo LEFT JOIN libros l ON l.id=lp.id_libro LEFT JOIN materias m ON l.id_materia=m.id WHERE pe.id='".$id_devol."'";
+$sql = "SELECT pe.id, l.id, l.id_grado, l.libro, l.isbn, m.materia, lp.cantidad, lp.cant_despachada, lp.id as lpid FROM devoluciones pe LEFT JOIN libros_devol lp ON lp.cod_pedido=pe.codigo LEFT JOIN libros l ON l.id=lp.id_libro LEFT JOIN materias m ON l.id_materia=m.id WHERE pe.id='".$id_devol."'";
 } else {
 $sql = "SELECT pe.id, l.id, l.id_grado, l.libro, l.isbn, m.materia, lp.cantidad, lp.id as lpid FROM devoluciones_prov pe LEFT JOIN libros_devol lp ON lp.cod_pedido=pe.codigo LEFT JOIN libros l ON l.id=lp.id_libro LEFT JOIN materias m ON l.id_materia=m.id WHERE pe.id='".$id_devol."'";
 }
@@ -77,6 +84,11 @@ $materias = $req_mat->fetchAll();
 
 $total_c  = array_sum(array_column($libros, 'cantidad'));
 $is_admin = ($_SESSION['tipo'] == 1 || $_SESSION['tipo'] == 2);
+// Devolución hecha desde lo despachado en World Office: los títulos y cantidades no se editan aquí
+// (el tope "despachado − ya devuelto" solo se valida al registrarla; php/mod_devol.php tampoco los
+// cambia). Para corregir, se anula y se registra de nuevo.
+$vinculada_muestreo = ($tipo == 1 && !empty($pedido['id_muestreo']));
+$edita_libros = $is_admin && !$vinculada_muestreo;
 $titulo   = ($tipo == 1) ? 'Devolución de muestras' : 'Devolución de proveedores';
 $tipo_lbl = ($tipo == 2) ? 'Proveedor' : 'Cliente';
 $back_url = ($tipo == 2) ? 'ver_devol_proveedores.php' : 'ver_devol_muestras.php';
@@ -357,6 +369,49 @@ echo html_motivo_anulacion(obtener_historial_estado($bdd, $tipo == 1 ? 'devoluci
 </div>
 <?php endif; ?>
 
+<!-- Origen: pedido de muestras / OP / documentos de World Office -->
+<?php if ($vinculada_muestreo): ?>
+<div class="modern-card mb-3">
+<div class="card-head">
+<h5><i class="bi bi-diagram-3 mr-2"></i> Origen de la devolución</h5>
+</div>
+<div class="px-4 py-3">
+<div class="mc-cards" style="margin-bottom:0;">
+<div class="mc-card">
+<div class="mc-card-icon blue"><i class="bi bi-box-seam"></i></div>
+<div>
+<p class="mc-card-label">Pedido de muestras</p>
+<p class="mc-card-val"><a href="muestreo_colegio.php?id_muestreo=<?= (int)$pedido['id_muestreo'] ?>" target="_blank"># <?= (int)$pedido['id_muestreo'] ?></a></p>
+</div>
+</div>
+<div class="mc-card">
+<div class="mc-card-icon amber"><i class="bi bi-file-earmark-check"></i></div>
+<div>
+<p class="mc-card-label">OP del despacho</p>
+<p class="mc-card-val"><?= htmlspecialchars($pedido['ops_muestreo'] ?: '—') ?></p>
+</div>
+</div>
+<?php if (!empty($pedido['cierre'])): ?>
+<div class="mc-card">
+<div class="mc-card-icon blue"><i class="bi bi-flag"></i></div>
+<div>
+<p class="mc-card-label">Tipo de devolución</p>
+<p class="mc-card-val"><?= $pedido['cierre'] === 'completa' ? 'Completa (cierra el pedido)' : 'Parcial' ?></p>
+</div>
+</div>
+<?php endif; ?>
+<div class="mc-card" style="grid-column: span 2;">
+<div class="mc-card-icon teal"><i class="bi bi-receipt"></i></div>
+<div>
+<p class="mc-card-label">Documentos de World Office</p>
+<p class="mc-card-val"><?= htmlspecialchars(trim(preg_replace('/\s*\(WO \d+\)/', '', (string)$pedido['documentos_wo'])) ?: '—') ?></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<?php endif; ?>
+
 <!-- Soporte adjunto -->
 <?php if (!empty($pedido['archivo'])): ?>
 <div class="modern-card mb-3 d-print-none">
@@ -380,8 +435,10 @@ echo html_motivo_anulacion(obtener_historial_estado($bdd, $tipo == 1 ? 'devoluci
 <form method="POST" action="php/mod_devol.php" id="form_pedido">
 <?php endif; ?>
 
-<!-- Admin: modify persona -->
-<?php if ($is_admin && $pedido['estado'] != 'Anulado'): ?>
+<!-- Admin: modify persona (las devoluciones de un muestreo quedan con el cliente del muestreo) -->
+<?php if ($vinculada_muestreo): ?>
+<input type="hidden" name="persona" value="<?= (int)$pedido['cid'] ?>">
+<?php elseif ($is_admin && $pedido['estado'] != 'Anulado'): ?>
 <div class="modern-card mb-3">
 <div class="card-head">
 <h5><i class="bi bi-person-lines-fill mr-2"></i> Modificar <?= $tipo_lbl ?></h5>
@@ -422,8 +479,9 @@ $p_nom = ($tipo == 1) ? $p['cliente'] : $p['proveedor'];
 <th>Título</th>
 <th>Materia</th>
 <th>Grado</th>
+<?php if ($vinculada_muestreo): ?><th>Despachada</th><?php endif; ?>
 <th>Cantidad</th>
-<?php if ($is_admin): ?><th class="d-print-none">Acciones</th><?php endif; ?>
+<?php if ($edita_libros): ?><th class="d-print-none">Acciones</th><?php endif; ?>
 </tr>
 </thead>
 <tbody>
@@ -449,15 +507,16 @@ $grado = $req_g->fetch();
 <td><?= htmlspecialchars($libro['libro']) ?></td>
 <td><?= htmlspecialchars($libro['materia']) ?></td>
 <td><?= htmlspecialchars($grado['grado'] ?? '—') ?></td>
+<?php if ($vinculada_muestreo): ?><td><?= $libro['cant_despachada'] !== null ? (int)$libro['cant_despachada'] : '—' ?></td><?php endif; ?>
 <td>
-<?php if ($is_admin && $pedido['estado'] != 'Anulado'): ?>
+<?php if ($edita_libros && $pedido['estado'] != 'Anulado'): ?>
 <input type="number" id="c<?= $libro['lpid'] ?>" name="cantidad_a"
 value="<?= $libro['cantidad'] ?>" class="form-control dc">
 <?php else: ?>
 <?= $libro['cantidad'] ?>
 <?php endif; ?>
 </td>
-<?php if ($is_admin): ?>
+<?php if ($edita_libros): ?>
 <td class="d-print-none">
 <button type="button" class="btn btn-danger btn-xs" id="e<?= $libro['lpid'] ?>">
 <i class="fa fa-trash"></i>
@@ -476,9 +535,9 @@ value="<?= $libro['cantidad'] ?>" class="form-control dc">
 </tbody>
 <tfoot>
 <tr>
-<td colspan="5" style="text-align:right; padding-right:16px;"><strong>Total:</strong></td>
+<td colspan="<?= $vinculada_muestreo ? 6 : 5 ?>" style="text-align:right; padding-right:16px;"><strong>Total:</strong></td>
 <td><strong><?= $total_c ?></strong></td>
-<?php if ($is_admin): ?><td class="d-print-none"></td><?php endif; ?>
+<?php if ($edita_libros): ?><td class="d-print-none"></td><?php endif; ?>
 </tr>
 </tfoot>
 </table>
@@ -526,9 +585,15 @@ Cantidad <small style="color:red;">*</small>
 </div>
 <?php endfor; ?>
 
+<?php if (!$vinculada_muestreo): ?>
 <a id="agregar_libro" class="vd-add-btn d-print-none">
 <i class="bi bi-plus-circle"></i> Agregar libro
 </a>
+<?php else: ?>
+<p class="d-print-none" style="font-size:12.5px;color:#64748b;margin:0 0 14px;">
+<i class="bi bi-info-circle"></i> Los títulos y cantidades salen de lo despachado en World Office y no se pueden modificar aquí. Si hay un error, anula esta devolución y regístrala de nuevo en <a href="devoluciones_muestras.php?id_muestreo=<?= (int)$pedido['id_muestreo'] ?>">Devolución de muestras</a>.
+</p>
+<?php endif; ?>
 
 <input type="hidden" name="pedido" value="<?= $id_devol ?>">
 <input type="hidden" name="codigo" value="<?= $pedido['codigo'] ?>">

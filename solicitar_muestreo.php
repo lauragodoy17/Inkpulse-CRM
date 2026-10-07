@@ -1,4 +1,9 @@
-<?php require_once("php/aut.php"); ?>
+<?php
+require_once("php/aut.php");
+// La legalización de muestras ahora se hace en legalizaciones_muestras.php, que trae los títulos
+// despachados desde World Office (pedido por el usuario 2026-10-07).
+if (intval($_GET['tp'] ?? 0) === 2) { header('Location: legalizaciones_muestras.php'); exit; }
+?>
 <!DOCTYPE html>
 <html lang="es">
   <head>
