@@ -15,6 +15,21 @@ require_once("aut.php");
 
 header('Content-Type: application/json');
 
+// Leer un export grande de World Office con PhpSpreadsheet consume bastante
+// memoria/tiempo; si el servidor tiene límites bajos el script moría sin
+// imprimir nada y libros.php mostraba "Respuesta inesperada del servidor:"
+// vacío. Se suben los límites y, si igual hay un error fatal, se devuelve
+// como JSON para que se vea el motivo real.
+@ini_set('memory_limit', '512M');
+@set_time_limit(300);
+@ini_set('display_errors', '0'); // el error fatal sale como JSON abajo, no como HTML
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        echo json_encode(['success' => false, 'message' => 'Error del servidor: ' . $err['message'] . ' (' . basename($err['file']) . ':' . $err['line'] . ')'], JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+});
+
 if (($_SESSION["tipo"] ?? null) != 1) {
     echo json_encode(['success' => false, 'message' => 'No autorizado']);
     exit;
@@ -37,7 +52,12 @@ if (empty($_FILES['archivo']['tmp_name']) || $_FILES['archivo']['error'] !== UPL
 }
 
 try {
-    $spreadsheet = IOFactory::load($_FILES['archivo']['tmp_name']);
+    // Solo datos: el export de World Office trae formato/alto de fila en
+    // cientos de miles de filas vacías y cargarlo agotaba la memoria.
+    $lector = IOFactory::createReaderForFile($_FILES['archivo']['tmp_name']);
+    $lector->setReadDataOnly(true);
+    $lector->setReadEmptyCells(false);
+    $spreadsheet = $lector->load($_FILES['archivo']['tmp_name']);
 } catch (Exception $e) {
     echo json_encode(['success' => false, 'message' => 'No se pudo leer el archivo como Excel: ' . $e->getMessage()]);
     exit;
@@ -155,4 +175,4 @@ echo json_encode([
     'totalValidas' => count($validas),
     'totalErrores' => count($filas) - count($validas),
     'ultimoPeriodo' => $periodoRow ? ['id' => (int)$periodoRow['id'], 'periodo' => $periodoRow['periodo']] : null,
-]);
+], JSON_INVALID_UTF8_SUBSTITUTE);
