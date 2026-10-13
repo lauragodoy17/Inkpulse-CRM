@@ -2,6 +2,12 @@
     require_once("../php/aut.php");
     include("../conexion/bdd.php");
     require_once("registrar_historial.php");
+    require_once(__DIR__ . "/../includes/presupuesto_cerrado.php");
+
+    if (presupuesto_cerrado($bdd, $_POST["id_colegio"] ?? 0, $_POST["periodo"] ?? 0)) {
+        header('Location: ../colegio.php?codigo='.urlencode($_POST["codigo"] ?? '').'&periodo='.intval($_POST["periodo"] ?? 0).'&tab=presupuesto');
+        exit;
+    }
 
     $id_usuario_h = intval($_SESSION["id"] ?? 0);
 

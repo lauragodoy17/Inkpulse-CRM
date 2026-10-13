@@ -1,6 +1,12 @@
 <?php
 	require_once("../php/aut.php");
 	include("../conexion/bdd.php");
+	require_once(__DIR__ . "/../includes/presupuesto_cerrado.php");
+
+	if (presupuesto_cerrado($bdd, $_POST["id_colegio"] ?? 0, $_POST["periodo"] ?? 0)) {
+		header('Location: ../colegio.php?codigo='.urlencode($_POST["codigo"] ?? '').'&periodo='.intval($_POST["periodo"] ?? 0).'&tab=presupuesto');
+		exit;
+	}
 
 
 	$sql_fcole = "SELECT MAX(fila_zona) as fila_zona FROM presupuestos WHERE id_periodo='".$_POST["periodo"]."' AND id_colegio='".$_POST["id_colegio"]."'";

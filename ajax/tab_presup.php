@@ -11,6 +11,12 @@
 	$req_periodo->execute();
 	$gp_periodo = $req_periodo->fetch();
 
+	require_once(__DIR__ . "/../includes/presupuesto_cerrado.php");
+	$presup_cerrado = presupuesto_cerrado($bdd, $_GET["colegio"], $_GET["periodo"]);
+	$req_existe_presup = $bdd->prepare("SELECT COUNT(*) FROM presupuestos WHERE id_colegio = ? AND id_periodo = ?");
+	$req_existe_presup->execute([$_GET["colegio"], $_GET["periodo"]]);
+	$existe_presup = (int)$req_existe_presup->fetchColumn() > 0;
+
 	$sql_costo_ia = "SELECT mt.id AS id_modelo_tokens, COALESCE(mt.valor_entrada * mt.tokens_entrada + mt.valor_salida * mt.tokens_salida, 0) AS costo_ia, mt.costo_almacenamiento
 	                  FROM ia_modelos m
 	                  JOIN ia_modelo_tokens mt ON mt.id_modelo = m.id
@@ -336,6 +342,28 @@
   .pr-confirm-btns  { display: flex; gap: 10px; justify-content: center; }
   .pr-confirm-btns .btn-cancel { background: #f1f5f9; color: #475569; border: none; border-radius: 8px; padding: 8px 22px; font-size: 0.85rem; cursor: pointer; }
   .pr-confirm-btns .btn-ok     { background: #dc2626; color: #fff;     border: none; border-radius: 8px; padding: 8px 22px; font-size: 0.85rem; cursor: pointer; font-weight: 600; }
+
+  /* Confirmación de cierre / reapertura del presupuesto */
+  .pr-cierre-box { max-width: 400px; text-align: left; padding: 26px 26px 22px; }
+  .pr-cierre-icon {
+    width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem; margin: 0 auto 14px;
+    background: #fee2e2; color: #dc2626;
+  }
+  .pr-cierre-box.abrir .pr-cierre-icon { background: #dbeafe; color: #2563eb; }
+  .pr-cierre-box .pr-confirm-title { text-align: center; font-size: 1.05rem; }
+  .pr-cierre-box .pr-confirm-msg   { text-align: center; margin-bottom: 14px; }
+  .pr-cierre-list {
+    list-style: none; margin: 0 0 20px; padding: 12px 14px;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+    font-size: 0.8rem; color: #475569;
+  }
+  .pr-cierre-list li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .pr-cierre-list li i { color: #dc2626; }
+  .pr-cierre-box.abrir .pr-cierre-list li i { color: #16a34a; }
+  .pr-cierre-box.abrir .btn-ok { background: #2563eb; }
+  .pr-cierre-box .btn-ok:hover { filter: brightness(.93); }
 </style>
 
 <div class="pr-wrap">
@@ -347,14 +375,42 @@
       <p class="pr-subtitle">Gestiona el presupuesto de libros aprobados y su probabilidad de venta</p>
     </div>
     <div class="pr-actions">
+      <?php if (!$presup_cerrado): ?>
       <a href="#" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modal_presupuesto" type="button">
         <i class="bi bi-plus-circle"></i> Añadir libros
       </a>
+      <?php endif; ?>
       <a class="btn btn-success btn-sm" href="php/presupuesto_excel.php?cole=<?= htmlspecialchars($_GET['colegio']) ?>&periodo=<?= htmlspecialchars($_GET['periodo']) ?>">
         <i class="bi bi-file-earmark-excel"></i> Exportar Excel
       </a>
+      <?php if ($_SESSION['tipo'] == 1): ?>
+        <?php if ($existe_presup || $presup_cerrado): ?>
+        <form action="php/cerrar_presupuesto.php" method="POST" style="display:inline;" id="pr-form-cierre">
+          <input type="hidden" name="id_colegio" value="<?= (int)$_GET['colegio'] ?>">
+          <input type="hidden" name="periodo"    value="<?= (int)$_GET['periodo'] ?>">
+          <input type="hidden" name="codigo"     value="<?= htmlspecialchars($_GET['codigo']) ?>">
+          <input type="hidden" name="accion"     value="<?= $presup_cerrado ? 'abrir' : 'cerrar' ?>">
+          <?php if ($presup_cerrado): ?>
+          <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-unlock"></i> Reabrir presupuesto</button>
+          <?php else: ?>
+          <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-lock"></i> Cerrar presupuesto</button>
+          <?php endif; ?>
+        </form>
+        <?php else: ?>
+        <button type="button" class="btn btn-danger btn-sm" disabled title="Añade libros al presupuesto antes de cerrarlo">
+          <i class="bi bi-lock"></i> Cerrar presupuesto
+        </button>
+        <?php endif; ?>
+      <?php endif; ?>
     </div>
   </div>
+
+  <?php if ($presup_cerrado): ?>
+  <div class="alert alert-secondary d-flex align-items-center" style="gap:8px;font-size:.85rem;">
+    <i class="bi bi-lock-fill"></i>
+    <span>Este presupuesto está <strong>cerrado</strong>: no se pueden añadir libros ni hacer cambios.</span>
+  </div>
+  <?php endif; ?>
 
   <?php if ($gp_periodo["periodo"] >= 2027 && $_SESSION['tipo'] == 1): ?>
   <!-- Tarjetas de IA (separadas visualmente) -->
@@ -656,7 +712,7 @@
         <div class="modal-footer">
           <?php if ($_SESSION["tipo"] != 2 && $_SESSION["tipo"] != 4): ?>
             <?php if ($_SESSION["zona"] == $_GET['cod_zona'] || $_SESSION["tipo"] == 1): ?>
-              <?php if ($_GET["f_cierre"] > date("Y-m-d")): ?>
+              <?php if ($_GET["f_cierre"] > date("Y-m-d") && !$presup_cerrado): ?>
                 <button type="button" class="lb-add-btn" id="agregar_ao">
                   <i class="bi bi-plus-circle"></i> Añadir otro libro
                 </button>
@@ -880,7 +936,7 @@
 
         // Borrar
         echo "<td>";
-        if ($gp_periodo["f_cierre"] > date("Y-m-d")) {
+        if ($gp_periodo["f_cierre"] > date("Y-m-d") && !$presup_cerrado) {
             echo "<button class='pr-btn-del pr-btn-row-del' type='button'
                     data-pid='".$libro_p["pid"]."'
                     data-libro='".$id_real_libro."'
@@ -1052,7 +1108,7 @@
           <input type="hidden" name="codigo" value="'.$_GET["codigo"].'">
           <input type="hidden" name="periodo" value="'.$_GET["periodo"].'">';
 
-    if ($num_hp >= 1) {
+    if ($num_hp >= 1 && !$presup_cerrado) {
         echo '<div class="pr-footer">';
         if ($_SESSION["tipo"]==1) {
             echo '<button class="btn btn-primary px-5" id="guardar_p">Guardar</button>';
@@ -1066,6 +1122,15 @@
 
     echo "</form>";
   ?>
+
+  <?php if ($presup_cerrado): ?>
+  <script>
+    // Presupuesto cerrado: toda la tabla queda en solo lectura (el servidor también rechaza los guardados).
+    $(function () {
+      $('#pp').find('input, select, textarea').not('[type=hidden]').attr('disabled', 'disabled');
+    });
+  </script>
+  <?php endif; ?>
 
 
 </div>
@@ -1088,6 +1153,38 @@
     </div>
   </div>
 </div>
+
+<?php if ($_SESSION['tipo'] == 1 && ($existe_presup || $presup_cerrado)): ?>
+<div class="pr-overlay" id="pr-overlay-cierre">
+  <div class="pr-confirm-box pr-cierre-box<?= $presup_cerrado ? ' abrir' : '' ?>">
+    <div class="pr-cierre-icon"><i class="bi <?= $presup_cerrado ? 'bi-unlock-fill' : 'bi-lock-fill' ?>"></i></div>
+    <?php if ($presup_cerrado): ?>
+      <p class="pr-confirm-title">¿Reabrir el presupuesto?</p>
+      <p class="pr-confirm-msg">El presupuesto de este colegio volverá a quedar editable.</p>
+      <ul class="pr-cierre-list">
+        <li><i class="bi bi-check-circle-fill"></i> Se podrán añadir libros nuevos</li>
+        <li><i class="bi bi-check-circle-fill"></i> Se podrán editar alumnos, descuentos y probabilidades</li>
+        <li><i class="bi bi-check-circle-fill"></i> Se podrán eliminar libros del presupuesto</li>
+      </ul>
+    <?php else: ?>
+      <p class="pr-confirm-title">¿Cerrar el presupuesto?</p>
+      <p class="pr-confirm-msg">Una vez cerrado, nadie podrá modificarlo hasta que un administrador lo reabra.</p>
+      <ul class="pr-cierre-list">
+        <li><i class="bi bi-x-circle-fill"></i> No se podrán añadir libros</li>
+        <li><i class="bi bi-x-circle-fill"></i> No se podrán editar alumnos, descuentos ni probabilidades</li>
+        <li><i class="bi bi-x-circle-fill"></i> No se podrán eliminar libros del presupuesto</li>
+      </ul>
+    <?php endif; ?>
+    <div class="pr-confirm-btns">
+      <button type="button" class="btn-cancel" id="pr-cierre-cancel">Cancelar</button>
+      <button type="button" class="btn-ok" id="pr-cierre-ok">
+        <i class="bi <?= $presup_cerrado ? 'bi-unlock' : 'bi-lock' ?>"></i>
+        <?= $presup_cerrado ? 'Sí, reabrir' : 'Sí, cerrar presupuesto' ?>
+      </button>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <script>var librosYaEnPresup = <?= json_encode($ids_exist_presup) ?>;</script>
 <script src="../vendors/scripts/core.js"></script>
@@ -1351,6 +1448,28 @@
         if (_prConfirmCb) _prConfirmCb();
         _prConfirmCb = null;
     });
+
+    // ── Cerrar / reabrir presupuesto ─────────────────────────────
+    $('#pr-form-cierre').on('submit', function(e) {
+        e.preventDefault();
+        $('#pr-overlay-cierre').addClass('open');
+    });
+    $('#pr-cierre-cancel').on('click', function() {
+        $('#pr-overlay-cierre').removeClass('open');
+    });
+    $('#pr-overlay-cierre').on('click', function(e) {
+        if (e.target === this) $(this).removeClass('open');
+    });
+    $('#pr-cierre-ok').on('click', function() {
+        var form = document.getElementById('pr-form-cierre');
+        sessionStorage.setItem('pr_cierre', form.elements['accion'].value);
+        $(this).prop('disabled', true);
+        form.submit();
+    });
+    if (sessionStorage.getItem('pr_cierre')) {
+        prToast(sessionStorage.getItem('pr_cierre') === 'cerrar' ? 'Presupuesto cerrado correctamente' : 'Presupuesto reabierto correctamente', 'ok');
+        sessionStorage.removeItem('pr_cierre');
+    }
 
     // ── Borrar fila con AJAX ─────────────────────────────────────
     $(document).on('click', '.pr-btn-row-del', function() {

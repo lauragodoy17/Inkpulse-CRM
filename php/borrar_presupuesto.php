@@ -1,12 +1,19 @@
 <?php
 	require_once("../php/aut.php");
 	include("../conexion/bdd.php");
+	require_once(__DIR__ . "/../includes/presupuesto_cerrado.php");
 
 	foreach ($_POST['b_presup'] as $presup) {
 
 		$req_fila = $bdd->prepare("SELECT id_periodo, id_colegio, id_libro, cod_area FROM presupuestos WHERE id=?");
 		$req_fila->execute([$presup]);
 		$fila = $req_fila->fetch();
+
+		// Presupuesto cerrado: no se borra nada
+		if ($fila && presupuesto_cerrado($bdd, $fila["id_colegio"], $fila["id_periodo"])) {
+			http_response_code(403);
+			continue;
+		}
 
 		$sql_eliminar="DELETE FROM presupuestos WHERE id='".$presup."'";
 
