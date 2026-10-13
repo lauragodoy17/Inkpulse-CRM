@@ -212,10 +212,13 @@ function dm_ped_de_concepto($concepto) {
  * Documentos FV/REM de World Office (no anulados) cuya OP en el concepto es una de $ops, con sus
  * renglones. Todas las consultas van en paralelo. Devuelve ['ok', 'error', 'documentos' => [
  * ['id','tipo','documento','fecha','concepto','op','ped','renglones' => [...]], ...]].
+ * Con $prefijo (ej. 'RE22', lo usan las legalizaciones) solo se consultan remisiones (REM) de ese
+ * prefijo: el filtro va en la petición a WO y se vuelve a comprobar en cada documento recibido.
  */
-function dm_documentos_wo_de_ops(array $ops) {
+function dm_documentos_wo_de_ops(array $ops, $prefijo = null) {
     if (!$ops) return ['ok' => true, 'error' => null, 'documentos' => []];
 
+    $tipos = $prefijo === null ? array_keys(WO_TIPOS_DESPACHO) : ['REM'];
     $opsPorId = [];
     $peticiones = [];
     foreach ($ops as $op) {
@@ -224,16 +227,18 @@ function dm_documentos_wo_de_ops(array $ops) {
         // año quedó mal escrito ("OP 2027*-6079"), "-6079;". Cada coincidencia se confirma después
         // con dm_op_de_concepto().
         $textos = ['OP ' . (int)$op['anio'] . '-' . (int)$op['id'], (int)$op['anio'] . ' - ' . (int)$op['id'], '-' . (int)$op['id'] . ';'];
-        foreach (array_keys(WO_TIPOS_DESPACHO) as $tipo) {
+        foreach ($tipos as $tipo) {
             foreach ($textos as $i => $texto) {
+                $filtros = [
+                    crear_filtro_api('documentoTipo.codigoDocumento', $tipo, 0),
+                    crear_filtro_api('moneda.id', '31', 4),
+                    crear_filtro_api('concepto', $texto, 0, 1), // tipoFiltro 1 = LIKE
+                ];
+                if ($prefijo !== null) $filtros[] = crear_filtro_api('prefijo.nombre', $prefijo, 0, 0);
                 $peticiones["{$op['id']}|$tipo|$i"] = [
                     'endpoint' => '/inventarios/listarDocumentoSalidaAlmacen',
                     'metodo'   => 'POST',
-                    'datos'    => cuerpo_listar_documentos_salida_almacen([
-                        crear_filtro_api('documentoTipo.codigoDocumento', $tipo, 0),
-                        crear_filtro_api('moneda.id', '31', 4),
-                        crear_filtro_api('concepto', $texto, 0, 1), // tipoFiltro 1 = LIKE
-                    ], 0, 50),
+                    'datos'    => cuerpo_listar_documentos_salida_almacen($filtros, 0, 50),
                 ];
             }
         }
@@ -250,6 +255,7 @@ function dm_documentos_wo_de_ops(array $ops) {
         if ($status !== 'OK') continue;
         foreach ($resp['data']['content'] ?? [] as $row) {
             if (!empty($row['senAnulado'])) continue;
+            if ($prefijo !== null && strcasecmp(trim((string)($row['prefijo'] ?? '')), $prefijo) !== 0) continue;
             $opConcepto = dm_op_de_concepto($row['concepto'] ?? '');
             if ($opConcepto === null || !isset($opsPorId[$opConcepto])) continue; // OP distinta (ej. 6146 vs 614)
             $documentos[(int)$row['id']] = [
@@ -386,15 +392,17 @@ function dm_registrado_por_producto(PDO $bdd, $idMuestreo, $modo) {
  * 'ops','documentos','titulos' => [['producto_wo','descripcion','codigo','id_libro','libro',
  * 'despachada','devuelta' | 'legalizada','disponible','documentos' => 'REM RE22 8177, ...',
  * 'ids_documentos' => '5870,...'], ...]].
+ * $buscarDocumentos(array $ops, array $muestreo) reemplaza la búsqueda de documentos en WO (las
+ * legalizaciones solo usan remisiones RE22, ver lm_detalle_legalizacion()); sin él, dm_documentos_wo_de_ops().
  */
-function dm_detalle_devolucion(PDO $bdd, $idMuestreo, $modo = 'devolucion') {
+function dm_detalle_devolucion(PDO $bdd, $idMuestreo, $modo = 'devolucion', ?callable $buscarDocumentos = null) {
     $muestreo = dm_obtener_muestreo($bdd, $idMuestreo);
     if (!$muestreo) return ['ok' => false, 'error' => 'El pedido de muestras no existe, no está Entregado o no está en tu alcance.'];
 
     $ops = dm_ops_muestreo($bdd, $idMuestreo);
     if (!$ops) return ['ok' => false, 'error' => 'El pedido de muestras #' . (int)$idMuestreo . ' no tiene OP asociada, no se puede cruzar con World Office.', 'muestreo' => $muestreo, 'ops' => []];
 
-    $wo = dm_documentos_wo_de_ops($ops);
+    $wo = $buscarDocumentos ? $buscarDocumentos($ops, $muestreo) : dm_documentos_wo_de_ops($ops);
     if (!$wo['ok']) return ['ok' => false, 'error' => $wo['error'], 'muestreo' => $muestreo, 'ops' => $ops];
 
     // Suma por producto WO a través de todos los documentos (ej. remisión + complemento).

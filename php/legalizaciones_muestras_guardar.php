@@ -37,7 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id_muestreo <= 0) {
     }
 
     if (!$error) {
-        $res = lm_guardar_legalizacion($bdd, $id_muestreo, $cantidades, $observaciones, $archivo, (string)($_POST['cierre'] ?? ''));
+        $res = lm_guardar_legalizacion($bdd, $id_muestreo, $cantidades, $observaciones, $archivo, (string)($_POST['cierre'] ?? ''),
+                                       ($_POST['fuente'] ?? '') === 'crm' ? 'crm' : 'auto');
         if ($res['ok']) {
             $redirect = '../muestreo_colegio_resto.php?id_muestras_e=' . $res['id_legalizacion'];
         } else {
