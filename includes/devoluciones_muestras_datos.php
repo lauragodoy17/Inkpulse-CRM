@@ -212,13 +212,14 @@ function dm_ped_de_concepto($concepto) {
  * Documentos FV/REM de World Office (no anulados) cuya OP en el concepto es una de $ops, con sus
  * renglones. Todas las consultas van en paralelo. Devuelve ['ok', 'error', 'documentos' => [
  * ['id','tipo','documento','fecha','concepto','op','ped','renglones' => [...]], ...]].
- * Con $prefijo (ej. 'RE22', lo usan las legalizaciones) solo se consultan remisiones (REM) de ese
- * prefijo: el filtro va en la petición a WO y se vuelve a comprobar en cada documento recibido.
+ * Con $prefijos (ej. ['RE22'] en legalizaciones, ['RE22', 'CEUR'] en devoluciones) solo se consultan
+ * remisiones (REM) de esos prefijos: con uno solo el filtro va en la petición a WO, y en todos los casos
+ * se vuelve a comprobar en cada documento recibido.
  */
-function dm_documentos_wo_de_ops(array $ops, $prefijo = null) {
+function dm_documentos_wo_de_ops(array $ops, ?array $prefijos = null) {
     if (!$ops) return ['ok' => true, 'error' => null, 'documentos' => []];
 
-    $tipos = $prefijo === null ? array_keys(WO_TIPOS_DESPACHO) : ['REM'];
+    $tipos = $prefijos === null ? array_keys(WO_TIPOS_DESPACHO) : ['REM'];
     $opsPorId = [];
     $peticiones = [];
     foreach ($ops as $op) {
@@ -234,7 +235,7 @@ function dm_documentos_wo_de_ops(array $ops, $prefijo = null) {
                     crear_filtro_api('moneda.id', '31', 4),
                     crear_filtro_api('concepto', $texto, 0, 1), // tipoFiltro 1 = LIKE
                 ];
-                if ($prefijo !== null) $filtros[] = crear_filtro_api('prefijo.nombre', $prefijo, 0, 0);
+                if ($prefijos !== null && count($prefijos) === 1) $filtros[] = crear_filtro_api('prefijo.nombre', $prefijos[0], 0, 0);
                 $peticiones["{$op['id']}|$tipo|$i"] = [
                     'endpoint' => '/inventarios/listarDocumentoSalidaAlmacen',
                     'metodo'   => 'POST',
@@ -255,7 +256,7 @@ function dm_documentos_wo_de_ops(array $ops, $prefijo = null) {
         if ($status !== 'OK') continue;
         foreach ($resp['data']['content'] ?? [] as $row) {
             if (!empty($row['senAnulado'])) continue;
-            if ($prefijo !== null && strcasecmp(trim((string)($row['prefijo'] ?? '')), $prefijo) !== 0) continue;
+            if ($prefijos !== null && !in_array(strtoupper(trim((string)($row['prefijo'] ?? ''))), $prefijos, true)) continue;
             $opConcepto = dm_op_de_concepto($row['concepto'] ?? '');
             if ($opConcepto === null || !isset($opsPorId[$opConcepto])) continue; // OP distinta (ej. 6146 vs 614)
             $documentos[(int)$row['id']] = [
@@ -386,6 +387,87 @@ function dm_registrado_por_producto(PDO $bdd, $idMuestreo, $modo) {
 }
 
 /**
+ * Las devoluciones buscan en todas las remisiones de muestras (REM), prefijos RE22 y CEUR, y nunca en
+ * facturas (pedido por el usuario 2026-10-13).
+ */
+const DM_PREFIJOS_DEVOLUCION = ['RE22', 'CEUR'];
+
+/**
+ * Detalle según de dónde salen los títulos (pedido por el usuario 2026-10-13):
+ *  - 'auto': lo despachado en World Office, solo en remisiones con los $prefijos dados.
+ *  - 'crm': botón "Traer información del pedido", para cuando WO no trae nada: lo solicitado en el CRM
+ *    (ver dm_detalle_crm()).
+ * Cada título trae 'clave' (producto WO en 'auto', id del libro en 'crm'), la del campo cantidad[...],
+ * y la respuesta trae 'fuente' para que el guardado recalcule con la misma.
+ */
+function dm_detalle_por_fuente(PDO $bdd, $idMuestreo, $modo, $fuente, array $prefijos) {
+    if ($fuente === 'crm') return dm_detalle_crm($bdd, $idMuestreo, $modo);
+    $detalle = dm_detalle_devolucion($bdd, $idMuestreo, $modo, fn($ops) => dm_documentos_wo_de_ops($ops, $prefijos));
+    foreach ($detalle['titulos'] ?? [] as $i => $t) $detalle['titulos'][$i]['clave'] = $t['producto_wo'];
+    $detalle['fuente'] = 'auto';
+    return $detalle;
+}
+
+/**
+ * Libros solicitados en el CRM (libros_muestreos.cantidad, lo que se montó desde el principio; no lo
+ * despachado ni lo aprobado) con lo ya devuelto (o legalizado) de cada libro y lo disponible
+ * (solicitado − registrado). Lo registrado se cuenta por libro en todas las devoluciones (o
+ * legalizaciones) activas del pedido, vengan de WO o del CRM, para no registrar dos veces el mismo libro
+ * por caminos distintos.
+ */
+function dm_detalle_crm(PDO $bdd, $idMuestreo, $modo) {
+    $muestreo = dm_obtener_muestreo($bdd, $idMuestreo);
+    if (!$muestreo) return ['ok' => false, 'error' => 'El pedido de muestras no existe, no está Entregado o no está en tu alcance.'];
+    $ops = dm_ops_muestreo($bdd, $idMuestreo);
+
+    $stmt = $bdd->prepare("SELECT lm.id_libro, SUM(lm.cantidad) AS solicitada, l.libro, TRIM(l.isbn) AS isbn, l.id_wo, l.tipo
+                           FROM libros_muestreos lm
+                           JOIN libros l ON l.id = lm.id_libro
+                           WHERE lm.cod_muestreo = ?
+                           GROUP BY lm.id_libro
+                           HAVING solicitada > 0
+                           ORDER BY l.libro");
+    $stmt->execute([(string)$muestreo['codigo']]);
+    $registrado = dm_registrado_por_libro($bdd, $idMuestreo, $modo);
+    $campo = $modo === 'legalizacion' ? 'legalizada' : 'devuelta';
+
+    $titulos = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $l) {
+        $idLibro = (int)$l['id_libro'];
+        $ya = $registrado[$idLibro] ?? 0;
+        $titulos[] = [
+            'clave'       => $idLibro,
+            'producto_wo' => (int)$l['id_wo'] ?: null,
+            'descripcion' => $l['libro'],
+            'codigo'      => (string)$l['isbn'],
+            'id_libro'    => $idLibro,
+            'libro'       => $l['libro'],
+            'tipo_ed'     => dm_tipo_libro_ed($l['tipo']),
+            'solicitada'  => (int)$l['solicitada'],
+            $campo        => $ya,
+            'disponible'  => max(0, (int)$l['solicitada'] - $ya),
+            'documentos'  => 'Solicitud CRM',
+            'ids_documentos' => null,
+        ];
+    }
+    if (!$titulos) return ['ok' => false, 'error' => 'El pedido de muestras #' . (int)$idMuestreo . ' no tiene libros registrados en el CRM.', 'muestreo' => $muestreo, 'ops' => $ops];
+
+    return ['ok' => true, 'error' => null, 'fuente' => 'crm', 'muestreo' => $muestreo, 'ops' => $ops,
+            'documentos' => [], 'titulos' => $titulos, 'cierre' => dm_cierre_completo($bdd, $idMuestreo, $modo)];
+}
+
+/** Unidades ya devueltas (o legalizadas) por libro del CRM en registros activos del muestreo: [id_libro => n]. */
+function dm_registrado_por_libro(PDO $bdd, $idMuestreo, $modo) {
+    $stmt = $bdd->prepare($modo === 'legalizacion'
+        ? "SELECT lme.id_libro, SUM(lme.cantidad) FROM libros_muestreos_e lme JOIN muestreos_e me ON me.codigo = lme.cod_muestreo
+           WHERE me.id_muestreo = ? AND me.estado <> " . DM_ESTADO_LEGALIZ_ANULADA . " GROUP BY lme.id_libro"
+        : "SELECT ld.id_libro, SUM(ld.cantidad) FROM libros_devol ld JOIN devoluciones d ON d.codigo = ld.cod_pedido
+           WHERE d.id_muestreo = ? AND d.estado <> " . DM_ESTADO_DEVOL_ANULADA . " GROUP BY ld.id_libro");
+    $stmt->execute([(int)$idMuestreo]);
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_KEY_PAIR));
+}
+
+/**
  * Todo lo que necesita la pantalla (y el guardado, que lo recalcula en el servidor): el muestreo,
  * sus OP, los documentos de WO encontrados y, por cada título despachado, cantidad despachada, ya
  * devuelta (o ya legalizada, en modo 'legalizacion') y disponible. Devuelve ['ok','error','muestreo',
@@ -457,20 +539,22 @@ function dm_detalle_devolucion(PDO $bdd, $idMuestreo, $modo = 'devolucion', ?cal
 }
 
 /**
- * Guarda una devolución. $cantidades = [producto_wo => cantidad a devolver]. Recalcula el despacho
- * en World Office y lo ya devuelto (bloqueando el muestreo para que dos devoluciones simultáneas no
+ * Guarda una devolución. $cantidades = [clave del título => cantidad a devolver]. Recalcula el despacho
+ * en World Office (o lo solicitado en el CRM, $fuente 'crm') y lo ya devuelto (bloqueando el muestreo para que dos devoluciones simultáneas no
  * se pasen del máximo) y rechaza cualquier cantidad fuera de 0..disponible. $cierre = 'parcial' (el
  * pedido sigue abierto hasta agotar unidades) o 'completa' (lo cierra aunque queden unidades).
+ * $fuente = la de dm_detalle_por_fuente() con que se cargó la pantalla.
  * Devuelve ['ok','error','id_devolucion'].
  */
-function dm_guardar_devolucion(PDO $bdd, $idMuestreo, array $cantidades, $observaciones, $archivo, $cierre) {
+function dm_guardar_devolucion(PDO $bdd, $idMuestreo, array $cantidades, $observaciones, $archivo, $cierre, $fuente = 'auto') {
     if (!in_array($cierre, ['parcial', 'completa'], true)) return ['ok' => false, 'error' => 'Elige si la devolución es parcial o completa.'];
-    $detalle = dm_detalle_devolucion($bdd, $idMuestreo);
+    $detalle = dm_detalle_por_fuente($bdd, $idMuestreo, 'devolucion', $fuente, DM_PREFIJOS_DEVOLUCION);
     if (!$detalle['ok']) return ['ok' => false, 'error' => $detalle['error']];
     if ($detalle['cierre']) return ['ok' => false, 'error' => dm_mensaje_cerrado('devolucion', $detalle['cierre'])];
 
+    $crm = $detalle['fuente'] === 'crm';
     $titulosPorProducto = [];
-    foreach ($detalle['titulos'] as $t) $titulosPorProducto[$t['producto_wo']] = $t;
+    foreach ($detalle['titulos'] as $t) $titulosPorProducto[$t['clave']] = $t;
 
     $aDevolver = [];
     foreach ($cantidades as $pid => $cant) {
@@ -478,7 +562,7 @@ function dm_guardar_devolucion(PDO $bdd, $idMuestreo, array $cantidades, $observ
         if (!preg_match('/^\d*$/', trim((string)$cant))) return ['ok' => false, 'error' => 'Las cantidades deben ser números enteros, sin decimales ni negativos.'];
         $cant = (int)$cant;
         if ($cant === 0) continue;
-        if (!isset($titulosPorProducto[$pid])) return ['ok' => false, 'error' => 'Uno de los títulos no aparece despachado en World Office para este pedido.'];
+        if (!isset($titulosPorProducto[$pid])) return ['ok' => false, 'error' => $crm ? 'Uno de los títulos no está en la solicitud de este pedido en el CRM.' : 'Uno de los títulos no aparece despachado en World Office para este pedido.'];
         if (!$titulosPorProducto[$pid]['id_libro']) return ['ok' => false, 'error' => 'El título "' . $titulosPorProducto[$pid]['descripcion'] . '" no está en el catálogo de libros del CRM.'];
         $aDevolver[$pid] = $cant;
     }
@@ -499,14 +583,15 @@ function dm_guardar_devolucion(PDO $bdd, $idMuestreo, array $cantidades, $observ
             $bdd->rollBack();
             return ['ok' => false, 'error' => dm_mensaje_cerrado('devolucion', $cierreActual)];
         }
-        $devuelto = dm_devuelto_por_producto($bdd, $idMuestreo);
+        $devuelto = $crm ? dm_registrado_por_libro($bdd, $idMuestreo, 'devolucion') : dm_devuelto_por_producto($bdd, $idMuestreo);
         foreach ($aDevolver as $pid => $cant) {
             $t = $titulosPorProducto[$pid];
-            $disponible = max(0, $t['despachada'] - ($devuelto[$pid] ?? 0));
+            $base = $crm ? $t['solicitada'] : $t['despachada'];
+            $disponible = max(0, $base - ($devuelto[$pid] ?? 0));
             if ($cant > $disponible) {
                 $bdd->rollBack();
-                return ['ok' => false, 'error' => 'No puedes devolver ' . $cant . ' de "' . $t['descripcion'] . '": se despacharon '
-                    . $t['despachada'] . ', ya se devolvieron ' . ($devuelto[$pid] ?? 0) . ' y quedan ' . $disponible . ' disponibles.'];
+                return ['ok' => false, 'error' => 'No puedes devolver ' . $cant . ' de "' . $t['descripcion'] . '": se ' . ($crm ? 'solicitaron ' : 'despacharon ')
+                    . $base . ', ya se devolvieron ' . ($devuelto[$pid] ?? 0) . ' y quedan ' . $disponible . ' disponibles.'];
             }
         }
 
@@ -526,7 +611,9 @@ function dm_guardar_devolucion(PDO $bdd, $idMuestreo, array $cantidades, $observ
                                     VALUES (?, ?, ?, ?, ?, ?, NOW())");
         foreach ($aDevolver as $pid => $cant) {
             $t = $titulosPorProducto[$pid];
-            $stmtLibro->execute([$codigo, $t['id_libro'], $cant, $pid, $t['despachada'], $t['ids_documentos']]);
+            // Desde el CRM: producto_wo = libros.id_wo (para que también cuente en el saldo de lo despachado
+            // en WO) y sin cantidad despachada ni documento de WO.
+            $stmtLibro->execute([$codigo, $t['id_libro'], $cant, $t['producto_wo'], $crm ? null : $t['despachada'], $t['ids_documentos']]);
         }
 
         $bdd->prepare("INSERT INTO devoluciones (codigo, tipo, id_periodo, persona, tipo_muestras, id_usuario, observaciones, archivo, estado,

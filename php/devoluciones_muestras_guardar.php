@@ -33,7 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id_muestreo <= 0) {
     }
 
     if (!$error) {
-        $res = dm_guardar_devolucion($bdd, $id_muestreo, $cantidades, $observaciones, $archivo, (string)($_POST['cierre'] ?? ''));
+        $res = dm_guardar_devolucion($bdd, $id_muestreo, $cantidades, $observaciones, $archivo, (string)($_POST['cierre'] ?? ''),
+                                    ($_POST['fuente'] ?? '') === 'crm' ? 'crm' : 'auto');
         if ($res['ok']) {
             $redirect = '../vista_devol.php?id_devol=' . $res['id_devolucion'] . '&tipo=1';
         } else {

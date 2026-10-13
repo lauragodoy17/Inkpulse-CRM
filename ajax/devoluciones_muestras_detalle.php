@@ -12,12 +12,14 @@ dm_validar_acceso(true);
 dm_asegurar_columnas($bdd);
 
 // modo=legalizacion lo usa legalizaciones_muestras.php: saldo despachado − legalizado y solo remisiones
-// RE22; fuente=crm es su botón "Traer información del pedido" (lo solicitado en el CRM) (ver lm_detalle_legalizacion()).
+// RE22; las devoluciones buscan en remisiones RE22 y CEUR. En ambos, fuente=crm es el botón "Traer
+// información del pedido" (lo solicitado en el CRM, ver dm_detalle_crm()).
 $modo = ($_GET['modo'] ?? '') === 'legalizacion' ? 'legalizacion' : 'devolucion';
 $idMuestreo = (int)($_GET['id_muestreo'] ?? 0);
+$fuente = ($_GET['fuente'] ?? '') === 'crm' ? 'crm' : 'auto';
 $detalle = $modo === 'legalizacion'
-    ? lm_detalle_legalizacion($bdd, $idMuestreo, ($_GET['fuente'] ?? '') === 'crm' ? 'crm' : 'auto')
-    : dm_detalle_devolucion($bdd, $idMuestreo, $modo);
+    ? lm_detalle_legalizacion($bdd, $idMuestreo, $fuente)
+    : dm_detalle_por_fuente($bdd, $idMuestreo, 'devolucion', $fuente, DM_PREFIJOS_DEVOLUCION);
 if (!empty($detalle['muestreo']['fecha'])) {
     $detalle['muestreo']['fecha'] = date('d/m/Y', strtotime($detalle['muestreo']['fecha']));
 }

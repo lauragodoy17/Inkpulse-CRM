@@ -166,6 +166,7 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
 
     .dm-cargando { text-align:center; padding:50px 10px; color:var(--dm-gris); }
     .dm-spinner { width:38px; height:38px; border:3px solid #dbeafe; border-top-color:var(--dm-azul); border-radius:50%; animation:dm-giro .8s linear infinite; margin:0 auto 12px; }
+    .dm-spinner-sm { display:inline-block; width:14px; height:14px; border-width:2px; margin:0; vertical-align:-2px; border-color:rgba(255,255,255,.4); border-top-color:#fff; }
     @keyframes dm-giro { to { transform:rotate(360deg); } }
     .dm-vacio { text-align:center; padding:46px 10px; color:#94a3b8; }
     .dm-vacio i { font-size:2.2rem; display:block; margin-bottom:8px; color:#cbd5e1; }
@@ -183,7 +184,7 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
         <div class="dm-flujo">
           <span>Pedido entregado</span><i class="bi bi-chevron-right"></i>
           <span>OP</span><i class="bi bi-chevron-right"></i>
-          <span>Factura / remisión en WO</span><i class="bi bi-chevron-right"></i>
+          <span>Remisión RE22 / CEUR en WO</span><i class="bi bi-chevron-right"></i>
           <span>Títulos despachados</span><i class="bi bi-chevron-right"></i>
           <span>Devolución</span>
         </div>
@@ -242,7 +243,7 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
             <tbody>
               <?php foreach ($muestreos as $m): $nd = (int)$m['n_devoluciones']; ?>
                 <tr data-id="<?= (int)$m['id'] ?>" data-estado="<?= $m['completado'] ? 'completado' : 'pendiente' ?>">
-                  <td data-order="<?= (int)$m['id'] ?>"><a class="dm-ped" href="muestreo_colegio.php?id_muestreo=<?= (int)$m['id'] ?>" target="_blank">#<?= (int)$m['id'] ?></a></td>
+                  <td data-order="<?= (int)$m['id'] ?>"><a class="dm-ped" href="muestreo_colegio_resto.php?id_pedido=<?= (int)$m['id'] ?>&tp=4" target="_blank">#<?= (int)$m['id'] ?></a></td>
                   <td data-search="<?= htmlspecialchars($m['colegio'] . ' ' . ($m['solicitante'] ?? '')) ?>" data-filter-colegio="<?= htmlspecialchars($m['colegio']) ?>">
                     <div class="dm-cole"><?= htmlspecialchars($m['colegio']) ?></div>
                     <?php if (!empty($m['solicitante'])): ?><div class="dm-sub"><i class="bi bi-person"></i><?= htmlspecialchars($m['solicitante']) ?></div><?php endif; ?>
@@ -346,20 +347,41 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
   }
   function aviso(tipo, icono, html) { return '<div class="dm-aviso ' + tipo + '"><i class="bi ' + icono + '"></i><div>' + html + '</div></div>'; }
 
-  function cargar(id) {
-    $('#dm-tabla tr').removeClass('dm-activo');
-    $('#dm-tabla tr[data-id="' + id + '"]').addClass('dm-activo');
-    $('#dm-paso2').removeClass('d-none');
-    $('#dm-paso2-titulo').text('Títulos despachados del pedido #' + id);
-    $('#dm-detalle').html('<div class="dm-cargando"><div class="dm-spinner"></div>Buscando la OP y lo despachado en World Office...</div>');
-    $('html, body').animate({ scrollTop: $('#dm-paso2').offset().top - 80 }, 300);
+  // fuente 'auto' = lo despachado en WO (remisión RE22 o CEUR con la OP en el concepto); 'crm' = botón
+  // "Traer información del pedido" (los libros y cantidades solicitados en el CRM). Solo una consulta a la
+  // vez: elegir otro pedido cancela la anterior y el botón no hace nada mientras haya una en curso.
+  var consulta = null;
+  function cargar(id, fuente) {
+    fuente = fuente || 'auto';
+    if (fuente === 'crm') {
+      if (consulta) return;
+      $('#dm-traer').prop('disabled', true).html('<span class="dm-spinner dm-spinner-sm"></span> Trayendo la información...');
+      $('#dm-traer-msg').html('');
+    } else {
+      if (consulta) consulta.abort();
+      $('#dm-tabla tr').removeClass('dm-activo');
+      $('#dm-tabla tr[data-id="' + id + '"]').addClass('dm-activo');
+      $('#dm-paso2').removeClass('d-none');
+      $('#dm-paso2-titulo').text('Títulos despachados del pedido #' + id);
+      $('#dm-detalle').html('<div class="dm-cargando"><div class="dm-spinner"></div>Buscando la OP y la remisión en World Office...</div>');
+      $('html, body').animate({ scrollTop: $('#dm-paso2').offset().top - 80 }, 300);
+    }
 
-    $.getJSON('ajax/devoluciones_muestras_detalle.php', { id_muestreo: id })
-      .done(function (r) { pintar(id, r); })
-      .fail(function () { $('#dm-detalle').html(aviso('err', 'bi-x-octagon', 'No se pudo consultar el pedido. Intenta de nuevo.')); });
+    var xhr = consulta = $.getJSON('ajax/devoluciones_muestras_detalle.php', { id_muestreo: id, fuente: fuente });
+    xhr.done(function (r) { pintar(id, r, fuente); })
+      .fail(function (x, estado) {
+        if (estado === 'abort') return;
+        if (fuente === 'crm') {
+          $('#dm-traer').prop('disabled', false).html('<i class="bi bi-cloud-download"></i> Traer información del pedido');
+          $('#dm-traer-msg').html(aviso('err', 'bi-x-octagon', 'No se pudo traer la información del pedido. Intenta de nuevo.'));
+        } else {
+          $('#dm-detalle').html(aviso('err', 'bi-x-octagon', 'No se pudo consultar el pedido. Intenta de nuevo.'));
+        }
+      })
+      .always(function () { if (consulta === xhr) consulta = null; });
   }
 
-  function pintar(id, r) {
+  function pintar(id, r, fuente) {
     var h = '';
     if (r.muestreo) {
       var ops = (r.ops || []).map(function (o) { return 'OP ' + o.anio + '-' + o.id; }).join(', ') || '—';
@@ -372,12 +394,27 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
         + dato('bi-file-earmark-check', 'OP', ops)
         + '</div>';
     }
-    if (!r.ok) { $('#dm-detalle').html(h + aviso('err', 'bi-x-octagon', esc(r.error))); return; }
-    if (!r.documentos.length) {
-      $('#dm-detalle').html(h + '<div class="dm-vacio"><i class="bi bi-search"></i>No se encontró en World Office ninguna factura o remisión con la OP de este pedido en el concepto.<br>Sin documento no hay títulos despachados para devolver.</div>');
+    if (!r.ok) {
+      if (fuente === 'crm') {
+        $('#dm-traer').prop('disabled', false).html('<i class="bi bi-cloud-download"></i> Traer información del pedido');
+        $('#dm-traer-msg').html(aviso('err', 'bi-x-octagon', esc(r.error)));
+      } else {
+        $('#dm-detalle').html(h + aviso('err', 'bi-x-octagon', esc(r.error)));
+      }
+      return;
+    }
+    var crm = r.fuente === 'crm';
+    if (!crm && !r.documentos.length) {
+      $('#dm-detalle').html(h + '<div class="dm-vacio"><i class="bi bi-search"></i>No se encontró en World Office ninguna remisión RE22 o CEUR con la OP de este pedido en el concepto.<br>'
+        + 'Puedes traer los libros y las cantidades que se solicitaron en el CRM.'
+        + '<div style="margin-top:14px;"><button type="button" class="dm-btn" id="dm-traer" data-id="' + id + '"><i class="bi bi-cloud-download"></i> Traer información del pedido</button></div>'
+        + '<div id="dm-traer-msg" style="max-width:640px;margin:12px auto 0;text-align:left;"></div></div>');
       return;
     }
 
+    if (crm) {
+      h += aviso('warn', 'bi-info-circle', 'World Office no trajo la remisión de este pedido: se muestran los libros y las cantidades <strong>solicitados en el CRM</strong>. Revisa que coincidan con lo que se entregó antes de guardar.');
+    } else {
     h += '<div class="dm-subtitulo"><i class="bi bi-receipt"></i> Documentos de World Office</div><div class="dm-docs">';
     var avisos = '';
     r.documentos.forEach(function (d) {
@@ -391,33 +428,36 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
       }
     });
     h += '</div>' + avisos;
+    }
 
     // Cerrado con una devolución "completa": ya no se registra nada aunque queden unidades.
     var cerrado = !!r.cierre;
     var hayDisponible = !cerrado && r.titulos.some(function (t) { return t.id_libro && t.disponible > 0; });
-    h += '<div class="dm-subtitulo" style="justify-content:space-between;"><span><i class="bi bi-book"></i> Títulos despachados (' + r.titulos.length + ')</span>'
+    h += '<div class="dm-subtitulo" style="justify-content:space-between;"><span><i class="bi bi-book"></i> Títulos ' + (crm ? 'solicitados' : 'despachados') + ' (' + r.titulos.length + ')</span>'
       + (hayDisponible ? '<button type="button" class="dm-btn dm-btn-light" id="dm-todo" style="padding:5px 12px;font-size:.75rem;"><i class="bi bi-check2-all"></i> Devolver todo lo disponible</button>' : '')
       + '</div>';
 
     h += '<form id="dm-form" method="POST" action="php/devoluciones_muestras_guardar.php" enctype="multipart/form-data">'
       + '<input type="hidden" name="id_muestreo" value="' + id + '">'
+      + '<input type="hidden" name="fuente" value="' + (crm ? 'crm' : 'auto') + '">'
       + '<div class="table-responsive"><table class="dm-tit-table"><thead><tr>'
-      + '<th>Título</th><th class="c" title="E = estudiante, D = docente">Tipo</th><th>Documento</th><th class="c">Despachada</th><th class="c">Ya devuelta</th><th class="c">Disponible</th><th class="c">A devolver</th>'
+      + '<th>Título</th><th class="c" title="E = estudiante, D = docente">Tipo</th><th>Documento</th><th class="c">' + (crm ? 'Solicitada' : 'Despachada') + '</th><th class="c">Ya devuelta</th><th class="c">Disponible</th><th class="c">A devolver</th>'
       + '</tr></thead><tbody>';
     r.titulos.forEach(function (t) {
       var sinLibro = !t.id_libro, editable = !cerrado && !sinLibro && t.disponible > 0;
-      var pct = t.despachada > 0 ? Math.min(100, Math.round(t.devuelta * 100 / t.despachada)) : 0;
+      var base = crm ? t.solicitada : t.despachada;
+      var pct = base > 0 ? Math.min(100, Math.round(t.devuelta * 100 / base)) : 0;
       h += '<tr' + (!editable ? ' class="dm-agotado"' : '') + '>'
         + '<td><div class="dm-libro">' + esc(t.descripcion) + '</div><div class="dm-isbn">' + esc(t.codigo) + '</div>'
         + (sinLibro ? '<div class="dm-sub" style="color:#dc2626;"><i class="bi bi-exclamation-circle"></i> No está en el catálogo del CRM</div>' : '') + '</td>'
         + '<td class="c">' + (t.tipo_ed ? '<span class="dm-pill ' + (t.tipo_ed === 'E' ? 'dm-pill-azul' : 'dm-pill-fv') + '" title="' + (t.tipo_ed === 'E' ? 'Estudiante' : 'Docente') + '">' + t.tipo_ed + '</span>' : '—') + '</td>'
         + '<td><span class="dm-pill dm-pill-gris">' + esc(t.documentos) + '</span></td>'
-        + '<td class="c"><span class="dm-num">' + t.despachada + '</span></td>'
+        + '<td class="c"><span class="dm-num">' + base + '</span></td>'
         + '<td class="c"><span class="dm-num">' + t.devuelta + '</span><div class="dm-barra" title="' + pct + '% devuelto"><span style="width:' + pct + '%"></span></div></td>'
         + '<td class="c">' + (t.disponible > 0 ? '<span class="dm-pill dm-pill-verde">' + t.disponible + '</span>' : '<span class="dm-pill dm-pill-gris">0</span>') + '</td>'
         + '<td class="c">' + (editable
             ? '<div class="dm-stepper"><button type="button" class="dm-menos" tabindex="-1">−</button>'
-              + '<input type="number" class="dm-input" name="cantidad[' + t.producto_wo + ']" min="0" max="' + t.disponible + '" step="1" value="0" data-max="' + t.disponible + '" data-tipo="' + (t.tipo_ed || '') + '" data-titulo="' + esc(t.descripcion) + '">'
+              + '<input type="number" class="dm-input" name="cantidad[' + t.clave + ']" min="0" max="' + t.disponible + '" step="1" value="0" data-max="' + t.disponible + '" data-tipo="' + (t.tipo_ed || '') + '" data-titulo="' + esc(t.descripcion) + '">'
               + '<button type="button" class="dm-mas" tabindex="-1">+</button></div><span class="dm-max">máx. ' + t.disponible + '</span>'
             : '<span class="dm-sub" style="justify-content:center;">' + (sinLibro ? 'No disponible' : (cerrado && t.disponible > 0 ? 'Cerrado' : 'Ya devuelto')) + '</span>')
         + '</td></tr>';
@@ -428,7 +468,7 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
       h += (cerrado
         ? aviso('ok', 'bi-check-circle', '<strong>Completado.</strong> Se cerró con la <a href="vista_devol.php?id_devol=' + r.cierre.id + '&tipo=1" target="_blank">devolución completa #' + r.cierre.id + '</a>'
             + (r.cierre.usuario ? ' de ' + esc(r.cierre.usuario) : '') + '. Ya no se pueden registrar más devoluciones de este pedido.')
-        : aviso('ok', 'bi-check-circle', '<strong>Completado.</strong> Ya se devolvió todo lo despachado en este pedido' + (r.titulos.some(function (t) { return !t.id_libro; }) ? ' (o los títulos pendientes no están en el catálogo del CRM).' : '.')))
+        : aviso('ok', 'bi-check-circle', '<strong>Completado.</strong> Ya se devolvió todo lo ' + (crm ? 'solicitado' : 'despachado') + ' en este pedido' + (r.titulos.some(function (t) { return !t.id_libro; }) ? ' (o los títulos pendientes no están en el catálogo del CRM).' : '.')))
         + '</form>';
       $('#dm-detalle').html(h);
       return;
@@ -506,6 +546,7 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
   });
 
   $(document).on('click', '.dm-btn-sel', function () { cargar($(this).data('id')); });
+  $(document).on('click', '#dm-traer', function () { cargar($(this).data('id'), 'crm'); });
 
   <?php if ($id_inicial > 0): ?>cargar(<?= $id_inicial ?>);<?php endif; ?>
 })();

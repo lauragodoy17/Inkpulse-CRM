@@ -25,72 +25,11 @@ const LM_PREFIJO_WO = 'RE22';
  *    remisiones RE22.
  *  - 'crm': botón "Traer información del pedido" (pedido por el usuario 2026-10-13), para cuando WO no
  *    trae nada: los libros y cantidades de la solicitud de muestras tal como se montó en el CRM
- *    (libros_muestreos). Ver lm_detalle_crm().
+ *    (ver dm_detalle_crm()).
  * El guardado vuelve a calcular con la misma fuente, así que el tope no se salta en ninguno de los dos.
- * Cada título trae 'clave' (producto WO en 'auto', id del libro en 'crm'): la del campo cantidad[...].
  */
 function lm_detalle_legalizacion(PDO $bdd, $idMuestreo, $fuente = 'auto') {
-    if ($fuente === 'crm') return lm_detalle_crm($bdd, $idMuestreo);
-    $detalle = dm_detalle_devolucion($bdd, $idMuestreo, 'legalizacion', fn($ops) => dm_documentos_wo_de_ops($ops, LM_PREFIJO_WO));
-    foreach ($detalle['titulos'] ?? [] as $i => $t) $detalle['titulos'][$i]['clave'] = $t['producto_wo'];
-    $detalle['fuente'] = 'auto';
-    return $detalle;
-}
-
-/**
- * Libros solicitados en el CRM (libros_muestreos.cantidad, lo que se montó desde el principio; no lo
- * despachado ni lo aprobado) con lo ya legalizado de cada libro en el pedido y lo disponible
- * (solicitado − legalizado). Lo legalizado se cuenta por libro en todas las legalizaciones activas del
- * pedido, vengan de WO o del CRM, para que el mismo libro no se legalice dos veces por caminos distintos.
- */
-function lm_detalle_crm(PDO $bdd, $idMuestreo) {
-    $muestreo = dm_obtener_muestreo($bdd, $idMuestreo);
-    if (!$muestreo) return ['ok' => false, 'error' => 'El pedido de muestras no existe, no está Entregado o no está en tu alcance.'];
-
-    $stmt = $bdd->prepare("SELECT lm.id_libro, SUM(lm.cantidad) AS solicitada, l.libro, TRIM(l.isbn) AS isbn, l.id_wo, l.tipo
-                           FROM libros_muestreos lm
-                           JOIN libros l ON l.id = lm.id_libro
-                           WHERE lm.cod_muestreo = ?
-                           GROUP BY lm.id_libro
-                           HAVING solicitada > 0
-                           ORDER BY l.libro");
-    $stmt->execute([(string)$muestreo['codigo']]);
-    $legalizado = lm_legalizado_por_libro($bdd, $idMuestreo);
-
-    $titulos = [];
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $l) {
-        $idLibro = (int)$l['id_libro'];
-        $ya = $legalizado[$idLibro] ?? 0;
-        $titulos[] = [
-            'clave'       => $idLibro,
-            'producto_wo' => (int)$l['id_wo'] ?: null,
-            'descripcion' => $l['libro'],
-            'codigo'      => (string)$l['isbn'],
-            'id_libro'    => $idLibro,
-            'libro'       => $l['libro'],
-            'tipo_ed'     => dm_tipo_libro_ed($l['tipo']),
-            'solicitada'  => (int)$l['solicitada'],
-            'legalizada'  => $ya,
-            'disponible'  => max(0, (int)$l['solicitada'] - $ya),
-            'documentos'  => 'Solicitud CRM',
-            'ids_documentos' => null,
-        ];
-    }
-    if (!$titulos) return ['ok' => false, 'error' => 'El pedido de muestras #' . (int)$idMuestreo . ' no tiene libros registrados en el CRM.', 'muestreo' => $muestreo, 'ops' => dm_ops_muestreo($bdd, $idMuestreo)];
-
-    return ['ok' => true, 'error' => null, 'fuente' => 'crm', 'muestreo' => $muestreo, 'ops' => dm_ops_muestreo($bdd, $idMuestreo),
-            'documentos' => [], 'titulos' => $titulos, 'cierre' => dm_cierre_completo($bdd, $idMuestreo, 'legalizacion')];
-}
-
-/** Unidades ya legalizadas por libro del CRM en legalizaciones activas del muestreo: [id_libro => n]. */
-function lm_legalizado_por_libro(PDO $bdd, $idMuestreo) {
-    $stmt = $bdd->prepare("SELECT lme.id_libro, SUM(lme.cantidad)
-                           FROM libros_muestreos_e lme
-                           JOIN muestreos_e me ON me.codigo = lme.cod_muestreo
-                           WHERE me.id_muestreo = ? AND me.estado <> " . DM_ESTADO_LEGALIZ_ANULADA . "
-                           GROUP BY lme.id_libro");
-    $stmt->execute([(int)$idMuestreo]);
-    return array_map('intval', $stmt->fetchAll(PDO::FETCH_KEY_PAIR));
+    return dm_detalle_por_fuente($bdd, $idMuestreo, 'legalizacion', $fuente, [LM_PREFIJO_WO]);
 }
 
 /**
@@ -135,7 +74,7 @@ function lm_guardar_legalizacion(PDO $bdd, $idMuestreo, array $cantidades, $obse
             $bdd->rollBack();
             return ['ok' => false, 'error' => dm_mensaje_cerrado('legalizacion', $cierreActual)];
         }
-        $legalizado = $crm ? lm_legalizado_por_libro($bdd, $idMuestreo) : dm_legalizado_por_producto($bdd, $idMuestreo);
+        $legalizado = $crm ? dm_registrado_por_libro($bdd, $idMuestreo, 'legalizacion') : dm_legalizado_por_producto($bdd, $idMuestreo);
         foreach ($aLegalizar as $pid => $cant) {
             $t = $titulosPorProducto[$pid];
             $base = $crm ? $t['solicitada'] : $t['despachada'];
