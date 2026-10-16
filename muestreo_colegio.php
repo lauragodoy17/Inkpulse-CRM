@@ -208,7 +208,7 @@
             $num_repetido = $req_repetido->rowCount();
             $n_repetido   = $req_repetido->fetchAll();
 
-            $sql = "SELECT pe.id, l.id, l.libro, l.tipo, lp.cantidad, lp.id as id_lm, l.isbn, m.materia, g.id as id_grado, g.grado FROM muestreos pe LEFT JOIN libros_muestreos lp ON lp.cod_muestreo=pe.codigo LEFT JOIN libros l ON l.id=lp.id_libro LEFT JOIN materias m ON m.id=l.id_materia LEFT JOIN grados g ON g.id=l.id_grado WHERE pe.id='".$_GET["id_pedido"]."' GROUP BY l.id";
+            $sql = "SELECT pe.id, l.id, l.libro, l.tipo, lp.cantidad, lp.cantidad_aprob, lp.id as id_lm, l.isbn, m.materia, g.id as id_grado, g.grado FROM muestreos pe LEFT JOIN libros_muestreos lp ON lp.cod_muestreo=pe.codigo LEFT JOIN libros l ON l.id=lp.id_libro LEFT JOIN materias m ON m.id=l.id_materia LEFT JOIN grados g ON g.id=l.id_grado WHERE pe.id='".$_GET["id_pedido"]."' GROUP BY l.id";
             $req = $bdd->prepare($sql); $req->execute();
           } else {
             $sql_pedido = "SELECT id FROM muestreos_e WHERE id='".$_GET["id_muestras_e"]."'";
@@ -396,7 +396,7 @@
                     if (isset($_GET["id_pedido"])) {
                       // El valor de libro_m[] ("id_lm/cantidad") se arma al enviar el formulario (ver submit abajo):
                       // antes lo hacía un <script> por fila que corría antes de cargar jQuery y nunca se guardaba nada.
-                      echo '<td style="text-align:center"><input type="number" min="0" class="mc-cant-aprob" data-lm="'.intval($libro["id_lm"]).'" id="cantidad_aprob'.$libro["id_lm"].'" value="0" required></td>';
+                      echo '<td style="text-align:center"><input type="number" min="0" class="mc-cant-aprob" data-lm="'.intval($libro["id_lm"]).'" id="cantidad_aprob'.$libro["id_lm"].'" value="'.max(0, intval($libro["cantidad_aprob"] ?? 0)).'" required></td>';
                       echo '<input type="hidden" name="libro_m[]" id="libro_m'.$libro["id_lm"].'">';
                     }
                     echo '</tr>';
