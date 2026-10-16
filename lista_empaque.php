@@ -223,6 +223,8 @@ le_crear_tablas($bdd);
 <script src="vendors/scripts/layout-settings.js"></script>
 <script src="src/plugins/select2/dist/js/select2.min.js"></script>
 <script>
+// Armar las cajas puede tomar más que la vida de la sesión en el servidor: se mantiene viva mientras la página esté abierta.
+setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
 (function () {
   function h(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
   function n(v) { v = parseFloat(v) || 0; return (v % 1 === 0 ? v : v.toFixed(2)).toLocaleString('es-CO'); }
@@ -707,7 +709,7 @@ le_crear_tablas($bdd);
         $('#le-cliente-filtro, #le-lista-cliente input, #le-continuar').prop('disabled', true);
         window.open('php/lista_empaque_pdf.php?id=' + r.id, '_blank');
       })
-      .fail(function () { inkToast('No se pudo generar la lista. Intenta de nuevo.', 'error'); })
+      .fail(function (xhr) { inkToast(h((xhr.responseJSON && xhr.responseJSON.error) || 'No se pudo generar la lista. Intenta de nuevo.'), 'error'); })
       .always(function () { $btn.prop('disabled', false).html('<i class="bi bi-file-earmark-pdf"></i> Generar lista de empaque'); });
   });
 })();

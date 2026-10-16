@@ -7,6 +7,13 @@
 require_once("aut.php");
 header('Content-Type: application/json');
 
+if (($_SESSION['autentificado'] ?? '') !== 'SI') {
+    // aut.php no corta la ejecución: sin esto, una sesión vencida llegaba como "Sin permiso."
+    header_remove('Location');
+    http_response_code(401);
+    echo json_encode(['ok' => false, 'error' => 'Tu sesión expiró. Inicia sesión en otra pestaña y vuelve a dar clic en "Generar lista de empaque": lo que armaste en esta página no se pierde.']);
+    exit;
+}
 if (!in_array(intval($_SESSION["tipo"] ?? 0), [1, 2], true) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(403);
     echo json_encode(['ok' => false, 'error' => 'Sin permiso.']);
