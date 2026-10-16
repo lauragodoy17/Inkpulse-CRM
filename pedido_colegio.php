@@ -380,6 +380,19 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
         echo html_motivo_anulacion(obtener_historial_estado($bdd, 'pedidos', $id_pedido, ESTADO_ANULADO), 'Pedido anulado');
       } ?>
 
+      <?php
+        // Trazabilidad: documentos de World Office que enviaron más unidades de las solicitadas en
+        // este pedido (o en su pedido original, si este es un pedido nuevo de backorder). Ver
+        // includes/excedentes_despacho.php.
+        require_once(__DIR__ . "/includes/excedentes_despacho.php");
+        $excedentes_pedido = excedentes_listar($bdd, $id_pedido);
+        if (!empty($excedentes_pedido)) echo excedentes_estilos() . excedentes_html($excedentes_pedido);
+
+        // Paquetes facturados con libros faltantes (includes/backorders_paquetes_datos.php).
+        require_once(__DIR__ . "/includes/backorders_paquetes_datos.php");
+        echo bp_html_alerta_pedido($bdd, BP_ORIGEN_PEDIDO, $id_pedido);
+      ?>
+
       <center id="impre"></center>
 
       <?php if ($show_stock): ?>
@@ -522,7 +535,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <th>Precio de Venta</th>
                 <th>Descuento</th>
                 <th>Precio Facturación</th>
-                <th>Cantidad</th>
+                <th><?= $col_cant_aprob ? 'Cantidad solicitada' : 'Cantidad' ?></th>
                 <th>Valor Venta</th>
                 <?php if ($show_plataforma): ?><th>Plataforma</th><?php endif; ?>
                 <?php if ($show_stock): ?><th class="d-print-none">Existencia</th><?php endif; ?>
@@ -554,7 +567,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 </td>
                 <td class="print-col-cantaprob<?= $ph_cant_aprob ?>" style="text-align:center">
                   <input type="number" id="c<?= $lb['lpid'] ?>" class="ap-qty-input"
-                         data-lpid="<?= $lb['lpid'] ?>" value="<?= htmlspecialchars($lb['cantidad_aprob']) ?>">
+                         data-lpid="<?= $lb['lpid'] ?>" data-solicitada="<?= intval($lb['cantidad']) ?>" value="<?= htmlspecialchars($lb['cantidad_aprob']) ?>">
                 </td>
               </tr>
               <?php endforeach; ?>
@@ -575,7 +588,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <?php if ($show_plataforma): ?><td></td><?php endif; ?>
                 <?php if ($show_stock): ?><td class="d-print-none"></td><?php endif; ?>
                 <td class="print-col-descaprob<?= $ph_desc_aprob ?>"></td>
-                <td class="print-col-cantaprob<?= $ph_cant_aprob ?>"></td>
+                <td class="print-col-cantaprob<?= $ph_cant_aprob ?>" id="total-cant-aprob" style="text-align:center;font-weight:700"></td>
               </tr>
             </tfoot>
           </table>
@@ -654,6 +667,19 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
 <script src="vendors/scripts/process.js"></script>
 <script src="vendors/scripts/layout-settings.js"></script>
 <script>
+// Total de la columna "Cantidad aprobada": libros sin cantidad aprobada cuentan con lo solicitado.
+// Solo se muestra si al menos un libro tiene cantidad aprobada.
+function actualizarTotalCantAprob() {
+  var total = 0, alguna = false;
+  $('.ap-qty-input').each(function () {
+    var v = $.trim($(this).val());
+    if (v !== '') alguna = true;
+    total += (v !== '') ? (parseInt(v, 10) || 0) : (parseInt($(this).data('solicitada'), 10) || 0);
+  });
+  $('#total-cant-aprob').text(alguna ? total : '');
+}
+$(function () { actualizarTotalCantAprob(); });
+$(document).on('input', '.ap-qty-input', actualizarTotalCantAprob);
 function buildLibpVal(lpid) {
   return $('#c'+lpid).val() + '/' + lpid + '/' + $('#d'+lpid).val();
 }

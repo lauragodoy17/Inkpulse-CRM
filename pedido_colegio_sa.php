@@ -494,7 +494,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <th>PVP</th>
                 <th>Descuento</th>
                 <th>Precio facturación</th>
-                <th>Cantidad</th>
+                <th><?= ($col_cant_aprob && ($is_admin || $is_viewer)) ? 'Cantidad solicitada' : 'Cantidad' ?></th>
                 <th>Valor venta</th>
                 <?php if ($show_stock): ?><th class="d-print-none">Existencia</th><?php endif; ?>
                 <?php if ($is_admin || $is_viewer): ?>
@@ -527,7 +527,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 </td>
                 <td class="print-col-cantaprob<?= $ph_cant_aprob ?>" style="text-align:center">
                   <input type="number" id="c<?= $lb['lpid'] ?>" name="cantidad_a"
-                         class="ap-qty-input" data-lpid="<?= $lb['lpid'] ?>"
+                         class="ap-qty-input" data-lpid="<?= $lb['lpid'] ?>" data-solicitada="<?= intval($lb['cantidad']) ?>"
                          value="<?= htmlspecialchars($lb['cantidad_aprob']) ?>">
                 </td>
                 <?php endif; ?>
@@ -548,7 +548,7 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <td style="text-align:center;font-weight:700"><?= $total_c ?></td>
                 <td style="font-weight:700">$ <?= number_format($total_v, 0, ',', '.') ?></td>
                 <?php if ($show_stock): ?><td class="d-print-none"></td><?php endif; ?>
-                <?php if ($is_admin || $is_viewer): ?><td class="print-col-descaprob<?= $ph_desc_aprob ?>"></td><td class="print-col-cantaprob<?= $ph_cant_aprob ?>"></td><?php endif; ?>
+                <?php if ($is_admin || $is_viewer): ?><td class="print-col-descaprob<?= $ph_desc_aprob ?>"></td><td class="print-col-cantaprob<?= $ph_cant_aprob ?>" id="total-cant-aprob" style="text-align:center;font-weight:700"></td><?php endif; ?>
                 <?php if ($can_edit): ?><td></td><?php endif; ?>
               </tr>
             </tfoot>
@@ -686,6 +686,19 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
 <script src="src/plugins/datatables/js/jquery.dataTables.min.js"></script>
 <script src="src/plugins/datatables/js/dataTables.bootstrap4.min.js"></script>
 <script>
+// Total de la columna "Cantidad aprobada": libros sin cantidad aprobada cuentan con lo solicitado.
+// Solo se muestra si al menos un libro tiene cantidad aprobada.
+function actualizarTotalCantAprob() {
+  var total = 0, alguna = false;
+  $('.ap-qty-input').each(function () {
+    var v = $.trim($(this).val());
+    if (v !== '') alguna = true;
+    total += (v !== '') ? (parseInt(v, 10) || 0) : (parseInt($(this).data('solicitada'), 10) || 0);
+  });
+  $('#total-cant-aprob').text(alguna ? total : '');
+}
+$(function () { actualizarTotalCantAprob(); });
+$(document).on('input', '.ap-qty-input', actualizarTotalCantAprob);
 function buildLibpVal(lpid) {
   return $('#c'+lpid).val() + '/' + lpid + '/' + $('#d'+lpid).val();
 }

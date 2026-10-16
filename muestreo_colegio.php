@@ -394,14 +394,10 @@
                     echo '<td>'.htmlspecialchars($libro["grado"]).'</td>';
                     echo '<td style="text-align:center">'.$libro["cantidad"].'</td>';
                     if (isset($_GET["id_pedido"])) {
-                      echo '<td style="text-align:center"><input type="number" id="cantidad_aprob'.$libro["id_lm"].'" value="0" required></td>';
+                      // El valor de libro_m[] ("id_lm/cantidad") se arma al enviar el formulario (ver submit abajo):
+                      // antes lo hacía un <script> por fila que corría antes de cargar jQuery y nunca se guardaba nada.
+                      echo '<td style="text-align:center"><input type="number" min="0" class="mc-cant-aprob" data-lm="'.intval($libro["id_lm"]).'" id="cantidad_aprob'.$libro["id_lm"].'" value="0" required></td>';
                       echo '<input type="hidden" name="libro_m[]" id="libro_m'.$libro["id_lm"].'">';
-                      echo "<script>
-                        $('#cantidad_aprob".$libro["id_lm"]."').keyup(function(){
-                          var cant = $('#cantidad_aprob".$libro["id_lm"]."').val();
-                          $('#libro_m".$libro["id_lm"]."').val(".$libro["id_lm"]."+'/' + cant);
-                        });
-                      </script>";
                     }
                     echo '</tr>';
                   }
@@ -469,6 +465,10 @@
     $("#form_aprobar").on('submit', function(e){
       e.preventDefault();
       var form = this;
+      $('.mc-cant-aprob').each(function () {
+        var lm = $(this).data('lm');
+        $('#libro_m' + lm).val(lm + '/' + $.trim($(this).val()));
+      });
       inkConfirm({
         title: '¿Aprobar este muestreo?',
         text:  'Se registrarán las cantidades aprobadas y el muestreo quedará en estado Aprobado.',

@@ -456,7 +456,18 @@
                 <th>Ubicación</th>
                 <th>Materia</th>
                 <th>Grado</th>
-                <?php if (isset($_GET["id_pedido"])): ?>
+                <?php
+                  // Si al aprobar cambiaron la cantidad de algún libro, se ven lo solicitado y lo aprobado lado a lado
+                  // (cantidad_aprob < 1 = no la cambiaron: se aprueba lo solicitado).
+                  $hay_cant_aprob = false;
+                  if (isset($_GET["id_pedido"])) {
+                    foreach ($libros as $lb_a) { if (intval($lb_a["cantidad_aprob"]) >= 1) { $hay_cant_aprob = true; break; } }
+                  }
+                ?>
+                <?php if ($hay_cant_aprob): ?>
+                  <th>Cantidad solicitada</th>
+                  <th>Cantidad aprobada</th>
+                <?php elseif (isset($_GET["id_pedido"])): ?>
                   <th>Cantidad</th>
                 <?php else: ?>
                   <th>Cantidad entregada</th>
@@ -466,6 +477,7 @@
             <tbody>
               <?php
                 $i = 1;
+                $total_cantidad_aprob = [];
                 foreach ($libros as $libro) {
                   $su = $bdd->prepare(
                     "SELECT l.id_tipo, l.lugar, u.piso, u.ubicacion, lu.posicion
@@ -496,14 +508,18 @@
                   echo '<td>'.htmlspecialchars($ubi).'</td>';
                   echo '<td>'.htmlspecialchars($libro["materia"]).'</td>';
                   echo '<td>'.htmlspecialchars($libro["grado"]).'</td>';
-                  if (isset($_GET["id_pedido"])) {
-                    if ($libro["cantidad_aprob"] < 1) {
-                      echo '<td style="text-align:center">'.$libro["cantidad"].'</td>';
-                      $total_cantidad[]       = $libro["cantidad"];
-                    }else{
-                      echo '<td style="text-align:center">'.$libro["cantidad_aprob"].'</td>';
-                      $total_cantidad[]       = $libro["cantidad"];
-                    }        
+                  if ($hay_cant_aprob) {
+                    $cambiada = intval($libro["cantidad_aprob"]) >= 1;
+                    $aprobada = $cambiada ? intval($libro["cantidad_aprob"]) : intval($libro["cantidad"]);
+                    $resaltar = $cambiada && $aprobada != intval($libro["cantidad"]);
+                    echo '<td style="text-align:center">'.intval($libro["cantidad"]).'</td>';
+                    echo '<td style="text-align:center'.($resaltar ? ';font-weight:700;color:#b45309' : '').'"'
+                       . ($cambiada ? '' : ' title="Sin cambio: se aprobó lo solicitado"').'>'.$aprobada.'</td>';
+                    $total_cantidad[]       = $libro["cantidad"];
+                    $total_cantidad_aprob[] = $aprobada;
+                  }elseif (isset($_GET["id_pedido"])) {
+                    echo '<td style="text-align:center">'.$libro["cantidad"].'</td>';
+                    $total_cantidad[]       = $libro["cantidad"];
                   }else{
                     echo '<td style="text-align:center">'.$libro["cantidad"].'</td>';
                     $total_cantidad[]       = $libro["cantidad"];
@@ -519,6 +535,7 @@
                 <td></td>
                 <td colspan="6" style="text-align:right">Total</td>
                 <td style="text-align:center"><?= $total_c ?></td>
+                <?php if ($hay_cant_aprob): ?><td style="text-align:center"><?= array_sum($total_cantidad_aprob) ?></td><?php endif; ?>
               </tr>
             </tfoot>
           </table>
