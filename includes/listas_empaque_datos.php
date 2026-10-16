@@ -301,7 +301,7 @@ function le_documentos_usados(PDO $bdd, array $claves) {
 /**
  * Varias búsquedas en listarDocumentoSalidaAlmacen A LA VEZ, cada una con todas sus páginas (hasta
  * 10): primero la página 0 de todas, luego la 1 de las que siguen, etc.
- * $consultas: [clave => [tipo, [filtros extra]]] (el tipo y la moneda se agregan aquí).
+ * $consultas: [clave => [tipo, [filtros extra]]] (el tipo se agrega aquí; cualquier moneda).
  * Devuelve [clave => filas]. Sin coincidencias WO responde BAD_REQUEST: la clave queda vacía.
  */
 function le_listar_wo_paralelo(array $consultas, $porPagina = 50) {
@@ -314,7 +314,8 @@ function le_listar_wo_paralelo(array $consultas, $porPagina = 50) {
             $peticiones[$k] = ['endpoint' => '/inventarios/listarDocumentoSalidaAlmacen', 'metodo' => 'POST',
                 'datos' => cuerpo_listar_documentos_salida_almacen(array_merge([
                     crear_filtro_api('documentoTipo.codigoDocumento', $tipo, 0),
-                    crear_filtro_api('moneda.id', '31', 4),
+                    // Sin filtro de moneda: hay facturas en dólares (ej. FVE 2484 de un cliente de Guatemala)
+                    // y la lista de empaque solo usa cantidades.
                 ], $filtros), $pagina, $porPagina)];
         }
         $resps = hacer_peticiones_api_paralelo($peticiones);
@@ -430,7 +431,6 @@ function le_buscar_wo_por_id($idWo, array $tipos = null) {
     foreach ($tipos ?? array_keys(LE_TIPOS_WO) as $tipo) {
         $resp = listar_documentos_salida_almacen([
             crear_filtro_api('documentoTipo.codigoDocumento', $tipo, 0),
-            crear_filtro_api('moneda.id', '31', 4),
             crear_filtro_api('id', (string)(int)$idWo, 4, 0),
         ], 0, 5);
         foreach (($resp['status'] ?? '') === 'OK' ? ($resp['data']['content'] ?? []) : [] as $row) {
