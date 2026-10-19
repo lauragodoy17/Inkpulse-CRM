@@ -47,6 +47,18 @@ require '../lib/PHPMailer/src/SMTP.php';
 		 die ('Erreur execute');
 		}
 
+	// Próxima visita (pedido por la usuaria 2026-10-16): queda en Gestión y seguimiento del colegio con
+	// recordatorio por correo un día antes. Ver includes/seguimientos_colegio.php.
+	if (trim($_POST["proxima_visita"] ?? '') !== '') {
+		require_once('../includes/seguimientos_colegio.php');
+		try {
+			$seg = seg_registrar_desde_visita($bdd, (int)$_POST["id_visita"], $_POST["proxima_visita"], $_POST["comentarios"] ?? '', (int)($_SESSION['id'] ?? 0));
+			if (!$seg['ok']) error_log('Próxima visita plan #' . (int)$_POST["id_visita"] . ': ' . $seg['error']);
+		} catch (Exception $e) {
+			error_log('Próxima visita plan #' . (int)$_POST["id_visita"] . ': ' . $e->getMessage());
+		}
+	}
+
 	$sql_p = "SELECT id FROM visitas WHERE id_plan_trabajo='".$_POST["id_visita"]."'";
 												
 	$req = $bdd->prepare($sql_p);

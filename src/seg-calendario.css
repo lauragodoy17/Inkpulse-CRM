@@ -1,0 +1,24 @@
+/* Calendario de fechas de "Gestión y seguimiento" y de "Ejecutar visita" (air-datepicker de la plantilla,
+   vendors/scripts/core.js). Lo usa src/seg-calendario.js con la clase seg-dp. */
+.seg-fecha-wrap { position:relative; }
+.seg-fecha-wrap .form-control { padding-right:34px; cursor:pointer; background:#fff; }
+.seg-fecha-wrap > i { position:absolute; right:11px; top:50%; transform:translateY(-50%); color:#2563eb; pointer-events:none; font-size:15px; }
+.datepicker.seg-dp { z-index:1060; width:272px; font-family:inherit; font-size:13px; color:#1f2937; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 12px 32px rgba(15,23,42,.16); }
+.seg-dp .datepicker--pointer { border-color:#e5e7eb; }
+.seg-dp .datepicker--content { padding:6px 8px 8px; }
+.seg-dp .datepicker--nav { border-bottom:1px solid #f1f5f9; padding:6px; }
+.seg-dp .datepicker--nav-title { font-weight:600; color:#111827; text-transform:capitalize; border-radius:8px; }
+.seg-dp .datepicker--nav-title i { color:#6b7280; }
+.seg-dp .datepicker--nav-action { border-radius:8px; }
+.seg-dp .datepicker--nav-action:hover, .seg-dp .datepicker--nav-title:hover { background:#eff6ff; }
+.seg-dp .datepicker--nav-action path { stroke:#2563eb; }
+.seg-dp .datepicker--day-name { color:#6b7280; font-weight:600; font-size:11px; }
+.seg-dp .datepicker--cell { border-radius:8px; height:34px; }
+.seg-dp .datepicker--cell.-focus- { background:#eff6ff; color:#1d4ed8; }
+.seg-dp .datepicker--cell.-current- { color:#2563eb; font-weight:700; box-shadow:inset 0 0 0 1px #93c5fd; }
+.seg-dp .datepicker--cell.-selected-, .seg-dp .datepicker--cell.-selected-.-current-, .seg-dp .datepicker--cell.-selected-.-focus- { background:#2563eb; color:#fff; box-shadow:none; }
+.seg-dp .datepicker--cell.-disabled-, .seg-dp .datepicker--cell.-disabled-.-focus- { color:#d1d5db; background:none; cursor:not-allowed; }
+.seg-dp .datepicker--cell-day.-other-month- { color:#d1d5db; }
+.seg-dp .datepicker--buttons { border-top:1px solid #f1f5f9; padding:6px; }
+.seg-dp .datepicker--button { color:#2563eb; font-weight:600; border-radius:8px; }
+.seg-dp .datepicker--button:hover { background:#eff6ff; color:#1d4ed8; }

@@ -8,7 +8,8 @@ $zonificacion_active = in_array($current_page, ['ver_colegios.php','agregar_cole
 $agenda_active       = $current_page === 'agenda.php';
 $muestreo_active     = in_array($current_page, ['solicitar_muestreo.php','legalizaciones_muestras.php','lista_muestreo.php','ver_muestreo.php','muestras_entregadas.php']);
 $pedidos_active      = in_array($current_page, ['ver_pedidos.php','lista_pedidos.php','agrupar_pedidos.php','pedido_colegio.php']);
-$devoluciones_active = in_array($current_page, ['devol_muestras_sa.php','devoluciones_muestras.php','ver_devol_muestras.php','ver_devol_ventas.php','ver_devol_proveedores.php','proveedores.php']);
+$venta_directa_active = in_array($current_page, ['colegios_venta_directa.php','solicitar_venta_directa.php','lista_venta_directa.php','venta_directa.php']);
+$devoluciones_active = in_array($current_page, ['devoluciones_venta_directa.php','ver_devol_venta_directa.php','devol_muestras_sa.php','devoluciones_muestras.php','ver_devol_muestras.php','ver_devol_ventas.php','ver_devol_proveedores.php','proveedores.php']);
 $pedidos_sa_active   = in_array($current_page, ['solicitar_pedido_sa.php','ver_pedidos_sa.php','lista_pedidos_sa.php','pedido_colegio_sa.php']);
 $presupuesto_active  = $current_page === 'colegios_presup.php';
 $atenciones_active   = $current_page === 'lista_atenciones.php';
@@ -439,6 +440,33 @@ $periodos_active     = $current_page === 'periodos.php';
 								</ul>
 							</li>
 
+							<li class="dropdown <?= $venta_directa_active ? 'show' : '' ?>" id="venta-directa">
+								<a href="javascript:;" class="dropdown-toggle <?= $venta_directa_active ? 'active' : '' ?>">
+									<span class="micon bi bi-bag-check"></span
+									><span class="mtext">Venta directa</span>
+								</a>
+								<ul class="submenu">
+									<?php if ($_SESSION["tipo"]==3 || $_SESSION["tipo"]==6) {?>
+										<li><a href="colegios_venta_directa.php">Solicitar venta directa</a></li>
+										<li><a href="ver_venta_directa.php">Ver ventas directas</a></li>
+									<?php }else { ?>
+										<li><a href="colegios_venta_directa.php">Solicitar</a></li>
+										<li>
+											<a href="lista_venta_directa.php?tp=2">Pendientes</a>
+											<a href="lista_venta_directa.php?tp=3">Aprobados</a>
+											<a href="lista_venta_directa.php?tp=6">Procesando</a>
+											<a href="lista_venta_directa.php?tp=7">En facturación</a>
+											<a href="lista_venta_directa.php?tp=8">En despacho</a>
+											<a href="lista_venta_directa.php?tp=4">Entregados</a>
+											<a href="lista_venta_directa.php?tp=5">Anulados</a>
+										</li>
+										<?php if ($_SESSION["tipo"] != 10) { // mismos usuarios que ven Órdenes de Pedido ?>
+										<li><a href="lista_op.php?vd=1&tp=1">OP de venta directa</a></li>
+										<?php } ?>
+									<?php } ?>
+								</ul>
+							</li>
+
 							<li class="dropdown <?= $devoluciones_active ? 'show' : '' ?>">
 								<a href="javascript:;" class="dropdown-toggle <?= $devoluciones_active ? 'active' : '' ?>">
 									<span class="micon bi bi-arrow-bar-left"></span
@@ -463,6 +491,10 @@ $periodos_active     = $current_page === 'periodos.php';
 										<li><a href="devol_muestras_sa.php?tp=3">Devoluciones de ventas sin adopción</a></li>
 									<?php } ?>
 									<li><a href="ver_devol_ventas.php">Ver devoluciones de ventas</a></li>
+
+									<li class="menu-subgroup-label">Venta directa</li>
+									<li><a href="devoluciones_venta_directa.php">Devolución de venta directa</a></li>
+									<li><a href="ver_devol_venta_directa.php">Ver devoluciones de venta directa</a></li>
 
 								</ul>
 							</li>
@@ -533,6 +565,12 @@ $periodos_active     = $current_page === 'periodos.php';
 								<li><a href="backorders_sa.php">Administrar</a></li>
 								<li><a href="backorders_sa_informe.php">Informe</a></li>
 							</ul>
+						</li>
+						<li>
+							<a href="backorders_paquetes.php" class="dropdown-toggle no-arrow <?= $current_page == 'backorders_paquetes.php' ? 'active' : '' ?>">
+								<span class="micon bi bi-boxes"></span
+								><span class="mtext">Backorders de paquetes</span>
+							</a>
 						</li>
 						<li class="dropdown <?= $empaque_active ? 'show' : '' ?>">
 							<a href="javascript:;" class="dropdown-toggle <?= $empaque_active ? 'active' : '' ?>">
@@ -924,3 +962,12 @@ $periodos_active     = $current_page === 'periodos.php';
 			</div>
 		</div>
 		<div class="mobile-menu-overlay"></div>
+<script>
+// Recordatorios de "Gestión y seguimiento" de colegios (includes/seguimientos_colegio.php): una vez al día
+// por navegador se piden al servidor, por si la tarea programada no corrió. No repite correos ya enviados.
+(function () {
+  var clave = 'seg_recordatorios_' + new Date().toISOString().slice(0, 10);
+  try { if (localStorage.getItem(clave)) return; localStorage.setItem(clave, '1'); } catch (e) {}
+  if (window.fetch) fetch('php/seguimientos_recordatorios.php', { credentials: 'same-origin' }).catch(function () {});
+})();
+</script>

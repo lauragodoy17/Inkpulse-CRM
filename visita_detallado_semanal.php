@@ -403,6 +403,18 @@
                       <textarea class="form-control" rows="3" name="comentarios" id="comentarios"></textarea>
                       </div>
                     </div>
+                    <div class="form-group">
+                      <?php require_once('includes/seguimientos_colegio.php'); $seg_prox_opc = seg_proxima_opcional($_SESSION['id'] ?? 0, $_SESSION['tipo'] ?? 0); ?>
+                      <label for="proxima_visita_txt" class="col-sm-12 control-label">Próxima visita:<?= $seg_prox_opc ? '' : ' <span style="color:#dc2626">*</span>' ?></label>
+                      <div class="col-sm-10">
+                        <div class="seg-fecha-wrap">
+                          <input type="text" class="form-control" id="proxima_visita_txt" placeholder="dd/mm/aaaa" inputmode="none" autocomplete="off"<?= $seg_prox_opc ? '' : ' required' ?>>
+                          <i class="dw dw-calendar1"></i>
+                        </div>
+                        <input type="hidden" name="proxima_visita" id="proxima_visita" value="">
+                        <small style="color:#6b7280">Un día antes se envía un recordatorio por correo al asesor del colegio y al promotor.</small>
+                      </div>
+                    </div>
                     <center>
                     <div class="checkbox">
                         <label><b>Efectiva:</b><br>
@@ -438,6 +450,9 @@
     <script src="vendors/scripts/script.min.js"></script>
     <script src="vendors/scripts/process.js"></script>
     <script src="vendors/scripts/layout-settings.js"></script>
+    <link rel="stylesheet" href="src/seg-calendario.css">
+    <script src="src/seg-calendario.js"></script>
+    <script>segCalendario('#proxima_visita_txt', '#proxima_visita', { minDate: segFechaDesdeHoy(1)<?= !empty($seg_prox_opc) ? ', clearButton: true' : '' ?> });</script>
 
     
   </body>
