@@ -104,21 +104,12 @@ $materias = $req->fetchAll();
                       
                   </select>
               </div>
-              <?php if ($_SESSION['tipo']!=6): ?>
-                <div class="col-md-4 col-sm-6 col-12 d-none" id="muestras">
-                  <label for="cole" class="control-label">Tipo de muestras<small style="color:red;">*</small></label>
-                  <select name="tipo" id="tipo" class="form-control custom-select2" required>
-                    <option value="">Seleccione</option>
-                    <option value="1">Docente</option>
-                    <option value="2">Estudiante</option>
-                        
-                    </select>
-                </div>
-              <?php else: ?>
+              
+            
 
-                <input type="hidden" name="tipo" id="tipo" value="1">
+              <input type="hidden" name="tipo" id="tipo" value="1">
 
-              <?php endif; ?>
+              
 
               <div class="col-md-4 col-sm-6 col-12">
                 <div class="form-group">

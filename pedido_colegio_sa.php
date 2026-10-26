@@ -23,6 +23,9 @@ require_once(__DIR__ . "/includes/historial_estados.php");
 $tp_estado_map = [3 => 2, 4 => 4, 5 => 3, 6 => 5, 7 => 6, 8 => 7];
 $tp_estado_label = [3 => 'Aprobado', 4 => 'Entregado', 5 => 'Anulado', 6 => 'Procesando', 7 => 'Facturación', 8 => 'En despacho'];
 $procesado_info = null;
+// ¿Ya está registrado ("consignado") en Backorders sin adopción? (backorders no anulados del pedido)
+require_once(__DIR__ . "/includes/backorders_sa_datos.php");
+$bsa_registrado = bsa_pedidos2_registrados($bdd, [$id_pedido])[$id_pedido] ?? [];
 if (isset($tp_estado_map[$tp])) {
   crear_tabla_historial_estados($bdd);
   $procesado_info = obtener_historial_estado($bdd, 'pedidos_sa', $id_pedido, $tp_estado_map[$tp]);
@@ -395,15 +398,6 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
             <p class="mc-card-val"><?= htmlspecialchars($pedido["ptipo"] ?? '—') ?></p>
           </div>
         </div>
-        <?php if ($pedido["ptipo"]=="Muestras") { ?>
-          <div class="mc-card">
-            <div class="mc-card-icon teal"><i class="bi bi-journal"></i></div>
-            <div>
-              <p class="mc-card-label">Tipo de muestras</p>
-              <p class="mc-card-val"><?= htmlspecialchars($pedido["tipo_muestras"] ?? '—') ?></p>
-            </div>
-          </div>
-        <?php } ?>
         <div class="mc-card">
           <div class="mc-card-icon orange"><i class="bi bi-calendar3"></i></div>
           <div>
@@ -439,6 +433,16 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
             <p class="mc-card-val"><?= (intval($pedido['fac_rem'] ?? 0) == 1) ? 'Factura' : 'Remisión' ?></p>
           </div>
         </div>
+        <?php if ($bsa_registrado): ?>
+        <div class="mc-card">
+          <div class="mc-card-icon green"><i class="bi bi-journal-check"></i></div>
+          <div>
+            <p class="mc-card-label">Backorders</p>
+            <p class="mc-card-val"><span class="pc-badge pc-badge-green">Registrado</span>
+              <a href="backorders_sa_informe.php" target="_blank" style="font-size:.8rem;">#<?= implode(', #', $bsa_registrado) ?></a></p>
+          </div>
+        </div>
+        <?php endif; ?>
         <div class="mc-card">
           <div class="mc-card-icon <?= $ac['badge'] === 'yellow' ? 'amber' : $ac['badge'] ?>"><i class="bi bi-flag-fill"></i></div>
           <div>
