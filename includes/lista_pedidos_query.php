@@ -21,7 +21,7 @@ function lista_pedidos_query_parts($tp) {
 
   $where  = "WHERE p.estado = :estado";
   $params = [':estado' => $estado_val];
-  if (($_SESSION['tipo'] ?? null) != 10) {
+  if (($_SESSION['tipo'] ?? null) == 10) {
     $where .= " AND (c.cod_zona = :zona OR c.zona_madre = :zona)";
     $params[':zona'] = $_SESSION['zona'];
   }
