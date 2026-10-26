@@ -38,7 +38,7 @@ $req = $bdd->prepare($sql);
 $req->execute($ids);
 $rows = $req->fetchAll(PDO::FETCH_ASSOC);
 
-if (($_SESSION['tipo'] ?? null) != 10) {
+if (($_SESSION['tipo'] ?? null) == 10) {
     $zona = $_SESSION['zona'] ?? null;
     $rows = array_values(array_filter($rows, function ($r) use ($zona) {
         return $r['cod_zona'] == $zona || $r['zona_madre'] == $zona;
