@@ -16,12 +16,14 @@ dm_asegurar_columnas($bdd);
 // información del pedido" (lo solicitado en el CRM, ver dm_detalle_crm()).
 $modo = ($_GET['modo'] ?? '') === 'legalizacion' ? 'legalizacion' : 'devolucion';
 
-// Devoluciones: varios pedidos del mismo colegio a la vez (ids[]), con crm[] = los pedidos que se cargan
-// con "Traer información del pedido". Ver dm_detalle_varios().
-if ($modo === 'devolucion' && isset($_GET['ids'])) {
+// Varios pedidos del mismo colegio a la vez (ids[]), con crm[] = los pedidos que se cargan con "Traer
+// información del pedido". Ver dm_detalle_varios() (devoluciones) y lm_detalle_varios() (legalizaciones).
+if (isset($_GET['ids'])) {
     $fuentes = [];
     foreach ((array)($_GET['crm'] ?? []) as $id) $fuentes[(int)$id] = 'crm';
-    $detalle = dm_detalle_varios($bdd, (array)$_GET['ids'], $fuentes);
+    $detalle = $modo === 'legalizacion'
+        ? lm_detalle_varios($bdd, (array)$_GET['ids'], $fuentes)
+        : dm_detalle_varios($bdd, (array)$_GET['ids'], $fuentes);
     foreach ($detalle['titulos'] ?? [] as $i => $t) unset($detalle['titulos'][$i]['partes']);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($detalle, JSON_UNESCAPED_UNICODE);

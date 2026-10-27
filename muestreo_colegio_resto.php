@@ -304,10 +304,13 @@
             // de donde salieron. Las del formulario anterior no tienen estas columnas llenas.
             $origen_legaliz = null;
             try {
-              $req_ol = $bdd->prepare("SELECT id_muestreo, ops_muestreo, documentos_wo, cierre FROM muestreos_e WHERE id = ? AND id_muestreo IS NOT NULL");
+              $req_ol = $bdd->prepare("SELECT id_muestreo, ids_muestreos, ops_muestreo, documentos_wo, cierre FROM muestreos_e WHERE id = ? AND id_muestreo IS NOT NULL");
               $req_ol->execute([intval($_GET["id_muestras_e"])]);
               $origen_legaliz = $req_ol->fetch(PDO::FETCH_ASSOC) ?: null;
             } catch (Exception $e) { /* columnas aún no creadas */ }
+            // Una legalización puede ser de varios pedidos (ids_muestreos, desde 2026-10-27).
+            $pedidos_legaliz = $origen_legaliz ? array_filter(array_map('intval', explode(',', (string)$origen_legaliz['ids_muestreos']))) : [];
+            if ($origen_legaliz && !$pedidos_legaliz) $pedidos_legaliz = [(int)$origen_legaliz['id_muestreo']];
           }
 
           if ($pedido["tipo"] == 3) {
@@ -341,8 +344,8 @@
         <?php if (!empty($origen_legaliz)): ?>
         <div class="mc-op-badge">
           <i class="bi bi-patch-check"></i>
-          Legalizado del pedido de muestras
-          <a href="muestreo_colegio.php?id_muestreo=<?= (int)$origen_legaliz['id_muestreo'] ?>" target="_blank">#<?= (int)$origen_legaliz['id_muestreo'] ?></a>
+          Legalizado <?= count($pedidos_legaliz) > 1 ? 'de los pedidos de muestras' : 'del pedido de muestras' ?>
+          <?php foreach (array_values($pedidos_legaliz) as $i => $id_pl): ?><?= $i ? ', ' : '' ?><a href="muestreo_colegio.php?id_muestreo=<?= $id_pl ?>" target="_blank">#<?= $id_pl ?></a><?php endforeach; ?>
           <?php if (!empty($origen_legaliz['ops_muestreo'])): ?> · OP <?= htmlspecialchars($origen_legaliz['ops_muestreo']) ?><?php endif; ?>
           <?php if (!empty($origen_legaliz['documentos_wo'])): ?> · WO <?= htmlspecialchars($origen_legaliz['documentos_wo']) ?><?php endif; ?>
           <?php if (!empty($origen_legaliz['cierre'])): ?> · Legalización <strong><?= $origen_legaliz['cierre'] === 'completa' ? 'completa' : 'parcial' ?></strong><?php endif; ?>

@@ -63,6 +63,9 @@ function dm_asegurar_columnas(PDO $bdd) {
         // (pedido:cantidad:producto WO). NULL en lo registrado antes = todo del id_muestreo.
         "ALTER TABLE devoluciones ADD COLUMN ids_muestreos VARCHAR(500) NULL DEFAULT NULL",
         "ALTER TABLE libros_devol ADD COLUMN reparto VARCHAR(500) NULL DEFAULT NULL",
+        // Lo mismo para las legalizaciones de varios pedidos (pedido por la usuaria 2026-10-27).
+        "ALTER TABLE muestreos_e ADD COLUMN ids_muestreos VARCHAR(500) NULL DEFAULT NULL",
+        "ALTER TABLE libros_muestreos_e ADD COLUMN reparto VARCHAR(500) NULL DEFAULT NULL",
     ];
     foreach ($alter as $sql) {
         try { $bdd->exec($sql); } catch (Exception $e) { /* ya existe */ }
@@ -114,7 +117,7 @@ function dm_listar_muestreos_entregados(PDO $bdd, $idPeriodo = null) {
                    GROUP_CONCAT(DISTINCT CONCAT(op.`año`, '-', op.id) ORDER BY op.id SEPARATOR ', ') AS ops,
                    GROUP_CONCAT(DISTINCT NULLIF(TRIM(op.n_doc), '') ORDER BY op.id SEPARATOR ', ') AS docs_op,
                    (SELECT COUNT(*) FROM devoluciones d WHERE (d.id_muestreo = m.id OR FIND_IN_SET(m.id, d.ids_muestreos)) AND d.estado <> " . DM_ESTADO_DEVOL_ANULADA . ") AS n_devoluciones,
-                   (SELECT COUNT(*) FROM muestreos_e me WHERE me.id_muestreo = m.id AND me.estado <> " . DM_ESTADO_LEGALIZ_ANULADA . ") AS n_legalizaciones
+                   (SELECT COUNT(*) FROM muestreos_e me WHERE (me.id_muestreo = m.id OR FIND_IN_SET(m.id, me.ids_muestreos)) AND me.estado <> " . DM_ESTADO_LEGALIZ_ANULADA . ") AS n_legalizaciones
             FROM muestreos m
             JOIN colegios c ON c.id = m.id_colegio
             LEFT JOIN usuarios u ON u.id = m.id_usuario
@@ -136,21 +139,18 @@ function dm_listar_muestreos_entregados(PDO $bdd, $idPeriodo = null) {
  * legalización lo devuelve a pendiente solo, porque se calcula en vivo.
  */
 function dm_marcar_completados(PDO $bdd, array $muestreos, $modo) {
-    // Pedidos cerrados a mano con una devolución/legalización "completa" activa (una devolución de
-    // varios pedidos cierra todos los suyos).
-    if ($modo === 'legalizacion') {
-        $cerrados = array_flip($bdd->query("SELECT DISTINCT id_muestreo FROM muestreos_e WHERE id_muestreo IS NOT NULL AND cierre = 'completa' AND estado <> " . DM_ESTADO_LEGALIZ_ANULADA)->fetchAll(PDO::FETCH_COLUMN));
-        $registrado = $bdd->query("SELECT me.id_muestreo, SUM(lme.cantidad) FROM muestreos_e me JOIN libros_muestreos_e lme ON lme.cod_muestreo = me.codigo
-           WHERE me.id_muestreo IS NOT NULL AND me.estado <> " . DM_ESTADO_LEGALIZ_ANULADA . " AND lme.producto_wo IS NOT NULL GROUP BY me.id_muestreo")->fetchAll(PDO::FETCH_KEY_PAIR);
-    } else {
-        $cerrados = [];
-        foreach ($bdd->query("SELECT id_muestreo, ids_muestreos FROM devoluciones WHERE id_muestreo IS NOT NULL AND cierre = 'completa' AND estado <> " . DM_ESTADO_DEVOL_ANULADA)->fetchAll(PDO::FETCH_ASSOC) as $d) {
-            foreach (dm_ids_de_devolucion($d) as $id) $cerrados[$id] = true;
-        }
-        $registrado = [];
-        foreach (dm_devuelto_repartido($bdd) as $x) {
-            if ($x['producto_wo'] !== null) $registrado[$x['id_muestreo']] = ($registrado[$x['id_muestreo']] ?? 0) + $x['cantidad'];
-        }
+    // Pedidos cerrados a mano con una devolución/legalización "completa" activa (una de varios pedidos
+    // cierra todos los suyos).
+    $sqlCerrados = $modo === 'legalizacion'
+        ? "SELECT id_muestreo, ids_muestreos FROM muestreos_e WHERE id_muestreo IS NOT NULL AND cierre = 'completa' AND estado <> " . DM_ESTADO_LEGALIZ_ANULADA
+        : "SELECT id_muestreo, ids_muestreos FROM devoluciones WHERE id_muestreo IS NOT NULL AND cierre = 'completa' AND estado <> " . DM_ESTADO_DEVOL_ANULADA;
+    $cerrados = [];
+    foreach ($bdd->query($sqlCerrados)->fetchAll(PDO::FETCH_ASSOC) as $d) {
+        foreach (dm_ids_de_devolucion($d) as $id) $cerrados[$id] = true;
+    }
+    $registrado = [];
+    foreach (dm_registrado_repartido($bdd, $modo) as $x) {
+        if ($x['producto_wo'] !== null) $registrado[$x['id_muestreo']] = ($registrado[$x['id_muestreo']] ?? 0) + $x['cantidad'];
     }
     foreach ($muestreos as &$m) {
         $despachadas = $m['unidades_despachadas_wo'];
@@ -168,15 +168,15 @@ function dm_marcar_completados(PDO $bdd, array $muestreos, $modo) {
 function dm_cierre_completo(PDO $bdd, $idMuestreo, $modo) {
     $sql = $modo === 'legalizacion'
         ? "SELECT x.id, x.created_at AS fecha, CONCAT(TRIM(u.nombres), ' ', TRIM(u.apellidos)) AS usuario FROM muestreos_e x
-           LEFT JOIN usuarios u ON u.id = x.id_usuario WHERE x.id_muestreo = ? AND x.cierre = 'completa' AND x.estado <> " . DM_ESTADO_LEGALIZ_ANULADA
+           LEFT JOIN usuarios u ON u.id = x.id_usuario WHERE (x.id_muestreo = ? OR FIND_IN_SET(?, x.ids_muestreos)) AND x.cierre = 'completa' AND x.estado <> " . DM_ESTADO_LEGALIZ_ANULADA
         : "SELECT x.id, x.created_at AS fecha, CONCAT(TRIM(u.nombres), ' ', TRIM(u.apellidos)) AS usuario FROM devoluciones x
            LEFT JOIN usuarios u ON u.id = x.id_usuario WHERE (x.id_muestreo = ? OR FIND_IN_SET(?, x.ids_muestreos)) AND x.cierre = 'completa' AND x.estado <> " . DM_ESTADO_DEVOL_ANULADA;
     $stmt = $bdd->prepare($sql . " ORDER BY x.id LIMIT 1");
-    $stmt->execute($modo === 'legalizacion' ? [(int)$idMuestreo] : [(int)$idMuestreo, (int)$idMuestreo]);
+    $stmt->execute([(int)$idMuestreo, (int)$idMuestreo]);
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
-/** Pedidos de muestras de una devolución (fila con id_muestreo e ids_muestreos): [id, ...]. */
+/** Pedidos de muestras de una devolución o legalización (fila con id_muestreo e ids_muestreos): [id, ...]. */
 function dm_ids_de_devolucion(array $devolucion) {
     $ids = array_filter(array_map('intval', explode(',', (string)($devolucion['ids_muestreos'] ?? ''))));
     return $ids ? array_values($ids) : array_filter([(int)($devolucion['id_muestreo'] ?? 0)]);
@@ -189,9 +189,21 @@ function dm_ids_de_devolucion(array $devolucion) {
  * 'id_libro','cantidad'], ...].
  */
 function dm_devuelto_repartido(PDO $bdd, $idMuestreo = null) {
-    $sql = "SELECT d.id_muestreo, ld.reparto, ld.producto_wo, ld.id_libro, ld.cantidad
-            FROM libros_devol ld JOIN devoluciones d ON d.codigo = ld.cod_pedido
-            WHERE d.id_muestreo IS NOT NULL AND d.estado <> " . DM_ESTADO_DEVOL_ANULADA;
+    return dm_registrado_repartido($bdd, 'devolucion', $idMuestreo);
+}
+
+/**
+ * Igual que dm_devuelto_repartido() para el modo dado: 'devolucion' (devoluciones + libros_devol) o
+ * 'legalizacion' (muestreos_e + libros_muestreos_e, con libros_muestreos_e.reparto).
+ */
+function dm_registrado_repartido(PDO $bdd, $modo, $idMuestreo = null) {
+    $sql = $modo === 'legalizacion'
+        ? "SELECT d.id_muestreo, ld.reparto, ld.producto_wo, ld.id_libro, ld.cantidad
+           FROM libros_muestreos_e ld JOIN muestreos_e d ON d.codigo = ld.cod_muestreo
+           WHERE d.id_muestreo IS NOT NULL AND d.estado <> " . DM_ESTADO_LEGALIZ_ANULADA
+        : "SELECT d.id_muestreo, ld.reparto, ld.producto_wo, ld.id_libro, ld.cantidad
+           FROM libros_devol ld JOIN devoluciones d ON d.codigo = ld.cod_pedido
+           WHERE d.id_muestreo IS NOT NULL AND d.estado <> " . DM_ESTADO_DEVOL_ANULADA;
     $params = [];
     if ($idMuestreo !== null) {
         $sql .= " AND (d.id_muestreo = ? OR FIND_IN_SET(?, d.ids_muestreos))";
@@ -419,14 +431,10 @@ function dm_devuelto_por_producto(PDO $bdd, $idMuestreo) {
 
 /** Unidades ya legalizadas por producto WO en legalizaciones activas del muestreo: [producto_wo => n]. */
 function dm_legalizado_por_producto(PDO $bdd, $idMuestreo) {
-    $stmt = $bdd->prepare("SELECT lme.producto_wo, SUM(lme.cantidad) AS legalizado
-                           FROM libros_muestreos_e lme
-                           JOIN muestreos_e me ON me.codigo = lme.cod_muestreo
-                           WHERE me.id_muestreo = ? AND me.estado <> " . DM_ESTADO_LEGALIZ_ANULADA . " AND lme.producto_wo IS NOT NULL
-                           GROUP BY lme.producto_wo");
-    $stmt->execute([(int)$idMuestreo]);
     $res = [];
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) $res[(int)$r['producto_wo']] = (int)$r['legalizado'];
+    foreach (dm_registrado_repartido($bdd, 'legalizacion', $idMuestreo) as $x) {
+        if ($x['producto_wo'] !== null) $res[$x['producto_wo']] = ($res[$x['producto_wo']] ?? 0) + $x['cantidad'];
+    }
     return $res;
 }
 
@@ -511,15 +519,9 @@ function dm_detalle_crm(PDO $bdd, $idMuestreo, $modo) {
 
 /** Unidades ya devueltas (o legalizadas) por libro del CRM en registros activos del muestreo: [id_libro => n]. */
 function dm_registrado_por_libro(PDO $bdd, $idMuestreo, $modo) {
-    if ($modo !== 'legalizacion') {
-        $res = [];
-        foreach (dm_devuelto_repartido($bdd, $idMuestreo) as $x) $res[$x['id_libro']] = ($res[$x['id_libro']] ?? 0) + $x['cantidad'];
-        return $res;
-    }
-    $stmt = $bdd->prepare("SELECT lme.id_libro, SUM(lme.cantidad) FROM libros_muestreos_e lme JOIN muestreos_e me ON me.codigo = lme.cod_muestreo
-                           WHERE me.id_muestreo = ? AND me.estado <> " . DM_ESTADO_LEGALIZ_ANULADA . " GROUP BY lme.id_libro");
-    $stmt->execute([(int)$idMuestreo]);
-    return array_map('intval', $stmt->fetchAll(PDO::FETCH_KEY_PAIR));
+    $res = [];
+    foreach (dm_registrado_repartido($bdd, $modo, $idMuestreo) as $x) $res[$x['id_libro']] = ($res[$x['id_libro']] ?? 0) + $x['cantidad'];
+    return $res;
 }
 
 /**
@@ -602,7 +604,7 @@ function dm_titulos_de_documentos(PDO $bdd, $idMuestreo, $codMuestreo, array $do
 }
 
 
-/** Máximo de pedidos en una misma devolución (cada uno suma consultas a World Office). */
+/** Máximo de pedidos en una misma devolución o legalización (cada uno suma consultas a World Office). */
 const DM_MAX_PEDIDOS_DEVOLUCION = 30;
 
 /**
@@ -612,17 +614,21 @@ const DM_MAX_PEDIDOS_DEVOLUCION = 30;
  * la suma, que es lo que se puede devolver).
  * $fuentes = [id_muestreo => 'crm'] para los pedidos que se cargan con "Traer información del pedido"
  * (lo solicitado en el CRM, dm_detalle_crm()); los demás salen de WO.
+ * $modo = 'legalizacion' (pedido por la usuaria 2026-10-27): lo mismo para legalizar, con su propio saldo
+ * (despachado − legalizado) y los $prefijos de las legalizaciones (ver lm_detalle_varios()).
  * Cada título trae 'partes' (de qué pedido y producto WO sale cada saldo, en orden de pedido), que usa
- * dm_guardar_devolucion_varios() para repartir lo devuelto. Los pedidos ya cerrados con una devolución
- * completa se muestran pero no suman disponible.
+ * dm_repartir_varios() para repartir lo registrado. Los pedidos ya cerrados con una devolución (o
+ * legalización) completa se muestran pero no suman disponible.
  * Devuelve ['ok','error','colegio','id_colegio','cliente','id_cliente','pedidos' => [resumen por
- * pedido], 'titulos' => [...], 'incluidos' => [ids de pedidos con algo por devolver]].
+ * pedido], 'titulos' => [...], 'incluidos' => [ids de pedidos con algo por registrar]].
  */
-function dm_detalle_varios(PDO $bdd, array $ids, array $fuentes = []) {
+function dm_detalle_varios(PDO $bdd, array $ids, array $fuentes = [], $modo = 'devolucion', ?array $prefijos = null) {
+    $leg = $modo === 'legalizacion';
+    $campo = $leg ? 'legalizada' : 'devuelta';
     $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($i) => $i > 0)));
     sort($ids);
     if (!$ids) return ['ok' => false, 'error' => 'Elige al menos un pedido de muestras.'];
-    if (count($ids) > DM_MAX_PEDIDOS_DEVOLUCION) return ['ok' => false, 'error' => 'Puedes devolver hasta ' . DM_MAX_PEDIDOS_DEVOLUCION . ' pedidos a la vez.'];
+    if (count($ids) > DM_MAX_PEDIDOS_DEVOLUCION) return ['ok' => false, 'error' => 'Puedes ' . ($leg ? 'legalizar' : 'devolver') . ' hasta ' . DM_MAX_PEDIDOS_DEVOLUCION . ' pedidos a la vez.'];
 
     $pedidos = [];
     $opsAuto = [];
@@ -630,18 +636,18 @@ function dm_detalle_varios(PDO $bdd, array $ids, array $fuentes = []) {
     foreach ($ids as $id) {
         $m = dm_obtener_muestreo($bdd, $id);
         if (!$m) return ['ok' => false, 'error' => 'El pedido de muestras #' . $id . ' no existe, no está Entregado o no está en tu alcance.'];
-        if ($idColegio !== null && (int)$m['id_colegio'] !== $idColegio) return ['ok' => false, 'error' => 'Todos los pedidos de una devolución deben ser del mismo colegio.'];
+        if ($idColegio !== null && (int)$m['id_colegio'] !== $idColegio) return ['ok' => false, 'error' => 'Todos los pedidos de una ' . ($leg ? 'legalización' : 'devolución') . ' deben ser del mismo colegio.'];
         $idColegio = (int)$m['id_colegio'];
         $fuente = ($fuentes[$id] ?? '') === 'crm' ? 'crm' : 'auto';
         $ops = dm_ops_muestreo($bdd, $id);
-        $pedidos[$id] = ['muestreo' => $m, 'ops' => $ops, 'fuente' => $fuente, 'cierre' => dm_cierre_completo($bdd, $id, 'devolucion')];
+        $pedidos[$id] = ['muestreo' => $m, 'ops' => $ops, 'fuente' => $fuente, 'cierre' => dm_cierre_completo($bdd, $id, $modo)];
         if ($fuente === 'auto') foreach ($ops as $op) $opsAuto[] = $op;
     }
 
     // Una sola búsqueda en WO con las OP de todos los pedidos; cada documento vuelve a su pedido por la OP.
     $docsPorOp = [];
     if ($opsAuto) {
-        $wo = dm_documentos_wo_de_ops($opsAuto, DM_PREFIJOS_DEVOLUCION);
+        $wo = dm_documentos_wo_de_ops($opsAuto, $prefijos ?? DM_PREFIJOS_DEVOLUCION);
         if (!$wo['ok']) return ['ok' => false, 'error' => $wo['error']];
         foreach ($wo['documentos'] as $doc) $docsPorOp[(int)$doc['op']][] = $doc;
     }
@@ -661,12 +667,12 @@ function dm_detalle_varios(PDO $bdd, array $ids, array $fuentes = []) {
             $docs = [];
             foreach ($p['ops'] as $op) foreach ($docsPorOp[(int)$op['id']] ?? [] as $doc) $docs[] = $doc;
             if ($docs) {
-                $titulos = dm_titulos_de_documentos($bdd, $id, $m['codigo'], $docs, 'devolucion');
+                $titulos = dm_titulos_de_documentos($bdd, $id, $m['codigo'], $docs, $modo);
                 foreach ($titulos as $i => $t) $titulos[$i]['clave'] = $t['producto_wo'];
             } else {
-                // Sin OP o sin remisión RE22/CEUR en WO: se toma de una vez lo solicitado en el CRM, como si
-                // hubieran dado "Traer información del pedido" (pedido por la usuaria 2026-10-16). El guardado
-                // vuelve a pasar por aquí, así que usa la misma fuente.
+                // Sin OP o sin remisión en WO: se toma de una vez lo solicitado en el CRM, como si hubieran
+                // dado "Traer información del pedido" (pedido por la usuaria 2026-10-16). El guardado vuelve
+                // a pasar por aquí, así que usa la misma fuente.
                 $info['sin_documentos'] = true;
                 $info['sin_op'] = !$p['ops'];
                 $info['crm_automatico'] = true;
@@ -679,7 +685,7 @@ function dm_detalle_varios(PDO $bdd, array $ids, array $fuentes = []) {
             }
         }
         if ($p['fuente'] === 'crm') {
-            $d = dm_detalle_crm($bdd, $id, 'devolucion');
+            $d = dm_detalle_crm($bdd, $id, $modo);
             if ($d['ok']) $titulos = $d['titulos']; else $info['error'] = $d['error'];
         }
 
@@ -692,16 +698,16 @@ function dm_detalle_varios(PDO $bdd, array $ids, array $fuentes = []) {
             $k = $t['id_libro'] ? 'L' . $t['id_libro'] : 'W' . $t['producto_wo'];
             if (!isset($agrupados[$k])) {
                 $agrupados[$k] = ['clave' => $t['id_libro'] ?: null, 'id_libro' => $t['id_libro'] ?: null, 'descripcion' => $t['descripcion'],
-                                  'codigo' => $t['codigo'], 'tipo_ed' => $t['tipo_ed'], 'base' => 0, 'devuelta' => 0, 'disponible' => 0,
+                                  'codigo' => $t['codigo'], 'tipo_ed' => $t['tipo_ed'], 'base' => 0, $campo => 0, 'disponible' => 0,
                                   'documentos' => [], 'pedidos' => [], 'partes' => []];
             }
             $a = &$agrupados[$k];
             $a['base'] += $base;
-            $a['devuelta'] += (int)$t['devuelta'];
+            $a[$campo] += (int)$t[$campo];
             $a['disponible'] += $disponible;
             foreach ($crm ? ['Solicitud CRM #' . $id] : explode(', ', $t['documentos']) as $etq) $a['documentos'][$etq] = $etq;
             $a['pedidos'][$id] = ['id' => $id, 'base' => ($a['pedidos'][$id]['base'] ?? 0) + $base,
-                                  'devuelta' => ($a['pedidos'][$id]['devuelta'] ?? 0) + (int)$t['devuelta'],
+                                  $campo => ($a['pedidos'][$id][$campo] ?? 0) + (int)$t[$campo],
                                   'disponible' => ($a['pedidos'][$id]['disponible'] ?? 0) + $disponible];
             $a['partes'][] = ['id_muestreo' => $id, 'fuente' => $p['fuente'], 'clave' => (int)$t['clave'], 'producto_wo' => $t['producto_wo'] ?: null,
                               'base' => $base, 'cerrado' => (bool)$p['cierre'], 'ids_documentos' => (string)$t['ids_documentos']];
@@ -726,11 +732,113 @@ function dm_detalle_varios(PDO $bdd, array $ids, array $fuentes = []) {
 }
 
 /**
+ * Primera parte del guardado de varios pedidos, común a devoluciones y legalizaciones (antes de abrir la
+ * transacción): valida $cantidades = [id_libro => cantidad] contra los títulos de $detalle
+ * (dm_detalle_varios()). Devuelve ['ok','error','incluidos','a_registrar' => [id_libro => n],
+ * 'por_libro' => [id_libro => título], 'fuentes' => [id pedido => fuente], 'ops' => [...], 'docs' => [...]].
+ */
+function dm_preparar_varios(array $detalle, array $cantidades, $modo) {
+    $verbo = $modo === 'legalizacion' ? 'legalizar' : 'devolver';
+    $incluidos = $detalle['incluidos'];
+    if (!$incluidos) return ['ok' => false, 'error' => 'Ninguno de los pedidos elegidos tiene títulos por ' . $verbo . '.'];
+
+    $porLibro = [];
+    foreach ($detalle['titulos'] as $t) if ($t['id_libro']) $porLibro[(int)$t['id_libro']] = $t;
+
+    $aRegistrar = [];
+    foreach ($cantidades as $idLibro => $cant) {
+        if (!preg_match('/^\d*$/', trim((string)$cant))) return ['ok' => false, 'error' => 'Las cantidades deben ser números enteros, sin decimales ni negativos.'];
+        $cant = (int)$cant;
+        if ($cant === 0) continue;
+        if (!isset($porLibro[(int)$idLibro])) return ['ok' => false, 'error' => 'Uno de los títulos no está en los pedidos elegidos (ni despachado en World Office ni en la solicitud del CRM).'];
+        $aRegistrar[(int)$idLibro] = $cant;
+    }
+    if (!$aRegistrar) return ['ok' => false, 'error' => 'Ingresa al menos una cantidad a ' . $verbo . '.'];
+
+    $fuentes = [];
+    $docs = [];
+    $ops = [];
+    foreach ($detalle['pedidos'] as $p) {
+        if (!in_array($p['id'], $incluidos, true)) continue;
+        $fuentes[$p['id']] = $p['fuente'];
+        if ($p['ops'] !== '') $ops[] = $p['ops'];
+        // Solo el número que se ve en World Office (ej. "RE22 8165"), sin el id interno.
+        foreach ($p['documentos'] as $d) $docs[$d['documento']] = $d['documento'];
+    }
+    return ['ok' => true, 'error' => null, 'incluidos' => $incluidos, 'a_registrar' => $aRegistrar, 'por_libro' => $porLibro,
+            'fuentes' => $fuentes, 'ops' => $ops, 'docs' => array_values($docs)];
+}
+
+/**
+ * Segunda parte, DENTRO de la transacción: bloquea los pedidos (FOR UPDATE, en orden de id, serializa
+ * registros simultáneos de los mismos pedidos), revisa que ninguno se haya cerrado y reparte cada cantidad
+ * entre los pedidos en orden (el más antiguo primero) hasta agotar el saldo actual de cada uno.
+ * Devuelve ['ok','error','reparto' => [id_libro => [partes con 'cantidad']]]; si falla ya hizo rollBack.
+ */
+function dm_repartir_varios(PDO $bdd, array $prep, $modo) {
+    $incluidos = $prep['incluidos'];
+    $bdd->prepare("SELECT id FROM muestreos WHERE id IN (" . implode(',', array_fill(0, count($incluidos), '?')) . ") ORDER BY id FOR UPDATE")
+        ->execute($incluidos);
+    $registrado = [];
+    foreach ($incluidos as $id) {
+        if ($cierreActual = dm_cierre_completo($bdd, $id, $modo)) {
+            $bdd->rollBack();
+            return ['ok' => false, 'error' => 'Pedido #' . $id . ': ' . dm_mensaje_cerrado($modo, $cierreActual)];
+        }
+        $registrado[$id] = $prep['fuentes'][$id] === 'crm' ? dm_registrado_por_libro($bdd, $id, $modo) : dm_registrado_por_producto($bdd, $id, $modo);
+    }
+
+    // Las partes ya vienen en orden de pedido.
+    $reparto = [];
+    foreach ($prep['a_registrar'] as $idLibro => $cant) {
+        $t = $prep['por_libro'][$idLibro];
+        $resta = $cant;
+        $disponibleTotal = 0;
+        $reparto[$idLibro] = [];
+        foreach ($t['partes'] as $pa) {
+            if ($pa['cerrado'] || !isset($registrado[$pa['id_muestreo']])) continue;
+            $ya = $registrado[$pa['id_muestreo']][$pa['clave']] ?? 0;
+            $disp = max(0, $pa['base'] - $ya);
+            $disponibleTotal += $disp;
+            $toma = min($resta, $disp);
+            if ($toma <= 0) continue;
+            $reparto[$idLibro][] = $pa + ['cantidad' => $toma];
+            $registrado[$pa['id_muestreo']][$pa['clave']] = $ya + $toma;
+            $resta -= $toma;
+        }
+        if ($resta > 0) {
+            $bdd->rollBack();
+            return ['ok' => false, 'error' => 'No puedes ' . ($modo === 'legalizacion' ? 'legalizar ' : 'devolver ') . $cant . ' de "' . $t['descripcion']
+                . '": en los pedidos elegidos quedan ' . $disponibleTotal . ' disponibles.'];
+        }
+    }
+    return ['ok' => true, 'error' => null, 'reparto' => $reparto];
+}
+
+/**
+ * Columnas de la fila de un libro (una por libro; el reparto por pedido va en la columna reparto, ver
+ * dm_asegurar_columnas()): [producto_wo, cant_despachada, documentos_wo, reparto]. Desde el CRM:
+ * producto_wo = libros.id_wo y sin cantidad despachada.
+ */
+function dm_fila_libro_varios(array $prep, $idLibro, array $repartoLibro) {
+    $productoWo = null;
+    $despachada = null;
+    $idsDocs = [];
+    foreach ($prep['por_libro'][$idLibro]['partes'] as $pa) {
+        if ($pa['cerrado'] || !in_array($pa['id_muestreo'], $prep['incluidos'], true)) continue;
+        if ($productoWo === null && $pa['producto_wo']) $productoWo = (int)$pa['producto_wo'];
+        if ($pa['fuente'] === 'auto') $despachada = (int)$despachada + $pa['base'];
+        foreach (array_filter(explode(',', $pa['ids_documentos'])) as $idDoc) $idsDocs[$idDoc] = $idDoc;
+    }
+    $partes = array_map(fn($pa) => $pa['id_muestreo'] . ':' . $pa['cantidad'] . ':' . (int)$pa['producto_wo'], $repartoLibro);
+    return [$productoWo, $despachada, mb_substr(implode(',', $idsDocs), 0, 255) ?: null, implode(',', $partes)];
+}
+
+/**
  * Guarda UNA devolución de varios pedidos de muestras del mismo colegio. $cantidades = [id_libro =>
  * cantidad a devolver]: el tope es la suma de lo disponible del libro en todos los pedidos elegidos.
- * Lo devuelto se reparte entre los pedidos en orden (el más antiguo primero) hasta agotar el saldo de
- * cada uno, y queda en libros_devol.reparto para que el saldo y el estado Completado de cada pedido
- * sigan cuadrando. Se recalcula todo en el servidor con los pedidos bloqueados (FOR UPDATE).
+ * Lo devuelto se reparte entre los pedidos (dm_repartir_varios()) y queda en libros_devol.reparto para que
+ * el saldo y el estado Completado de cada pedido sigan cuadrando. Se recalcula todo en el servidor.
  * $cierre = 'parcial' o 'completa' (cierra todos los pedidos incluidos aunque queden unidades).
  * Devuelve ['ok','error','id_devolucion'].
  */
@@ -738,72 +846,15 @@ function dm_guardar_devolucion_varios(PDO $bdd, array $ids, array $fuentes, arra
     if (!in_array($cierre, ['parcial', 'completa'], true)) return ['ok' => false, 'error' => 'Elige si la devolución es parcial o completa.'];
     $detalle = dm_detalle_varios($bdd, $ids, $fuentes);
     if (!$detalle['ok']) return ['ok' => false, 'error' => $detalle['error']];
-    $incluidos = $detalle['incluidos'];
-    if (!$incluidos) return ['ok' => false, 'error' => 'Ninguno de los pedidos elegidos tiene títulos por devolver.'];
-
-    $porLibro = [];
-    foreach ($detalle['titulos'] as $t) if ($t['id_libro']) $porLibro[(int)$t['id_libro']] = $t;
-
-    $aDevolver = [];
-    foreach ($cantidades as $idLibro => $cant) {
-        if (!preg_match('/^\d*$/', trim((string)$cant))) return ['ok' => false, 'error' => 'Las cantidades deben ser números enteros, sin decimales ni negativos.'];
-        $cant = (int)$cant;
-        if ($cant === 0) continue;
-        if (!isset($porLibro[(int)$idLibro])) return ['ok' => false, 'error' => 'Uno de los títulos no está en los pedidos elegidos (ni despachado en World Office ni en la solicitud del CRM).'];
-        $aDevolver[(int)$idLibro] = $cant;
-    }
-    if (!$aDevolver) return ['ok' => false, 'error' => 'Ingresa al menos una cantidad a devolver.'];
-
-    $fuentePorPedido = [];
-    $docsLabel = [];
-    $opsLabel = [];
-    foreach ($detalle['pedidos'] as $p) {
-        if (!in_array($p['id'], $incluidos, true)) continue;
-        $fuentePorPedido[$p['id']] = $p['fuente'];
-        if ($p['ops'] !== '') $opsLabel[] = $p['ops'];
-        // Solo el número que se ve en World Office (ej. "RE22 8165"), sin el id interno.
-        foreach ($p['documentos'] as $d) $docsLabel[$d['documento']] = $d['documento'];
-    }
+    $prep = dm_preparar_varios($detalle, $cantidades, 'devolucion');
+    if (!$prep['ok']) return ['ok' => false, 'error' => $prep['error']];
+    $incluidos = $prep['incluidos'];
 
     $bdd->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $bdd->beginTransaction();
     try {
-        // Bloqueo de los pedidos (en orden de id): serializa devoluciones simultáneas de los mismos pedidos.
-        $bdd->prepare("SELECT id FROM muestreos WHERE id IN (" . implode(',', array_fill(0, count($incluidos), '?')) . ") ORDER BY id FOR UPDATE")
-            ->execute($incluidos);
-        $devuelto = [];
-        foreach ($incluidos as $id) {
-            if ($cierreActual = dm_cierre_completo($bdd, $id, 'devolucion')) {
-                $bdd->rollBack();
-                return ['ok' => false, 'error' => 'Pedido #' . $id . ': ' . dm_mensaje_cerrado('devolucion', $cierreActual)];
-            }
-            $devuelto[$id] = $fuentePorPedido[$id] === 'crm' ? dm_registrado_por_libro($bdd, $id, 'devolucion') : dm_devuelto_por_producto($bdd, $id);
-        }
-
-        // Reparto por pedido, el más antiguo primero (las partes ya vienen en orden de pedido).
-        $reparto = [];
-        foreach ($aDevolver as $idLibro => $cant) {
-            $t = $porLibro[$idLibro];
-            $resta = $cant;
-            $disponibleTotal = 0;
-            $reparto[$idLibro] = [];
-            foreach ($t['partes'] as $pa) {
-                if ($pa['cerrado'] || !isset($devuelto[$pa['id_muestreo']])) continue;
-                $ya = $devuelto[$pa['id_muestreo']][$pa['clave']] ?? 0;
-                $disp = max(0, $pa['base'] - $ya);
-                $disponibleTotal += $disp;
-                $toma = min($resta, $disp);
-                if ($toma <= 0) continue;
-                $reparto[$idLibro][] = $pa + ['cantidad' => $toma];
-                $devuelto[$pa['id_muestreo']][$pa['clave']] = $ya + $toma;
-                $resta -= $toma;
-            }
-            if ($resta > 0) {
-                $bdd->rollBack();
-                return ['ok' => false, 'error' => 'No puedes devolver ' . $cant . ' de "' . $t['descripcion'] . '": en los pedidos elegidos quedan '
-                    . $disponibleTotal . ' disponibles.'];
-            }
-        }
+        $rep = dm_repartir_varios($bdd, $prep, 'devolucion');
+        if (!$rep['ok']) return ['ok' => false, 'error' => $rep['error']];
 
         do {
             $codigo = '';
@@ -814,33 +865,21 @@ function dm_guardar_devolucion_varios(PDO $bdd, array $ids, array $fuentes, arra
 
         // Mismo estado inicial que el formulario anterior (php/reg_devol.php): administración la deja
         // Recibida, el resto Pendiente.
-        $tipoMuestras = dm_tipo_muestras_devolucion(array_map(fn($idLibro) => $porLibro[$idLibro]['tipo_ed'], array_keys($aDevolver)));
+        $tipoMuestras = dm_tipo_muestras_devolucion(array_map(fn($idLibro) => $prep['por_libro'][$idLibro]['tipo_ed'], array_keys($prep['a_registrar'])));
         $estado = ((int)$_SESSION['tipo'] === 1 || (int)$_SESSION['tipo'] === 2 || (int)$_SESSION['id'] === 19) ? 2 : 1;
 
-        // Una fila por libro (vista_devol y la OP de la devolución la leen así); el reparto por pedido va en
-        // libros_devol.reparto. Desde el CRM: producto_wo = libros.id_wo y sin cantidad despachada.
+        // Una fila por libro (vista_devol y la OP de la devolución la leen así).
         $stmtLibro = $bdd->prepare("INSERT INTO libros_devol (cod_pedido, id_libro, cantidad, producto_wo, cant_despachada, documentos_wo, reparto, created_at)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
-        foreach ($aDevolver as $idLibro => $cant) {
-            $t = $porLibro[$idLibro];
-            $productoWo = null;
-            $despachada = null;
-            $idsDocs = [];
-            foreach ($t['partes'] as $pa) {
-                if ($pa['cerrado'] || !isset($devuelto[$pa['id_muestreo']])) continue;
-                if ($productoWo === null && $pa['producto_wo']) $productoWo = (int)$pa['producto_wo'];
-                if ($pa['fuente'] === 'auto') $despachada = (int)$despachada + $pa['base'];
-                foreach (array_filter(explode(',', $pa['ids_documentos'])) as $idDoc) $idsDocs[$idDoc] = $idDoc;
-            }
-            $partes = array_map(fn($pa) => $pa['id_muestreo'] . ':' . $pa['cantidad'] . ':' . (int)$pa['producto_wo'], $reparto[$idLibro]);
-            $stmtLibro->execute([$codigo, $idLibro, $cant, $productoWo, $despachada, mb_substr(implode(',', $idsDocs), 0, 255) ?: null, implode(',', $partes)]);
+        foreach ($prep['a_registrar'] as $idLibro => $cant) {
+            $stmtLibro->execute(array_merge([$codigo, $idLibro, $cant], dm_fila_libro_varios($prep, $idLibro, $rep['reparto'][$idLibro])));
         }
 
         $bdd->prepare("INSERT INTO devoluciones (codigo, tipo, id_periodo, persona, tipo_muestras, id_usuario, observaciones, archivo, estado,
                                                  id_colegio, id_muestreo, ids_muestreos, ops_muestreo, documentos_wo, cierre, created_at)
                        VALUES (?, '1', '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())")
             ->execute([$codigo, $detalle['id_cliente'], $tipoMuestras, $_SESSION['id'], $observaciones, $archivo, $estado, $detalle['id_colegio'],
-                       $incluidos[0], implode(',', $incluidos), mb_substr(implode(', ', $opsLabel), 0, 100), mb_substr(implode(', ', $docsLabel), 0, 500), $cierre]);
+                       $incluidos[0], implode(',', $incluidos), mb_substr(implode(', ', $prep['ops']), 0, 100), mb_substr(implode(', ', $prep['docs']), 0, 500), $cierre]);
         $idDevolucion = (int)$bdd->lastInsertId();
 
         $bdd->commit();

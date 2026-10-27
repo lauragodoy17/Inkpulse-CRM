@@ -2,32 +2,52 @@
 /**
  * /legalizaciones_muestras.php
  * Módulo "Legalizar muestras": reemplaza el formulario manual solicitar_muestreo.php?tp=2 (pedido
- * por el usuario 2026-10-07). Mismo flujo que devoluciones_muestras.php: lista los pedidos de
- * muestras (muestreos) Entregados y al elegir uno trae de World Office los títulos y cantidades
- * realmente despachados para legalizarlos con tope (despachado − legalizado; independiente de las
- * devoluciones, pedido por el usuario 2026-10-07).
+ * por el usuario 2026-10-07). Mismo flujo que devoluciones_muestras.php: primero se elige el colegio (y
+ * el período) y se cargan de una vez todos sus pedidos de muestras Entregados por legalizar, con lo
+ * realmente despachado en sus remisiones RE22 de World Office sumado por título, para registrar UNA sola
+ * legalización con tope (despachado − legalizado; independiente de las devoluciones). Varios pedidos en
+ * una legalización: pedido por la usuaria 2026-10-27, igual que las devoluciones.
  * Lógica en includes/legalizaciones_muestras_datos.php; el paso 2 usa el mismo
  * ajax/devoluciones_muestras_detalle.php que las devoluciones.
  */
 require_once("php/aut.php");
 require_once("conexion/bdd.php");
 require_once("includes/legalizaciones_muestras_datos.php");
+require_once("includes/periodos_fechas.php");
 
 dm_validar_acceso();
 dm_asegurar_columnas($bdd);
 
-$muestreos = dm_marcar_completados($bdd, dm_listar_muestreos_entregados($bdd), 'legalizacion');
+$id_inicial = (int)($_GET['id_muestreo'] ?? 0);
+['periodos' => $periodos, 'periodoActivo' => $periodo_activo] = obtener_periodo_activo($bdd);
+// Período: el elegido; si se llega con ?id_muestreo, el de ese pedido; si no, el activo hoy. 0 = todos.
+if (isset($_GET['periodo'])) {
+  $id_periodo = (int)$_GET['periodo'];
+} elseif ($id_inicial > 0) {
+  $st = $bdd->prepare("SELECT id_periodo FROM muestreos WHERE id = ?");
+  $st->execute([$id_inicial]);
+  $id_periodo = (int)($st->fetchColumn() ?: $periodo_activo);
+} else {
+  $id_periodo = (int)$periodo_activo;
+}
+
+$muestreos = dm_marcar_completados($bdd, dm_listar_muestreos_entregados($bdd, $id_periodo ?: null), 'legalizacion');
 $colegios = [];
 $con_legalizacion = 0;
 $completados = 0;
+$colegio_inicial = '';
 foreach ($muestreos as $m) {
   $colegios[$m['id_colegio']] = $m['colegio'];
   if ((int)$m['n_legalizaciones'] > 0) $con_legalizacion++;
   if ($m['completado']) $completados++;
+  if ((int)$m['id'] === $id_inicial) $colegio_inicial = (string)$m['id_colegio'];
 }
 asort($colegios, SORT_NATURAL | SORT_FLAG_CASE);
-$es_admin = in_array((int)$_SESSION['tipo'], [1, 2], true);
-$id_inicial = (int)($_GET['id_muestreo'] ?? 0);
+// Pedidos por legalizar por colegio (los más recientes primero): se cargan todos al elegir el colegio.
+$pendientes_por_colegio = [];
+foreach ($muestreos as $m) if (!$m['completado']) $pendientes_por_colegio[(int)$m['id_colegio']][] = (int)$m['id'];
+foreach ($pendientes_por_colegio as &$ids_col) rsort($ids_col);
+unset($ids_col);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -153,16 +173,6 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
     .dm-total { display:flex; align-items:baseline; gap:8px; }
     .dm-total strong { font-size:1.5rem; font-weight:800; color:var(--dm-azul); }
     .dm-total span { font-size:.82rem; color:var(--dm-gris); font-weight:600; }
-    .dm-cierre { margin-top:18px; }
-    .dm-cierre .dm-dato-lbl { margin-bottom:8px; }
-    .dm-cierre-opts { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    .dm-opc { display:flex; gap:10px; align-items:flex-start; border:1.5px solid var(--dm-borde); border-radius:12px; padding:12px 14px; cursor:pointer; margin:0; transition:border-color .15s, background .15s; }
-    .dm-opc:hover { border-color:#bfdbfe; }
-    .dm-opc input { margin-top:3px; accent-color:var(--dm-azul); }
-    .dm-opc strong { display:block; font-size:.88rem; color:var(--dm-tinta); }
-    .dm-opc small { display:block; font-size:.76rem; color:var(--dm-gris); margin-top:2px; line-height:1.4; }
-    .dm-opc:has(input:checked) { border-color:var(--dm-azul2); background:#eff6ff; }
-    @media (max-width:768px) { .dm-cierre-opts { grid-template-columns:1fr; } }
     .dm-campos { display:grid; grid-template-columns:2fr 1fr; gap:14px; margin-top:18px; }
     .dm-campos textarea, .dm-campos input[type=file] { border-radius:10px; font-size:.86rem; }
     @media (max-width:768px) { .dm-campos { grid-template-columns:1fr; } .dm-buscar input { width:100%; } }
@@ -173,6 +183,19 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
     @keyframes dm-giro { to { transform:rotate(360deg); } }
     .dm-vacio { text-align:center; padding:46px 10px; color:#94a3b8; }
     .dm-vacio i { font-size:2.2rem; display:block; margin-bottom:8px; color:#cbd5e1; }
+    /* Selección de pedidos */
+    .dm-check { width:17px; height:17px; accent-color:var(--dm-azul); cursor:pointer; vertical-align:middle; }
+    .dm-check:disabled { cursor:not-allowed; opacity:.4; }
+    .dm-table tbody tr.dm-marcado td { background:#eff6ff; }
+    .dm-seleccion { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; background:#f8fafc; border:1px solid var(--dm-borde); border-radius:12px; padding:12px 16px; margin-top:16px; }
+    .dm-seleccion-txt { font-size:.86rem; color:var(--dm-gris); font-weight:600; }
+    .dm-seleccion-txt strong { color:var(--dm-azul); font-size:1.05rem; }
+    .dm-ped-card { border:1px solid var(--dm-borde); border-radius:12px; padding:12px 14px; background:#fff; }
+    .dm-ped-card.err { border-color:#fecaca; background:#fffafa; }
+    .dm-ped-card.vacio { border-color:#fde68a; background:#fffdf5; }
+    .dm-ped-card .dm-doc-top { margin-bottom:8px; }
+    .dm-ped-docs { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    .dm-reparto { font-size:.72rem; color:#94a3b8; margin-top:3px; }
   </style>
 </head>
 <body>
@@ -183,12 +206,12 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
 
       <div class="dm-hero">
         <h4><i class="bi bi-patch-check"></i> Legalizar muestras</h4>
-        <p>Elige un pedido de muestras entregado y registra las muestras que se legalizan. Los títulos y las cantidades salen de la remisión de muestras (RE22) de World Office, menos lo ya legalizado.</p>
+        <p>Elige el colegio y se cargan de una vez todos sus pedidos de muestras por legalizar, con los títulos sumados de sus remisiones de muestras (RE22) de World Office menos lo ya legalizado (si un pedido no tiene remisión en WO, se toma lo solicitado en el CRM). Registra una sola legalización con todos.</p>
         <div class="dm-flujo">
-          <span>Pedido entregado</span><i class="bi bi-chevron-right"></i>
-          <span>OP</span><i class="bi bi-chevron-right"></i>
-          <span>Remisión RE22 en WO</span><i class="bi bi-chevron-right"></i>
-          <span>Títulos despachados</span><i class="bi bi-chevron-right"></i>
+          <span>Colegio</span><i class="bi bi-chevron-right"></i>
+          <span>Pedidos entregados</span><i class="bi bi-chevron-right"></i>
+          <span>Remisiones RE22 en WO</span><i class="bi bi-chevron-right"></i>
+          <span>Títulos sumados</span><i class="bi bi-chevron-right"></i>
           <span>Legalización</span>
         </div>
       </div>
@@ -203,76 +226,37 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
       <!-- Paso 1 -->
       <div class="dm-section">
         <div class="dm-section-head">
-          <h5 class="dm-section-title"><span class="dm-paso">1</span> Elige el pedido de muestras</h5>
-          <span class="dm-pill dm-pill-gris" id="dm-contador"><?= count($muestreos) ?> pedidos</span>
+          <h5 class="dm-section-title"><span class="dm-paso">1</span> Elige el colegio</h5>
         </div>
         <div class="dm-section-body">
           <div class="dm-toolbar">
-            <div class="dm-campo" style="min-width:300px;flex:1;max-width:420px;">
-              <label for="f_colegio">Colegio</label>
+            <div class="dm-campo" style="min-width:300px;flex:1;max-width:460px;">
+              <label for="f_colegio">Colegio <span style="color:#dc2626;">*</span></label>
               <select id="f_colegio" class="custom-select2" style="width:100%;">
-                <option value="">Todos los colegios</option>
-                <?php foreach ($colegios as $nombre): ?>
-                  <option value="<?= htmlspecialchars($nombre) ?>"><?= htmlspecialchars($nombre) ?></option>
+                <option value="">Elige un colegio...</option>
+                <?php foreach ($colegios as $id_col => $nombre): ?>
+                  <option value="<?= (int)$id_col ?>"<?= (string)$id_col === $colegio_inicial ? ' selected' : '' ?>><?= htmlspecialchars($nombre) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
             <div class="dm-campo">
-              <label for="f_estado">Estado</label>
-              <select id="f_estado" class="form-control" style="height:38px;border-radius:10px;font-size:.88rem;min-width:160px;">
-                <option value="pendiente" selected>Por legalizar</option>
-                <option value="completado">Completados</option>
+              <label for="f_periodo">Período</label>
+              <select id="f_periodo" class="form-control" style="height:38px;border-radius:10px;font-size:.88rem;min-width:150px;">
+                <?php foreach ($periodos as $p): ?>
+                  <option value="<?= (int)$p['id'] ?>"<?= (int)$p['id'] === $id_periodo ? ' selected' : '' ?>><?= htmlspecialchars($p['periodo']) ?><?= (int)$p['id'] === (int)$periodo_activo ? ' (actual)' : '' ?></option>
+                <?php endforeach; ?>
+                <option value="0"<?= $id_periodo === 0 ? ' selected' : '' ?>>Todos los períodos</option>
               </select>
             </div>
-            <div class="dm-campo">
-              <label for="f_buscar">Buscar</label>
-              <div class="dm-buscar"><i class="bi bi-search"></i><input type="text" id="f_buscar" placeholder="<?= $es_admin ? 'Pedido, OP, asesor...' : 'Pedido, OP' ?>"></div>
-            </div>
-            <button type="button" class="dm-limpiar" id="f_limpiar"><i class="bi bi-x-circle"></i> Limpiar</button>
           </div>
 
-          <table class="dm-table" id="dm-tabla">
-            <thead>
-              <tr>
-                <th>Pedido</th>
-                <th>Colegio</th>
-                <th>Fecha</th>
-                <th>Estado</th>
-                <th>OP</th>
-                <th>Legalizaciones</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($muestreos as $m): $nd = (int)$m['n_legalizaciones']; ?>
-                <tr data-id="<?= (int)$m['id'] ?>" data-estado="<?= $m['completado'] ? 'completado' : 'pendiente' ?>">
-                  <td data-order="<?= (int)$m['id'] ?>"><a class="dm-ped" href="muestreo_colegio_resto.php?id_pedido=<?= (int)$m['id'] ?>&tp=4" target="_blank">#<?= (int)$m['id'] ?></a></td>
-                  <td data-search="<?= htmlspecialchars($m['colegio'] . ' ' . ($m['solicitante'] ?? '')) ?>" data-filter-colegio="<?= htmlspecialchars($m['colegio']) ?>">
-                    <div class="dm-cole"><?= htmlspecialchars($m['colegio']) ?></div>
-                    <?php if (!empty($m['solicitante'])): ?><div class="dm-sub"><i class="bi bi-person"></i><?= htmlspecialchars($m['solicitante']) ?></div><?php endif; ?>
-                  </td>
-                  <td data-order="<?= htmlspecialchars($m['fecha']) ?>" style="white-space:nowrap;"><?= htmlspecialchars(date('d/m/Y', strtotime($m['fecha']))) ?></td>
-                  <td><?= $m['completado']
-                    ? '<span class="dm-pill dm-pill-verde" title="Ya se legalizó todo lo despachado"><i class="bi bi-check2-circle"></i> Completado</span>'
-                    : '<span class="dm-pill dm-pill-azul"><i class="bi bi-truck"></i> Entregado</span>' ?></td>
-                  <td>
-                    <?php if ($m['ops']): ?>
-                      <div class="dm-op">OP <?= htmlspecialchars($m['ops']) ?></div>
-                      <?php if (!empty($m['docs_op'])): ?><div class="dm-sub" title="Documento registrado en la OP al despacharla"><i class="bi bi-receipt"></i><?= htmlspecialchars($m['docs_op']) ?></div><?php endif; ?>
-                    <?php else: ?>
-                      <span class="dm-pill dm-pill-gris">Sin OP</span>
-                    <?php endif; ?>
-                  </td>
-                  <td data-order="<?= $nd ?>"><?= $nd > 0 ? '<span class="dm-pill dm-pill-ambar">' . $nd . ' registrada' . ($nd > 1 ? 's' : '') . '</span>' : '<span class="dm-pill dm-pill-gris">Ninguna</span>' ?></td>
-                  <td style="text-align:right;"><?php if ($m['completado']): ?>
-                    <button type="button" class="dm-btn dm-btn-light dm-btn-sel" data-id="<?= (int)$m['id'] ?>"><i class="bi bi-eye"></i> Ver</button>
-                  <?php else: ?>
-                    <button type="button" class="dm-btn dm-btn-sel" data-id="<?= (int)$m['id'] ?>">Legalizar <i class="bi bi-arrow-right"></i></button>
-                  <?php endif; ?></td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
+          <div class="dm-vacio" id="dm-sin-colegio"><i class="bi bi-building"></i>Elige un colegio para cargar todos sus pedidos de muestras por legalizar<?= $id_periodo ? ' del período' : '' ?>.</div>
+          <div class="dm-vacio d-none" id="dm-sin-pendientes"><i class="bi bi-check2-circle"></i>Este colegio no tiene pedidos de muestras por legalizar<?= $id_periodo ? ' en el período' : '' ?>.</div>
+
+          <div class="dm-seleccion d-none" id="dm-resumen-sel">
+            <div class="dm-seleccion-txt"><strong id="dm-n-sel">0</strong> <span id="dm-n-sel-txt">pedidos por legalizar</span></div>
+            <button type="button" class="dm-btn dm-btn-light" id="dm-buscar-wo"><i class="bi bi-arrow-clockwise"></i> Volver a consultar World Office</button>
+          </div>
         </div>
       </div>
 
@@ -294,192 +278,171 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
 <script src="vendors/scripts/script.min.js"></script>
 <script src="vendors/scripts/process.js"></script>
 <script src="vendors/scripts/layout-settings.js"></script>
-<script src="src/plugins/datatables/js/jquery.dataTables.min.js"></script>
-<script src="src/plugins/datatables/js/dataTables.bootstrap4.min.js"></script>
 <script src="src/ink-alerts.js"></script>
 <script>
 (function () {
+  var MAX_PEDIDOS = <?= DM_MAX_PEDIDOS_DEVOLUCION ?>;
   var esc = function (s) { return $('<div>').text(s == null ? '' : String(s)).html(); };
 
-  var tabla = $('#dm-tabla').DataTable({
-    order: [[0, 'desc']],
-    pageLength: 15,
-    lengthMenu: [15, 30, 50, 100],
-    dom: 't<"d-flex justify-content-between align-items-center flex-wrap"ilp>',
-    columnDefs: [{ orderable: false, targets: [3, 6] }],
-    language: {
-      lengthMenu: 'Mostrar _MENU_', zeroRecords: 'No hay pedidos que coincidan con el filtro',
-      emptyTable: 'No hay pedidos de muestras entregados', info: '_START_–_END_ de _TOTAL_ pedidos',
-      infoEmpty: 'Sin pedidos', infoFiltered: '(de _MAX_)', paginate: { first: '«', previous: '‹', next: '›', last: '»' }
-    },
-    drawCallback: function () {
-      var info = this.api().page.info();
-      $('#dm-contador').text(info.recordsDisplay + ' pedido' + (info.recordsDisplay === 1 ? '' : 's'));
-    }
+  // Pedidos por legalizar de cada colegio, los más recientes primero. Al elegir el colegio se cargan TODOS
+  // de una vez (igual que devoluciones_muestras.php).
+  var PENDIENTES = <?= json_encode($pendientes_por_colegio ?: new stdClass()) ?>;
+  var idsColegio = [];
+  function aplicarColegio(cargarTodo) {
+    var col = $('#f_colegio').val() || '', todos = PENDIENTES[col] || [];
+    idsColegio = todos.slice(0, MAX_PEDIDOS);
+    $('#dm-sin-colegio').toggleClass('d-none', !!col);
+    $('#dm-sin-pendientes').toggleClass('d-none', !col || todos.length > 0);
+    $('#dm-resumen-sel').toggleClass('d-none', !idsColegio.length);
+    $('#dm-n-sel').text(idsColegio.length);
+    $('#dm-n-sel-txt').text(idsColegio.length === 1 ? 'pedido por legalizar' : 'pedidos por legalizar');
+    if (consulta) consulta.abort();
+    $('#dm-paso2').addClass('d-none');
+    if (todos.length > MAX_PEDIDOS) inkToast('Se cargaron los ' + MAX_PEDIDOS + ' pedidos más recientes de ' + todos.length + ' (máximo por legalización).', 'warn');
+    if (idsColegio.length && cargarTodo !== false) cargar(idsColegio, []);
+  }
+  $('#f_colegio').on('change', function () { aplicarColegio(); });
+  // El período filtra los pedidos en el servidor: se recarga la página con el colegio elegido.
+  $('#f_periodo').on('change', function () {
+    window.location.href = 'legalizaciones_muestras.php?periodo=' + encodeURIComponent($(this).val());
   });
-
-  // Filtro por colegio exacto (no por coincidencia parcial: "San José" no debe traer "San José de...").
-  var colegioFiltro = '';
-  $.fn.dataTable.ext.search.push(function (settings, data, idx) {
-    if (settings.nTable.id !== 'dm-tabla' || !colegioFiltro) return true;
-    return $(tabla.row(idx).node()).find('td').eq(1).attr('data-filter-colegio') === colegioFiltro;
-  });
-  // Los completados no salen en la lista principal; solo al elegir "Completados" (pedido por el
-  // usuario 2026-10-07).
-  var estadoFiltro = 'pendiente';
-  $.fn.dataTable.ext.search.push(function (settings, data, idx) {
-    if (settings.nTable.id !== 'dm-tabla' || !estadoFiltro) return true;
-    return $(tabla.row(idx).node()).attr('data-estado') === estadoFiltro;
-  });
-  tabla.draw(); // aplicar el filtro de estado desde la primera carga
-  $('#f_estado').on('change', function () { estadoFiltro = $(this).val() || 'pendiente'; tabla.draw(); });
-  $('#f_colegio').on('change', function () { colegioFiltro = $(this).val() || ''; tabla.draw(); });
-  $('#f_buscar').on('keyup', function () { tabla.search(this.value).draw(); });
-  $('#f_limpiar').on('click', function () {
-    $('#f_buscar').val(''); colegioFiltro = ''; $('#f_colegio').val('').trigger('change.select2');
-    estadoFiltro = 'pendiente'; $('#f_estado').val('pendiente');
-    tabla.search('').draw();
-  });
-  $('#dm-cerrar').on('click', function () {
-    $('#dm-paso2').addClass('d-none'); $('#dm-tabla tr').removeClass('dm-activo');
-  });
+  $('#dm-cerrar').on('click', function () { $('#dm-paso2').addClass('d-none'); });
 
   function dato(icono, label, val) {
     return '<div class="dm-dato"><i class="bi ' + icono + '"></i><div><div class="dm-dato-lbl">' + esc(label) + '</div><div class="dm-dato-val">' + esc(val) + '</div></div></div>';
   }
   function aviso(tipo, icono, html) { return '<div class="dm-aviso ' + tipo + '"><i class="bi ' + icono + '"></i><div>' + html + '</div></div>'; }
+  function lnkPedido(id) { return '<a class="dm-ped" href="muestreo_colegio_resto.php?id_pedido=' + id + '&tp=4" target="_blank">#' + id + '</a>'; }
 
-  // fuente 'auto' = lo despachado en WO (remisión RE22 con la OP en el concepto); 'crm' = botón "Traer
-  // información del pedido" (los libros y cantidades solicitados en el CRM). Solo una consulta a la vez: elegir otro pedido cancela la
-  // anterior y el botón no hace nada mientras haya una en curso.
-  var consulta = null;
-  function cargar(id, fuente) {
-    fuente = fuente || 'auto';
-    if (fuente === 'crm') {
-      if (consulta) return;
-      $('#dm-traer').prop('disabled', true).html('<span class="dm-spinner dm-spinner-sm"></span> Trayendo la información...');
-      $('#dm-traer-msg').html('');
-    } else {
-      if (consulta) consulta.abort();
-      $('#dm-tabla tr').removeClass('dm-activo');
-      $('#dm-tabla tr[data-id="' + id + '"]').addClass('dm-activo');
-      $('#dm-paso2').removeClass('d-none');
-      $('#dm-paso2-titulo').text('Títulos despachados del pedido #' + id);
-      $('#dm-detalle').html('<div class="dm-cargando"><div class="dm-spinner"></div>Buscando la OP y la remisión RE22 en World Office...</div>');
-      $('html, body').animate({ scrollTop: $('#dm-paso2').offset().top - 80 }, 300);
-    }
+  // Una sola consulta a la vez: una nueva cancela la anterior. crmIds = pedidos que se cargan con lo
+  // solicitado en el CRM.
+  var consulta = null, crmIds = [];
+  function cargar(ids, crm) {
+    crmIds = (crm || []).filter(function (id) { return ids.indexOf(id) >= 0; });
+    if (consulta) consulta.abort();
+    $('#dm-paso2').removeClass('d-none');
+    $('#dm-paso2-titulo').text(ids.length === 1 ? 'Títulos del pedido #' + ids[0] : 'Títulos de ' + ids.length + ' pedidos (sumados)');
+    $('#dm-detalle').html('<div class="dm-cargando"><div class="dm-spinner"></div>Buscando las OP y las remisiones RE22 en World Office'
+      + (ids.length > 1 ? ' de ' + ids.length + ' pedidos' : '') + '...</div>');
+    $('html, body').animate({ scrollTop: $('#dm-paso2').offset().top - 80 }, 300);
 
-    var xhr = consulta = $.getJSON('ajax/devoluciones_muestras_detalle.php', { id_muestreo: id, modo: 'legalizacion', fuente: fuente });
-    xhr.done(function (r) { pintar(id, r, fuente); })
+    var xhr = consulta = $.getJSON('ajax/devoluciones_muestras_detalle.php', { modo: 'legalizacion', ids: ids, crm: crmIds });
+    xhr.done(function (r) { pintar(r); })
       .fail(function (x, estado) {
         if (estado === 'abort') return;
-        if (fuente === 'crm') {
-          $('#dm-traer').prop('disabled', false).html('<i class="bi bi-cloud-download"></i> Traer información del pedido');
-          $('#dm-traer-msg').html(aviso('err', 'bi-x-octagon', 'No se pudo traer la información del pedido. Intenta de nuevo.'));
-        } else {
-          $('#dm-detalle').html(aviso('err', 'bi-x-octagon', 'No se pudo consultar el pedido. Intenta de nuevo.'));
-        }
+        $('#dm-detalle').html(aviso('err', 'bi-x-octagon', 'No se pudo consultar los pedidos. Intenta de nuevo.'));
       })
       .always(function () { if (consulta === xhr) consulta = null; });
   }
 
-  function pintar(id, r, fuente) {
-    var h = '';
-    if (r.muestreo) {
-      var ops = (r.ops || []).map(function (o) { return 'OP ' + o.anio + '-' + o.id; }).join(', ') || '—';
-      h += '<div class="dm-resumen">'
-        + dato('bi-box-seam', 'Pedido de muestras', '#' + r.muestreo.id)
-        + dato('bi-building', 'Colegio', r.muestreo.colegio)
-        + dato('bi-calendar3', 'Fecha del pedido', r.muestreo.fecha)
-        + dato('bi-person', 'Solicitado por', r.muestreo.solicitante || '—')
-        + dato('bi-person-badge', 'Cliente', r.muestreo.cliente || '—')
-        + dato('bi-file-earmark-check', 'OP', ops)
-        + '</div>';
+  function tarjetaPedido(p) {
+    var cls = p.error ? ' err' : (p.sin_documentos ? ' vacio' : '');
+    var h = '<div class="dm-ped-card' + cls + '"><div class="dm-doc-top">' + lnkPedido(p.id)
+      + (p.fuente === 'crm' ? '<span class="dm-pill dm-pill-ambar">Solicitud CRM</span>' : '')
+      + (p.cierre ? '<span class="dm-pill dm-pill-verde"><i class="bi bi-check2-circle"></i> Completado</span>' : '')
+      + '<span class="dm-doc-fecha"><i class="bi bi-calendar3"></i> ' + esc(p.fecha) + '</span></div>'
+      + '<div class="dm-sub" style="margin:0;"><i class="bi bi-file-earmark-check"></i> ' + (p.ops ? 'OP ' + esc(p.ops) : 'Sin OP')
+      + (p.solicitante ? ' · <i class="bi bi-person"></i> ' + esc(p.solicitante) : '') + '</div>';
+    if (p.documentos.length) {
+      h += '<div class="dm-ped-docs">';
+      p.documentos.forEach(function (d) {
+        h += '<span class="dm-pill dm-pill-rem" title="' + esc(d.fecha + ' · ' + d.concepto) + '"><i class="bi bi-receipt"></i> ' + esc(d.documento) + '</span>';
+      });
+      h += '</div>';
     }
-    if (!r.ok) {
-      if (fuente === 'crm') {
-        $('#dm-traer').prop('disabled', false).html('<i class="bi bi-cloud-download"></i> Traer información del pedido');
-        $('#dm-traer-msg').html(aviso('err', 'bi-x-octagon', esc(r.error)));
-      } else {
-        $('#dm-detalle').html(h + aviso('err', 'bi-x-octagon', esc(r.error)));
-      }
-      return;
+    if (p.error) h += '<div class="dm-sub" style="color:#b91c1c;margin-top:8px;"><i class="bi bi-x-octagon"></i> ' + esc(p.error) + '</div>';
+    if (p.sin_documentos) {
+      h += '<div class="dm-sub" style="color:#92400e;margin-top:8px;"><i class="bi bi-exclamation-triangle"></i> '
+        + (p.sin_op ? 'No tiene OP asociada' : 'World Office no trajo ninguna remisión RE22 con su OP')
+        + ': se cargó lo solicitado en el CRM.</div>';
     }
-    var crm = r.fuente === 'crm';
-    if (!crm && !r.documentos.length) {
-      $('#dm-detalle').html(h + '<div class="dm-vacio"><i class="bi bi-search"></i>No se encontró en World Office ninguna remisión RE22 con la OP de este pedido en el concepto.<br>'
-        + 'Puedes traer los libros y las cantidades que se solicitaron en el CRM.'
-        + '<div style="margin-top:14px;"><button type="button" class="dm-btn" id="dm-traer" data-id="' + id + '"><i class="bi bi-cloud-download"></i> Traer información del pedido</button></div>'
-        + '<div id="dm-traer-msg" style="max-width:640px;margin:12px auto 0;text-align:left;"></div></div>');
-      return;
-    }
+    if (p.cierre) h += '<div class="dm-sub" style="margin-top:8px;">Cerrado con la <a href="muestreo_colegio_resto.php?id_muestras_e=' + p.cierre.id + '" target="_blank">legalización completa #' + p.cierre.id + '</a>: no suma disponible.</div>';
+    return h + '</div>';
+  }
 
-    if (crm) {
-      h += aviso('warn', 'bi-info-circle', 'World Office no trajo la remisión de este pedido: se muestran los libros y las cantidades <strong>solicitados en el CRM</strong>. Revisa que coincidan con lo que se entregó antes de guardar.');
-    } else {
-    h += '<div class="dm-subtitulo"><i class="bi bi-receipt"></i> Documentos de World Office</div><div class="dm-docs">';
-    var avisos = '';
-    r.documentos.forEach(function (d) {
-      h += '<div class="dm-doc"><div class="dm-doc-top">'
-        + '<span class="dm-pill ' + (d.tipo === 'FV' ? 'dm-pill-fv' : 'dm-pill-rem') + '">' + (d.tipo === 'FV' ? 'Factura' : 'Remisión') + '</span>'
-        + '<span class="dm-doc-num">' + esc(d.documento) + '</span>'
-        + '<span class="dm-doc-fecha"><i class="bi bi-calendar3"></i> ' + esc(d.fecha) + '</span></div>'
-        + '<div class="dm-doc-concepto">' + esc(d.concepto) + '</div></div>';
-      if (d.ped !== null && d.ped != id) {
-        avisos += aviso('warn', 'bi-exclamation-triangle', 'El concepto de <strong>' + esc(d.documento) + '</strong> dice PED ' + esc(d.ped) + ' y este pedido es el #' + id + '. Se tomó porque la OP coincide; revísalo antes de guardar.');
-      }
+  function pintar(r) {
+    if (!r.ok) { $('#dm-detalle').html(aviso('err', 'bi-x-octagon', esc(r.error))); return; }
+    var pedidos = r.pedidos, varios = pedidos.length > 1;
+    var unidades = pedidos.reduce(function (s, p) { return s + p.unidades; }, 0);
+    var h = '<div class="dm-resumen">'
+      + dato('bi-building', 'Colegio', r.colegio)
+      + dato('bi-person-badge', 'Cliente', r.cliente || '—')
+      + dato('bi-box-seam', varios ? 'Pedidos de muestras' : 'Pedido de muestras', pedidos.map(function (p) { return '#' + p.id; }).join(', '))
+      + dato('bi-stack', 'Unidades despachadas / solicitadas', unidades)
+      + '</div>';
+
+    h += '<div class="dm-subtitulo"><i class="bi bi-receipt"></i> Pedidos y documentos de World Office</div><div class="dm-docs">';
+    pedidos.forEach(function (p) { h += tarjetaPedido(p); });
+    h += '</div>';
+    pedidos.forEach(function (p) {
+      p.documentos.forEach(function (d) {
+        if (d.ped_distinto) h += aviso('warn', 'bi-exclamation-triangle', 'El concepto de <strong>' + esc(d.documento) + '</strong> dice PED ' + esc(d.ped) + ' y el pedido es el #' + p.id + '. Se tomó porque la OP coincide; revísalo antes de guardar.');
+      });
     });
-    h += '</div>' + avisos;
+    var deCrm = pedidos.filter(function (p) { return p.fuente === 'crm'; }).map(function (p) { return p.id; });
+    if (deCrm.length) {
+      h += aviso('warn', 'bi-info-circle', 'World Office no trajo la remisión RE22 de ' + deCrm.map(function (id) { return '#' + id; }).join(', ')
+        + ': de ' + (deCrm.length === 1 ? 'ese pedido' : 'esos pedidos') + ' se toman los libros y las cantidades <strong>solicitados en el CRM</strong>. Revisa que coincidan con lo que se entregó antes de guardar.');
+    }
+    var excluidos = pedidos.filter(function (p) { return r.incluidos.indexOf(p.id) < 0; });
+    if (excluidos.length && r.incluidos.length) {
+      h += aviso('warn', 'bi-dash-circle', 'No entra' + (excluidos.length > 1 ? 'n' : '') + ' en esta legalización: ' + excluidos.map(function (p) { return '#' + p.id; }).join(', ')
+        + ' (sin títulos por legalizar, completado o sin libros).');
     }
 
-    // Cerrado con una legalización "completa": ya no se registra nada aunque queden unidades.
-    var cerrado = !!r.cierre;
-    var hayDisponible = !cerrado && r.titulos.some(function (t) { return t.id_libro && t.disponible > 0; });
-    h += '<div class="dm-subtitulo" style="justify-content:space-between;"><span><i class="bi bi-book"></i> Títulos ' + (crm ? 'solicitados' : 'despachados') + ' (' + r.titulos.length + ')</span>'
+    if (!r.titulos.length) {
+      $('#dm-detalle').html(h + '<div class="dm-vacio"><i class="bi bi-search"></i>No hay títulos para legalizar en ' + (varios ? 'estos pedidos' : 'este pedido') + '.</div>');
+      return;
+    }
+
+    var fuentes = {};
+    pedidos.forEach(function (p) { if (p.unidades) fuentes[p.fuente] = true; });
+    var colBase = fuentes.auto && fuentes.crm ? 'Despachada / solicitada' : (fuentes.crm ? 'Solicitada' : 'Despachada');
+    var hayDisponible = r.titulos.some(function (t) { return t.id_libro && t.disponible > 0; });
+    h += '<div class="dm-subtitulo" style="justify-content:space-between;"><span><i class="bi bi-book"></i> Títulos ' + (varios ? 'sumados de todos los pedidos' : '') + ' (' + r.titulos.length + ')</span>'
       + (hayDisponible ? '<button type="button" class="dm-btn dm-btn-light" id="dm-todo" style="padding:5px 12px;font-size:.75rem;"><i class="bi bi-check2-all"></i> Legalizar todo lo disponible</button>' : '')
       + '</div>';
 
-    h += '<form id="dm-form" method="POST" action="php/legalizaciones_muestras_guardar.php" enctype="multipart/form-data">'
-      + '<input type="hidden" name="id_muestreo" value="' + id + '">'
-      + '<input type="hidden" name="fuente" value="' + (crm ? 'crm' : 'auto') + '">'
-      + '<div class="table-responsive"><table class="dm-tit-table"><thead><tr>'
-      + '<th>Título</th><th class="c" title="E = estudiante, D = docente">Tipo</th><th>Documento</th><th class="c">' + (crm ? 'Solicitada' : 'Despachada') + '</th><th class="c">Ya legalizada</th><th class="c">Disponible</th><th class="c">A legalizar</th>'
+    h += '<form id="dm-form" method="POST" action="php/legalizaciones_muestras_guardar.php" enctype="multipart/form-data">';
+    r.incluidos.forEach(function (id) {
+      h += '<input type="hidden" name="ids[]" value="' + id + '">';
+      if (deCrm.indexOf(id) >= 0) h += '<input type="hidden" name="crm[]" value="' + id + '">';
+    });
+    h += '<div class="table-responsive"><table class="dm-tit-table"><thead><tr>'
+      + '<th>Título</th><th class="c" title="E = estudiante, D = docente">Tipo</th><th>Documentos</th><th class="c">' + colBase + '</th><th class="c">Ya legalizada</th><th class="c">Disponible</th><th class="c">A legalizar</th>'
       + '</tr></thead><tbody>';
     r.titulos.forEach(function (t) {
-      var sinLibro = !t.id_libro, editable = !cerrado && !sinLibro && t.disponible > 0;
-      var base = crm ? t.solicitada : t.despachada;
-      var pct = base > 0 ? Math.min(100, Math.round(t.legalizada * 100 / base)) : 0;
+      var sinLibro = !t.id_libro, editable = !sinLibro && t.disponible > 0;
+      var pct = t.base > 0 ? Math.min(100, Math.round(t.legalizada * 100 / t.base)) : 0;
+      // Con varios pedidos, de cuál sale el saldo (se descuenta del más antiguo primero).
+      var reparto = varios && t.pedidos.length > 1
+        ? '<div class="dm-reparto">' + t.pedidos.map(function (p) { return '#' + p.id + ': ' + p.disponible; }).join(' · ') + '</div>' : '';
       h += '<tr' + (!editable ? ' class="dm-agotado"' : '') + '>'
         + '<td><div class="dm-libro">' + esc(t.descripcion) + '</div><div class="dm-isbn">' + esc(t.codigo) + '</div>'
         + (sinLibro ? '<div class="dm-sub" style="color:#dc2626;"><i class="bi bi-exclamation-circle"></i> No está en el catálogo del CRM</div>' : '') + '</td>'
         + '<td class="c">' + (t.tipo_ed ? '<span class="dm-pill ' + (t.tipo_ed === 'E' ? 'dm-pill-azul' : 'dm-pill-fv') + '" title="' + (t.tipo_ed === 'E' ? 'Estudiante' : 'Docente') + '">' + t.tipo_ed + '</span>' : '—') + '</td>'
-        + '<td><span class="dm-pill dm-pill-gris">' + esc(t.documentos) + '</span></td>'
-        + '<td class="c"><span class="dm-num">' + base + '</span></td>'
+        + '<td><span class="dm-pill dm-pill-gris" style="white-space:normal;">' + esc(t.documentos) + '</span></td>'
+        + '<td class="c"><span class="dm-num">' + t.base + '</span>' + (varios && t.pedidos.length > 1 ? '<div class="dm-num-sub">' + t.pedidos.length + ' pedidos</div>' : '') + '</td>'
         + '<td class="c"><span class="dm-num">' + t.legalizada + '</span><div class="dm-barra" title="' + pct + '% legalizado"><span style="width:' + pct + '%"></span></div></td>'
-        + '<td class="c">' + (t.disponible > 0 ? '<span class="dm-pill dm-pill-verde">' + t.disponible + '</span>' : '<span class="dm-pill dm-pill-gris">0</span>') + '</td>'
+        + '<td class="c">' + (t.disponible > 0 ? '<span class="dm-pill dm-pill-verde">' + t.disponible + '</span>' : '<span class="dm-pill dm-pill-gris">0</span>') + reparto + '</td>'
         + '<td class="c">' + (editable
             ? '<div class="dm-stepper"><button type="button" class="dm-menos" tabindex="-1">−</button>'
-              + '<input type="number" class="dm-input" name="cantidad[' + t.clave + ']" min="0" max="' + t.disponible + '" step="1" value="0" data-max="' + t.disponible + '" data-tipo="' + (t.tipo_ed || '') + '" data-titulo="' + esc(t.descripcion) + '">'
+              + '<input type="number" class="dm-input" name="cantidad[' + t.id_libro + ']" min="0" max="' + t.disponible + '" step="1" value="0" data-max="' + t.disponible + '" data-titulo="' + esc(t.descripcion) + '">'
               + '<button type="button" class="dm-mas" tabindex="-1">+</button></div><span class="dm-max">máx. ' + t.disponible + '</span>'
-            : '<span class="dm-sub" style="justify-content:center;">' + (sinLibro ? 'No disponible' : (cerrado && t.disponible > 0 ? 'Cerrado' : 'Ya legalizado')) + '</span>')
+            : '<span class="dm-sub" style="justify-content:center;">' + (sinLibro ? 'No disponible' : 'Ya legalizado') + '</span>')
         + '</td></tr>';
     });
     h += '</tbody></table></div>';
 
     if (!hayDisponible) {
-      h += (cerrado
-        ? aviso('ok', 'bi-check-circle', '<strong>Completado.</strong> Se cerró con la <a href="muestreo_colegio_resto.php?id_muestras_e=' + r.cierre.id + '" target="_blank">legalización completa #' + r.cierre.id + '</a>'
-            + (r.cierre.usuario ? ' de ' + esc(r.cierre.usuario) : '') + '. Ya no se pueden registrar más legalizaciones de este pedido.')
-        : aviso('ok', 'bi-check-circle', '<strong>Completado.</strong> Ya se legalizó todo lo ' + (crm ? 'solicitado' : 'despachado') + ' en este pedido' + (r.titulos.some(function (t) { return !t.id_libro; }) ? ' (o los títulos pendientes no están en el catálogo del CRM).' : '.')))
-        + '</form>';
+      h += aviso('ok', 'bi-check-circle', '<strong>Completado.</strong> No queda nada por legalizar en ' + (varios ? 'estos pedidos' : 'este pedido')
+        + (r.titulos.some(function (t) { return !t.id_libro; }) ? ' (o los títulos pendientes no están en el catálogo del CRM).' : '.')) + '</form>';
       $('#dm-detalle').html(h);
       return;
     }
-    h += '<div class="dm-cierre"><div class="dm-dato-lbl">Tipo de legalización <span style="color:#dc2626;">*</span></div><div class="dm-cierre-opts">'
-      + '<label class="dm-opc"><input type="radio" name="cierre" value="parcial"><span><strong>Legalización parcial</strong><small>El pedido sigue abierto para registrar más legalizaciones hasta que no queden unidades.</small></span></label>'
-      + '<label class="dm-opc"><input type="radio" name="cierre" value="completa"><span><strong>Legalización completa</strong><small>El pedido queda Completado y ya no se podrá legalizar nada más, aunque queden unidades.</small></span></label>'
-      + '</div></div>'
-      + '<div class="dm-campos"><div><label class="dm-dato-lbl" style="display:block;margin-bottom:6px;">Observaciones</label>'
+    // Sin "tipo de legalización" (quitado a pedido de la usuaria 2026-10-27, igual que en devoluciones): toda
+    // legalización es parcial y el pedido queda Completado solo cuando ya no le quedan unidades por legalizar.
+    h += '<div class="dm-campos"><div><label class="dm-dato-lbl" style="display:block;margin-bottom:6px;">Observaciones</label>'
       + '<textarea name="observaciones" class="form-control" rows="2" maxlength="300" placeholder="Opcional: a quién se entregaron, etc."></textarea></div>'
       + '<div><label class="dm-dato-lbl" style="display:block;margin-bottom:6px;">Soporte adjunto</label><input type="file" name="archivo" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"></div>'
       + '</div>'
@@ -500,7 +463,7 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
     $('#dm-enviar').prop('disabled', total === 0);
   }
 
-  // Nunca más de lo disponible (también se valida en el servidor).
+  // Nunca más de lo disponible sumado (también se valida en el servidor).
   function ajustar($in) {
     var max = parseInt($in.data('max'), 10), v = $in.val(), n = v === '' ? 0 : Number(v);
     if (!Number.isInteger(n) || n < 0) n = 0;
@@ -532,20 +495,21 @@ $id_inicial = (int)($_GET['id_muestreo'] ?? 0);
     });
     if (error) { inkToast(error, 'error'); return; }
     if (total === 0) { inkToast('Ingresa al menos una cantidad a legalizar.', 'warn'); return; }
-    var cierre = $('input[name="cierre"]:checked').val();
-    if (!cierre) { inkToast('Elige si la legalización es parcial o completa.', 'warn'); return; }
-    var texto = 'Se legalizarán ' + total + ' unidad(es) de este pedido de muestras.'
-      + (cierre === 'completa' ? ' Es una legalización COMPLETA: el pedido quedará Completado y ya no se podrá legalizar nada más.' : ' Es una legalización parcial: podrás seguir registrando legalizaciones.');
-    inkConfirm({ type: cierre === 'completa' ? 'warning' : 'info', title: '¿Registrar la legalización ' + cierre + '?', text: texto, btnOk: 'Legalizar' }, function () {
+    var n = $(form).find('input[name="ids[]"]').length, deQue = n > 1 ? 'de ' + n + ' pedidos de muestras en una sola legalización' : 'de este pedido de muestras';
+    var texto = 'Se legalizarán ' + total + ' unidad(es) ' + deQue + '. Podrás seguir registrando legalizaciones mientras queden unidades.';
+    inkConfirm({ type: 'info', title: '¿Registrar la legalización?', text: texto, btnOk: 'Legalizar' }, function () {
       $('#dm-enviar').prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> Guardando...');
       form.submit();
     });
   });
 
-  $(document).on('click', '.dm-btn-sel', function () { cargar($(this).data('id')); });
-  $(document).on('click', '#dm-traer', function () { cargar($(this).data('id'), 'crm'); });
+  $('#dm-buscar-wo').on('click', function () { if (idsColegio.length) cargar(idsColegio, []); });
 
-  <?php if ($id_inicial > 0): ?>cargar(<?= $id_inicial ?>);<?php endif; ?>
+  // Con ?id_muestreo solo se carga ese pedido; si no, todos los del colegio elegido.
+  aplicarColegio(<?= ($id_inicial > 0 && $colegio_inicial !== '') ? 'false' : '' ?>);
+  <?php if ($id_inicial > 0 && $colegio_inicial !== ''): ?>
+  cargar([<?= $id_inicial ?>], []);
+  <?php endif; ?>
 })();
 </script>
 </body>
