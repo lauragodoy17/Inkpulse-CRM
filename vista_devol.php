@@ -815,7 +815,7 @@ btnOk: 'Sí, eliminar'
 }, function(){ $(document.getElementById(lpid)).remove(); });
 });
 })(<?= $libro["lpid"] ?>, <?= json_encode($libro["libro"]) ?>);
-  })('<?= $libro["lpid"] ?>', <?= json_encode($libro["libro"]) ?: '{}' ?>);
+  ('<?= $libro["lpid"] ?>', <?= json_encode($libro["libro"]) ?: '{}' ?>);
 <?php endif; ?>
 <?php endforeach; ?>
 </script>
