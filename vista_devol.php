@@ -801,8 +801,8 @@ $('#form_pedido').submit();
 <?php foreach ($libros as $libro): ?>
 $('#c<?= $libro["lpid"] ?>').on('keyup', function(){
 var cant = $(this).val();
-    $('#l<?= $libro["lpid"] ?>').val(cant + '/' + <?= $libro["lpid"] ?>);
-    $('#l<?= $libro["lpid"] ?>').val(cant + '/' + '<?= $libro["lpid"] ?>');
+$('#l<?= $libro["lpid"] ?>').val(cant + '/' + <?= $libro["lpid"] ?>);
+$('#l<?= $libro["lpid"] ?>').val(cant + '/' + '<?= $libro["lpid"] ?>');
 });
 <?php if ($is_admin): ?>
 (function(lpid, nombre){
@@ -814,7 +814,7 @@ text: 'Se quitará "' + nombre + '" de esta devolución.',
 btnOk: 'Sí, eliminar'
 }, function(){ $(document.getElementById(lpid)).remove(); });
 });
-  })(<?= $libro["lpid"] ?>, <?= json_encode($libro["libro"]) ?>);
+})(<?= $libro["lpid"] ?>, <?= json_encode($libro["libro"]) ?>);
   })('<?= $libro["lpid"] ?>', <?= json_encode($libro["libro"]) ?: '{}' ?>);
 <?php endif; ?>
 <?php endforeach; ?>
@@ -822,4 +822,3 @@ btnOk: 'Sí, eliminar'
 <script src="src/contador-caracteres.js"></script>
 <script src="src/motivo-anulacion.js"></script>
 </body>
-</html>
