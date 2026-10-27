@@ -21,7 +21,7 @@ if ($tipo == 1) {
 // documentos de World Office de origen (columnas creadas por dm_asegurar_columnas).
 require_once(__DIR__ . "/includes/devoluciones_muestras_datos.php");
 dm_asegurar_columnas($bdd);
-$sql_pedido = "SELECT pe.id_muestreo, pe.ops_muestreo, pe.documentos_wo, pe.cierre, pe.fecha,pe.observaciones,pe.archivo,pe.codigo, pe.tipo_muestras,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid,co.colegio FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado LEFT JOIN clientes c ON pe.persona=c.id LEFT JOIN colegios co ON pe.id_colegio=co.id WHERE pe.id='".$pedido_base["id"]."'";
+$sql_pedido = "SELECT pe.id_muestreo, pe.ids_muestreos, pe.ops_muestreo, pe.documentos_wo, pe.cierre, pe.fecha,pe.observaciones,pe.archivo,pe.codigo, pe.tipo_muestras,u.nombres, u.apellidos, e.id as eid,e.estado, c.cliente, c.id as cid,co.colegio FROM devoluciones pe JOIN usuarios u ON u.id=pe.id_usuario JOIN estados_dev e ON e.id=pe.estado LEFT JOIN clientes c ON pe.persona=c.id LEFT JOIN colegios co ON pe.id_colegio=co.id WHERE pe.id='".$pedido_base["id"]."'";
 
 $req_pedido = $bdd->prepare($sql_pedido);
 $req_pedido->execute();
@@ -380,8 +380,9 @@ echo html_motivo_anulacion(obtener_historial_estado($bdd, $tipo == 1 ? 'devoluci
 <div class="mc-card">
 <div class="mc-card-icon blue"><i class="bi bi-box-seam"></i></div>
 <div>
-<p class="mc-card-label">Pedido de muestras</p>
-<p class="mc-card-val"><a href="muestreo_colegio.php?id_muestreo=<?= (int)$pedido['id_muestreo'] ?>" target="_blank"># <?= (int)$pedido['id_muestreo'] ?></a></p>
+<?php $ids_muestreos_devol = dm_ids_de_devolucion($pedido); // varios pedidos en una devolución (devoluciones_muestras.php) ?>
+<p class="mc-card-label"><?= count($ids_muestreos_devol) > 1 ? 'Pedidos de muestras' : 'Pedido de muestras' ?></p>
+<p class="mc-card-val"><?php foreach ($ids_muestreos_devol as $i => $id_m): ?><?= $i ? ', ' : '' ?><a href="muestreo_colegio.php?id_muestreo=<?= (int)$id_m ?>" target="_blank"># <?= (int)$id_m ?></a><?php endforeach; ?></p>
 </div>
 </div>
 <div class="mc-card">

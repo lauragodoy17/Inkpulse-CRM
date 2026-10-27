@@ -15,6 +15,19 @@ dm_asegurar_columnas($bdd);
 // RE22; las devoluciones buscan en remisiones RE22 y CEUR. En ambos, fuente=crm es el botón "Traer
 // información del pedido" (lo solicitado en el CRM, ver dm_detalle_crm()).
 $modo = ($_GET['modo'] ?? '') === 'legalizacion' ? 'legalizacion' : 'devolucion';
+
+// Devoluciones: varios pedidos del mismo colegio a la vez (ids[]), con crm[] = los pedidos que se cargan
+// con "Traer información del pedido". Ver dm_detalle_varios().
+if ($modo === 'devolucion' && isset($_GET['ids'])) {
+    $fuentes = [];
+    foreach ((array)($_GET['crm'] ?? []) as $id) $fuentes[(int)$id] = 'crm';
+    $detalle = dm_detalle_varios($bdd, (array)$_GET['ids'], $fuentes);
+    foreach ($detalle['titulos'] ?? [] as $i => $t) unset($detalle['titulos'][$i]['partes']);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($detalle, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $idMuestreo = (int)($_GET['id_muestreo'] ?? 0);
 $fuente = ($_GET['fuente'] ?? '') === 'crm' ? 'crm' : 'auto';
 $detalle = $modo === 'legalizacion'

@@ -34,7 +34,7 @@ function lm_detalle_legalizacion(PDO $bdd, $idMuestreo, $fuente = 'auto') {
 
 /**
  * Guarda una legalización. $cantidades = [clave del título => cantidad a legalizar]. Recalcula lo
- * despachado en World Office (o lo solicitado en el CRM, fuente 'crm') y lo ya legalizado con el muestreo bloqueado, igual que dm_guardar_devolucion().
+ * despachado en World Office (o lo solicitado en el CRM, fuente 'crm') y lo ya legalizado con el muestreo bloqueado, igual que las devoluciones (dm_guardar_devolucion_varios()).
  * $cierre = 'parcial' (sigue abierto hasta agotar unidades) o 'completa' (cierra el pedido en este
  * módulo aunque queden unidades). $fuente = la de lm_detalle_legalizacion() con que se cargó la pantalla.
  * Devuelve ['ok','error','id_legalizacion'].

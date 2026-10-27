@@ -1,9 +1,9 @@
 <?php
 /**
  * /php/devoluciones_muestras_guardar.php
- * Guarda una devolución del módulo devoluciones_muestras.php. Las cantidades se vuelven a validar
- * aquí contra lo despachado en World Office y lo ya devuelto (dm_guardar_devolucion), así que el
- * tope no se puede saltar desde el navegador.
+ * Guarda una devolución del módulo devoluciones_muestras.php (uno o varios pedidos del mismo colegio).
+ * Las cantidades se vuelven a validar aquí contra lo despachado en World Office y lo ya devuelto
+ * (dm_guardar_devolucion_varios), así que el tope no se puede saltar desde el navegador.
  */
 require_once("../php/aut.php");
 require_once("../conexion/bdd.php");
@@ -12,7 +12,10 @@ require_once("../includes/devoluciones_muestras_datos.php");
 dm_validar_acceso(false, '../');
 dm_asegurar_columnas($bdd); // antes de la transacción (DDL = commit implícito)
 
-$id_muestreo = (int)($_POST['id_muestreo'] ?? 0);
+$ids = array_values(array_filter(array_map('intval', (array)($_POST['ids'] ?? []))));
+$id_muestreo = $ids ? min($ids) : 0;
+$fuentes = [];
+foreach ((array)($_POST['crm'] ?? []) as $id) $fuentes[(int)$id] = 'crm';
 $volver = '../devoluciones_muestras.php' . ($id_muestreo ? '?id_muestreo=' . $id_muestreo : '');
 $error = null;
 $redirect = null;
@@ -33,8 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id_muestreo <= 0) {
     }
 
     if (!$error) {
-        $res = dm_guardar_devolucion($bdd, $id_muestreo, $cantidades, $observaciones, $archivo, (string)($_POST['cierre'] ?? ''),
-                                    ($_POST['fuente'] ?? '') === 'crm' ? 'crm' : 'auto');
+        $res = dm_guardar_devolucion_varios($bdd, $ids, $fuentes, $cantidades, $observaciones, $archivo, 'parcial'); // sin tipo de devolución: siempre parcial (2026-10-21)
         if ($res['ok']) {
             $redirect = '../vista_devol.php?id_devol=' . $res['id_devolucion'] . '&tipo=1';
         } else {
@@ -70,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $id_muestreo <= 0) {
   <div class="alert-card">
     <div class="icon-wrap icon-ok">&#10003;</div>
     <h2>¡Devolución registrada!</h2>
-    <p>La devolución del pedido de muestras #<?= $id_muestreo ?> fue guardada correctamente.</p>
+    <p>La devolución de <?= count($ids) === 1 ? 'el pedido de muestras #' . $id_muestreo : 'los pedidos de muestras #' . implode(', #', $ids) ?> fue guardada correctamente.</p>
     <p class="countdown" id="msg">Redirigiendo en 3 segundos...</p>
     <a href="<?= htmlspecialchars($redirect) ?>" class="btn btn-ok">Ver devolución</a>
   </div>
