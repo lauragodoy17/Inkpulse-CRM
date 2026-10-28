@@ -8,8 +8,8 @@ $zonificacion_active = in_array($current_page, ['ver_colegios.php','agregar_cole
 $agenda_active       = $current_page === 'agenda.php';
 $muestreo_active     = in_array($current_page, ['solicitar_muestreo.php','legalizaciones_muestras.php','lista_muestreo.php','ver_muestreo.php','muestras_entregadas.php']);
 $pedidos_active      = in_array($current_page, ['ver_pedidos.php','lista_pedidos.php','agrupar_pedidos.php','pedido_colegio.php']);
-$venta_directa_active = in_array($current_page, ['colegios_venta_directa.php','solicitar_venta_directa.php','lista_venta_directa.php','venta_directa.php']);
-$devoluciones_active = in_array($current_page, ['devoluciones_venta_directa.php','ver_devol_venta_directa.php','devol_muestras_sa.php','devoluciones_muestras.php','ver_devol_muestras.php','ver_devol_ventas.php','ver_devol_proveedores.php','proveedores.php']);
+$devoluciones_active = in_array($current_page, ['devol_muestras_sa.php','devoluciones_muestras.php','devoluciones_ventas.php','saldos_colegio.php','ver_devol_muestras.php','ver_devol_ventas.php','ver_devol_proveedores.php','proveedores.php']);
+$venta_directa_active = in_array($current_page, ['formatos_venta_directa.php','formato_venta_directa.php','ver_formato_venta_directa.php','devoluciones_venta_directa.php','ver_devol_venta_directa.php','ver_saldos_devolucion.php','ver_saldo_devolucion.php']);
 $pedidos_sa_active   = in_array($current_page, ['solicitar_pedido_sa.php','ver_pedidos_sa.php','lista_pedidos_sa.php','pedido_colegio_sa.php']);
 $presupuesto_active  = $current_page === 'colegios_presup.php';
 $atenciones_active   = $current_page === 'lista_atenciones.php';
@@ -440,33 +440,6 @@ $periodos_active     = $current_page === 'periodos.php';
 								</ul>
 							</li>
 
-							<li class="dropdown <?= $venta_directa_active ? 'show' : '' ?>" id="venta-directa">
-								<a href="javascript:;" class="dropdown-toggle <?= $venta_directa_active ? 'active' : '' ?>">
-									<span class="micon bi bi-bag-check"></span
-									><span class="mtext">Venta directa</span>
-								</a>
-								<ul class="submenu">
-									<?php if ($_SESSION["tipo"]==3 || $_SESSION["tipo"]==6) {?>
-										<li><a href="colegios_venta_directa.php">Solicitar venta directa</a></li>
-										<li><a href="ver_venta_directa.php">Ver ventas directas</a></li>
-									<?php }else { ?>
-										<li><a href="colegios_venta_directa.php">Solicitar</a></li>
-										<li>
-											<a href="lista_venta_directa.php?tp=2">Pendientes</a>
-											<a href="lista_venta_directa.php?tp=3">Aprobados</a>
-											<a href="lista_venta_directa.php?tp=6">Procesando</a>
-											<a href="lista_venta_directa.php?tp=7">En facturación</a>
-											<a href="lista_venta_directa.php?tp=8">En despacho</a>
-											<a href="lista_venta_directa.php?tp=4">Entregados</a>
-											<a href="lista_venta_directa.php?tp=5">Anulados</a>
-										</li>
-										<?php if ($_SESSION["tipo"] != 10) { // mismos usuarios que ven Órdenes de Pedido ?>
-										<li><a href="lista_op.php?vd=1&tp=1">OP de venta directa</a></li>
-										<?php } ?>
-									<?php } ?>
-								</ul>
-							</li>
-
 							<li class="dropdown <?= $devoluciones_active ? 'show' : '' ?>">
 								<a href="javascript:;" class="dropdown-toggle <?= $devoluciones_active ? 'active' : '' ?>">
 									<span class="micon bi bi-arrow-bar-left"></span
@@ -486,16 +459,28 @@ $periodos_active     = $current_page === 'periodos.php';
 									<li><a href="ver_devol_muestras.php">Ver devoluciones de muestras</a></li>
 
 									<li class="menu-subgroup-label">Ventas</li>
-									<li><a href="#" data-toggle="modal" data-target="#modal_devols">Devolución de ventas</a></li>
+									<!-- 2026-10-26: igual que devoluciones de muestras (antes modal de período → colegios_devols.php). -->
+									<li><a href="devoluciones_ventas.php">Devolución de ventas</a></li>
 									<?php if ($_SESSION["tipo"]==1 || $_SESSION["tipo"] ==2 || $_SESSION["id"] ==2) { ?>
 										<li><a href="devol_muestras_sa.php?tp=3">Devoluciones de ventas sin adopción</a></li>
 									<?php } ?>
 									<li><a href="ver_devol_ventas.php">Ver devoluciones de ventas</a></li>
+									<li><a href="saldos_colegio.php">Saldos de colegio</a></li>
 
-									<li class="menu-subgroup-label">Venta directa</li>
-									<li><a href="devoluciones_venta_directa.php">Devolución de venta directa</a></li>
-									<li><a href="ver_devol_venta_directa.php">Ver devoluciones de venta directa</a></li>
+								</ul>
+							</li>
 
+							<!-- Venta directa: módulo aparte de Devoluciones (2026-10-21). Se sigue guardando en devoluciones_v. -->
+							<li class="dropdown <?= $venta_directa_active ? 'show' : '' ?>">
+								<a href="javascript:;" class="dropdown-toggle <?= $venta_directa_active ? 'active' : '' ?>">
+									<span class="micon bi bi-bag-check"></span
+									><span class="mtext">Venta directa</span>
+								</a>
+								<ul class="submenu">
+									<li><a href="devoluciones_venta_directa.php">Legalización venta directa</a></li>
+									<li><a href="formatos_venta_directa.php">Formatos de venta directa</a></li>
+									<li><a href="ver_devol_venta_directa.php">Ver legalizaciones venta directa</a></li>
+									<li><a href="ver_saldos_devolucion.php">Saldos de devolución</a></li>
 								</ul>
 							</li>
 
@@ -566,12 +551,6 @@ $periodos_active     = $current_page === 'periodos.php';
 								<li><a href="backorders_sa_informe.php">Informe</a></li>
 							</ul>
 						</li>
-						<li>
-							<a href="backorders_paquetes.php" class="dropdown-toggle no-arrow <?= $current_page == 'backorders_paquetes.php' ? 'active' : '' ?>">
-								<span class="micon bi bi-boxes"></span
-								><span class="mtext">Backorders de paquetes</span>
-							</a>
-						</li>
 						<li class="dropdown <?= $empaque_active ? 'show' : '' ?>">
 							<a href="javascript:;" class="dropdown-toggle <?= $empaque_active ? 'active' : '' ?>">
 								<span class="micon bi bi-box-seam"></span
@@ -632,6 +611,7 @@ $periodos_active     = $current_page === 'periodos.php';
 									<li><a href="lista_op.php?tp=2">Pendientes</a></li>
 									<li><a href="lista_op.php?tp=3">Atendidas</a></li>
 									<li><a href="lista_op.php?tp=4">Anuladas</a></li>
+									<li><a href="lista_op.php?vd=1&tp=1">OP de venta directa</a></li>
 								</ul>
 							</li>
 						<?php } ?>
@@ -751,6 +731,7 @@ $periodos_active     = $current_page === 'periodos.php';
 										<li class="menu-subgroup-label">Ventas</li>
 										<li><a href="reporte_valoriza.php">Valorización libro a libro</a></li>
 										<li><a href="reporte_valoriza_global.php">Valorización global</a></li>
+										<li><a href="reporte_mercado.php">Mercado editorial</a></li>
 										<?php if ($_SESSION["tipo"] != 1) { ?>
 											<li><a href="reporte_colocacion_usuario.php">Colocación</a></li>
 										<?php } ?>
@@ -767,7 +748,7 @@ $periodos_active     = $current_page === 'periodos.php';
 											<li><a href="reporte_seguimiento_gerencia.php">Seguimiento gerencia</a></li>
 											<li><a href="reporte_editorial.php">Informe Cumplimiento</a></li>
 										<?php } ?>
-										<?php if ($_SESSION["tipo"]==1 || $_SESSION["id"]==69) { ?>
+										<?php if (in_array($_SESSION["tipo"], [1, 2]) && $_SESSION["id"] != 69) { // fichas técnicas: tipo 1 y 2 (no Héctor) ?>
 											<li><a href="reporte_paquetes.php">Paquetes</a></li>
 										<?php } ?>
 									<?php } ?>

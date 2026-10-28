@@ -98,10 +98,10 @@
       }
     </style>
 
-    
+
   </head>
   <body>
-    
+
     <?php include("template/nav_side.php"); ?>
     <div class="main-container">
       <div class="pd-ltr-20 xs-pd-20-10">
@@ -250,6 +250,16 @@
                         >Población</a
                       >
                     </li>
+                    <li class="nav-item pobla">
+                      <a
+                        class="nav-link"
+                        data-toggle="tab"
+                        href="#mercado"
+                        role="tab"
+                        aria-selected="false" data-url="ajax/tab_mercado.php"
+                        >Mercado editorial</a
+                      >
+                    </li>
                     <li class="nav-item presupuesto">
                       <a
                         class="nav-link"
@@ -362,7 +372,7 @@
                                 <label>Calendario <small style="color:red;"> *</small></label>
                                 <select class="custom-select" name="calendario" required>
                                   <option value="">Seleccione...</option>
-                                  
+
                                     <?php
 
                                       $sql = "SELECT * FROM calendarios";
@@ -378,7 +388,7 @@
                                         }else{
                                            echo '<option value="'.$calendario["id"].'">'.$calendario["calendario"].'</option>';
                                         }
-                                       
+
                                       }
 
                                     ?>
@@ -395,7 +405,7 @@
                                 <label>Departamento <small style="color:red;"> *</small></label>
                                 <select class="custom-select2" name="departamento" required>
                                   <option value="">Seleccione...</option>
-                                  
+
                                     <?php
 
                                       $sql = "SELECT * FROM departamentos";
@@ -411,7 +421,7 @@
                                         }else{
                                            echo '<option value="'.$departamento["id"].'">'.$departamento["departamento"].'</option>';
                                         }
-                                       
+
                                       }
 
                                     ?>
@@ -462,7 +472,7 @@
                           </div>
 
                           <div class="row">
-                            
+
                             <div class="col-sm-4">
                               <div class="form-group">
                                 <label>Página Web</label>
@@ -497,7 +507,7 @@
                                   <label>Segmento <small style="color:red;"> *</small></label>
                                   <select class="custom-select" name="segmento" required>
                                     <option value="">Seleccione...</option>
-                                    
+
                                       <?php
 
                                         $sql = "SELECT * FROM segmentos";
@@ -513,7 +523,7 @@
                                           }else{
                                              echo '<option value="'.$segmento["id"].'">'.$segmento["segmento"].'</option>';
                                           }
-                                         
+
                                         }
 
                                       ?>
@@ -522,14 +532,14 @@
                                   </select>
                                 </div>
                               </div>
-                            
+
                             <div class="col-sm-4">
 
                               <div class="form-group">
                                 <label>Status <small style="color:red;"> *</small></label>
                                 <select class="custom-select" name="status" required>
                                   <option value="">Seleccione...</option>
-                                  
+
                                     <?php
 
                                       $sql = "SELECT id, id_status FROM colegios_status WHERE id_colegio='".$colegio["id"]."' AND id_periodo='".$_GET['periodo']."'";
@@ -545,7 +555,7 @@
 
                                       $status = $req->fetchAll();
 
-                              
+
                                       foreach ($status as $statu) {
 
                                         if ($statu["id"]==$cole_status["id_status"]) {
@@ -554,14 +564,14 @@
                                           echo '<option value="'.$statu["id"].'">'.$statu["status"].'</option>';
                                         }
 
-                                        
+
                                       }    
 
                                     ?>
 
                                 </select>
                               </div>
-                             
+
                             </div>
                             <?php if ($_SESSION["tipo"]!=6) { ?>
                               <div class="col-sm-4">
@@ -570,7 +580,7 @@
                                   <label>Estado de cliente <small style="color:red;"> *</small></label>
                                   <select class="custom-select" name="estado_cliente" required>
                                     <option value="">Seleccione...</option>
-                                    
+
                                       <?php
 
                                         $sql = "SELECT id, id_estado_cliente FROM colegios_estados_clientes WHERE id_colegio='".$colegio["id"]."' AND id_periodo='".$_GET['periodo']."'";
@@ -586,7 +596,7 @@
 
                                         $estados = $req->fetchAll();
 
-                                
+
                                         foreach ($estados as $estado) {
 
                                           if ($estado["id"]==$cole_estado["id_estado_cliente"]) {
@@ -595,14 +605,14 @@
                                             echo '<option value="'.$estado["id"].'">'.$estado["estado"].'</option>';
                                           }
 
-                                          
+
                                         }    
 
                                       ?>
 
                                   </select>
                                 </div>
-                               
+
                               </div>
                             <?php } ?>
                           </div>
@@ -637,7 +647,7 @@
                                     $req = $bdd->prepare($sql);
                                     $req->execute();
                                     $count_p = $req->rowCount();
-                                    
+
                                     if ($count_p > 0) {
                                       echo '<option value="0">No</option>
                                       <option value="1" SELECTED>Si</option>';
@@ -646,7 +656,7 @@
                                       <option value="1">Si</option>';
                                     }
                                   ?>
-                                  
+
                                 </select>
                               </div>
                             </div>
@@ -660,16 +670,16 @@
 
                             ?>
 
-                              
-                              
+
+
                             <?php }else { ?>
                               <div class="col-sm-4 d-none" id="adjunto_propuesta_c">
-                  
+
                                 <div class="form-group">
                                   <label class="control-label no-padding-right" for="archivo"> Adjunto propuesta comercial <small style="color:red;"> *</small></label>
 
                                   <input type="file" name="archivo" id="i_pc" placeholder="Adjunto" class="form-control" />
-                                    
+
                                 </div>
                               </div>
                             <?php } ?>
@@ -688,6 +698,7 @@
                     </div>
                     <div class="tab-pane" id="info_contac" role="tabpanel"></div>
                     <div class="tab-pane" id="poblacion" role="tabpanel"></div>
+                    <div class="tab-pane" id="mercado" role="tabpanel"></div>
 
                     <div class="tab-pane" id="presupuesto" role="tabpanel"></div>
 
@@ -705,7 +716,7 @@
 
                   </div>
                 </div>
-                      
+
 
                 <style>
                   .rs-modal .modal-content  { border:none; border-radius:12px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.15); }
@@ -803,7 +814,7 @@
         <?php include("template/footer.php"); ?>
       </div>
     </div>
-    
+
     <!-- js -->
     <script src="vendors/scripts/core.js"></script>
     <script src="vendors/scripts/script.min.js"></script>
@@ -920,9 +931,9 @@
             var f_cierre = <?php echo json_encode($gp_periodo["f_cierre"]); ?>;
             var urlConParametros = baseUrl + '?colegio=' + <?php echo $colegio["id"] ?> + '&periodo='+ <?php echo $_GET["periodo"] ?>+ '&codigo='+ encodeURIComponent(codigo)+ '&cod_zona='+ <?php echo $colegio['cod_zona'] ?>+ '&sub_zona='+ <?php echo $colegio['sub_zona'] ?>+ '&responsable='+encodeURIComponent(responsable)+ '&promotor='+ <?php echo $promotor['id'] ?>+ '&f_cierre='+encodeURIComponent(f_cierre);
 
-           
+
           }
-          
+
 
           if ($(target).is(':empty')) {
             $(target).html("<br><br><center style='font-size:30px; color:#E25906'>Cargando...</center>");
@@ -933,7 +944,7 @@
           setTimeout(function () {
             const selects = $(target).find('select.custom-select2');
             if (selects.length) {
-              
+
 
               $("#modal_atenciones .custom-select2").select2({
                 dropdownParent: $('#modal_atenciones')
@@ -960,7 +971,7 @@
 
         if (tab) {
            $('.nav-link[href="#' + tab + '"]').tab('show');
-           
+
         }
 
 
@@ -970,13 +981,13 @@
             if (valor==1) {
               $("#adjunto_propuesta_c").removeClass("d-none");
               $("#i_pc").attr("required","required");
-               
-                       
+
+
             }else {
               $("#adjunto_propuesta_c").addClass("d-none");
               $("#i_pc").removeAttr("required","required");
             }
-                
+
         });
 
       });
@@ -984,7 +995,7 @@
 
       $('#empresa').on('change',function(){
         var valor = $(this).val();
-        
+
         if (valor==1) {
           $(".col-responsable").addClass("d-none");
           $(".col-responsable").addClass("d-none");
@@ -993,7 +1004,7 @@
           $(".col-responsable").removeClass("d-none");
           $("#responsable").attr("required","required");
         }
-       
+
         var dataString = 'empresa='+valor;
         $.ajax({
 
@@ -1001,7 +1012,7 @@
           type: "POST",
           data: dataString,
           success: function (resp) {
-                   
+
             $("#zona").html(resp);                        
             console.log(resp);
             if(valor =="") {
@@ -1017,9 +1028,9 @@
             console.log(estado);
           }
 
-                          
+
         })
-                
+
       });
 
     </script>
@@ -1029,18 +1040,29 @@
     .cole-toast { position:fixed; top:24px; right:24px; min-width:260px; padding:14px 20px; border-radius:10px; font-size:.87rem; font-weight:600; color:#fff; z-index:99999; box-shadow:0 6px 20px rgba(0,0,0,.18); display:flex; align-items:center; gap:10px; opacity:0; transform:translateY(-16px); transition:opacity .3s, transform .3s; pointer-events:none; }
     .cole-toast.show { opacity:1; transform:translateY(0); }
     .cole-toast.ok   { background:#16a34a; }
+    .cole-toast.err  { background:#dc2626; }
   </style>
   <div class="cole-toast" id="cole-toast"><i class="bi bi-check-circle-fill"></i><span id="cole-toast-msg"></span></div>
   <script>
-    <?php if (isset($_GET['msg']) && $_GET['msg'] === 'reasignado'): ?>
+    <?php
+      $toast_msgs = [
+        'reasignado'          => ['ok',  'Colegio reasignado correctamente'],
+        'mercado_anadido'     => ['ok',  'Títulos añadidos al mercado editorial'],
+        'mercado_guardado'    => ['ok',  'Mercado editorial guardado'],
+        'mercado_eliminado'   => ['ok',  'Título eliminado del mercado editorial'],
+        'mercado_vacio'       => ['err', 'No se añadió ningún título: completa editorial, materia, grado y título'],
+        'mercado_sin_permiso' => ['err', 'No tienes permiso para modificar el mercado editorial de este colegio'],
+      ];
+      $toast = $toast_msgs[$_GET['msg'] ?? ''] ?? null;
+    ?>
+    <?php if ($toast): ?>
     (function(){
       var $t = document.getElementById('cole-toast');
-      document.getElementById('cole-toast-msg').textContent = 'Colegio reasignado correctamente';
-      $t.classList.add('ok', 'show');
+      document.getElementById('cole-toast-msg').textContent = <?= json_encode($toast[1]) ?>;
+      $t.classList.add(<?= json_encode($toast[0]) ?>, 'show');
       setTimeout(function(){ $t.classList.remove('show'); }, 3500);
     })();
     <?php endif; ?>
   </script>
 
   </body>
-</html>
