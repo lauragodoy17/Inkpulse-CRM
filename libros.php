@@ -377,7 +377,7 @@ $editoriales = $bdd->query("SELECT id, editorial FROM editoriales ORDER BY edito
                   <th>Materia</th>
                   <th>Editorial</th>
                   <th>Grado</th>
-                  <th>Bodega</th>
+                  <th>Tipo</th>
                   <th>Precio</th>
                   <th>Presupuesto</th>
                   <th>Estado</th>
@@ -1044,11 +1044,11 @@ $(document).ready(function () {
     precargarBodegasWo(isbnPorIdWo);
   });
 
-  // Completa la "Bodega" consultando en World Office en qué bodega(s) tiene
+  // Propone el "Tipo" consultando en World Office en qué bodega tiene
   // existencias cada producto (igual que "Clasificar libros por bodega", pero
-  // para libros que todavía no existen en el catálogo local). No bloquea el
-  // agregado de filas: llega y completa el select solo si el usuario no lo
-  // había tocado ya a mano.
+  // para libros que todavía no existen en el catálogo local): General → Estudiante,
+  // Muestras General → Docente. Si está en ambas o en ninguna no propone nada.
+  // No bloquea el agregado de filas ni pisa lo que el usuario ya eligió.
   function precargarBodegasWo(isbnPorIdWo) {
     var idsWo = Object.keys(isbnPorIdWo);
     if (!idsWo.length) return;
@@ -1066,14 +1066,14 @@ $(document).ready(function () {
           var isbn = isbnPorIdWo[idWo];
           var f = isbn && filasCrear[isbn];
           var tipo = data.tipos[idWo];
-          if (f && !f.idBodega && tipo !== null && tipo !== undefined) {
-            f.idBodega = String(tipo);
+          if (f && !f.idTipo && (String(tipo) === '1' || String(tipo) === '4')) {
+            f.idTipo = String(tipo);
             huboCambios = true;
           }
         });
         if (huboCambios) window.renderTablaExcel();
       })
-      .catch(function () { /* si falla, la bodega queda para elegir a mano */ });
+      .catch(function () { /* si falla, el tipo queda para elegir a mano */ });
   }
 
   function mostrarError(msg) {
@@ -1209,18 +1209,21 @@ $(document).ready(function () {
     return out;
   }
 
-  // Bodega de World Office a la que pertenece el libro (mismo dominio que
-  // libros.tipo, ver php/clasificar_libros_bodega.php): 0 Ninguna, 1 General,
-  // 4 Muestras General, 3 Ambas. Es de solo lectura: se completa consultando
-  // World Office (precargarBodegasWo) y no se puede editar a mano — si WO no
-  // responde queda sin dato y se puede corregir después con "Clasificar
-  // libros por bodega".
-  var BODEGAS = [
-    { id: '1', nombre: 'General' },
-    { id: '4', nombre: 'Muestras General' },
-    { id: '3', nombre: 'Ambas' },
-    { id: '0', nombre: 'Ninguna' },
+  // Tipo del libro nuevo (libros.tipo, mismo dominio que php/clasificar_libros_bodega.php):
+  // 1 Estudiante (bodega General) o 4 Docente (bodega Muestras General). Se elige a mano;
+  // precargarBodegasWo solo lo propone cuando World Office lo tiene en una de esas dos bodegas.
+  var TIPOS_LIBRO = [
+    { id: '1', nombre: 'Estudiante' },
+    { id: '4', nombre: 'Docente' },
   ];
+
+  function opcionesTipo(seleccionadoId) {
+    var out = '<option value="">Seleccione</option>';
+    TIPOS_LIBRO.forEach(function (t) {
+      out += '<option value="' + t.id + '"' + (String(seleccionadoId) === t.id ? ' selected' : '') + '>' + h(t.nombre) + '</option>';
+    });
+    return out;
+  }
 
   // Busca en el catálogo local una editorial cuyo nombre coincida (sin
   // distinguir mayúsculas/espacios) con el nombre que trae World Office.
@@ -1232,7 +1235,7 @@ $(document).ready(function () {
   }
 
   function creacionCompleta(f) {
-    return !!(f.libro && f.idMateria && f.idGrado && f.idEditorial && f.precio !== '' && f.presupuesto !== '');
+    return !!(f.libro && f.idMateria && f.idGrado && f.idTipo && f.idEditorial && f.precio !== '' && f.presupuesto !== '');
   }
 
   // Agrega un libro nuevo (por ISBN) a filasCrear, o completa los campos
@@ -1257,7 +1260,7 @@ $(document).ready(function () {
         idGrado: '',
         idEditorial: buscarIdEditorialPorNombre(datos.editorialWo),
         editorialWo: datos.editorialWo || '',
-        idBodega: '',
+        idTipo: '',
         precio: (datos.precio != null && datos.precio !== '') ? datos.precio : '',
         presupuesto: datos.presupuesto || '',
         idWo: datos.idWo || '',
@@ -1303,10 +1306,6 @@ $(document).ready(function () {
     var editorialHint = (!f.idEditorial && f.editorialWo)
       ? '<br><small class="text-muted">WO: ' + h(f.editorialWo) + '</small>'
       : '';
-    var bodegaEncontrada = BODEGAS.find(function (b) { return b.id === String(f.idBodega); });
-    var bodegaHtml = bodegaEncontrada
-      ? h(bodegaEncontrada.nombre)
-      : '<small class="text-muted">' + (f.idWo ? 'Consultando WO...' : 'Sin dato') + '</small>';
     tr.innerHTML =
       '<td><span class="ln-badge-nuevo">Nuevo</span></td>' +
       '<td>' + h(f.isbn) + '</td>' +
@@ -1314,7 +1313,7 @@ $(document).ready(function () {
       '<td><select class="ln-crear-input ln-select-mini" data-campo="idMateria">' + opcionesMateria(f.idMateria) + '</select></td>' +
       '<td><select class="ln-crear-input ln-select-mini" data-campo="idEditorial">' + opcionesEditorial(f.idEditorial) + '</select>' + editorialHint + '</td>' +
       '<td><select class="ln-crear-input ln-select-mini" data-campo="idGrado">' + opcionesGrado(f.idGrado) + '</select></td>' +
-      '<td>' + bodegaHtml + '</td>' +
+      '<td><select class="ln-crear-input ln-select-mini" data-campo="idTipo">' + opcionesTipo(f.idTipo) + '</select></td>' +
       '<td><input type="number" step="any" class="ln-crear-input ln-input-mini" data-campo="precio" value="' + h(f.precio) + '" placeholder="Precio"></td>' +
       '<td><select class="ln-crear-input ln-select-mini" data-campo="presupuesto">' +
         '<option value=""' + (f.presupuesto === '' ? ' selected' : '') + '>Seleccione</option>' +
@@ -1476,7 +1475,7 @@ $(document).ready(function () {
       .map(function (f) {
         return {
           isbn: f.isbn, libro: f.libro, id_materia: f.idMateria, id_grado: f.idGrado,
-          id_editorial: f.idEditorial, tipo: f.idBodega,
+          id_editorial: f.idEditorial, tipo: f.idTipo,
           precio: f.precio, presupuesto: f.presupuesto, id_wo: f.idWo,
         };
       });
