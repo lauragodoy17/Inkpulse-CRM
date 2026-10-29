@@ -140,7 +140,7 @@ $etiquetas = $bdd->query("SELECT DISTINCT TRIM(etiqueta) AS etiqueta FROM libros
     }
     #select-libro-padre + .select2-container { width: 100% !important; }
     #editar_lugar + .select2-container { width: 100% !important; }
-    #etiqueta + .select2-container, #editar_etiqueta + .select2-container { width: 100% !important; }
+    #etiqueta + .select2-container, #editar_etiqueta + .select2-container, #editar_editorial + .select2-container { width: 100% !important; }
     .select2-dropdown { border:1.5px solid #d1d5db; border-radius:8px; box-shadow:0 4px 20px rgba(15,23,42,.10); }
     .select2-search--dropdown { padding:8px; }
     .select2-search--dropdown .select2-search__field { border:1.5px solid #d1d5db; border-radius:7px; padding:7px 12px; font-size:.85rem; outline:none; }
@@ -381,7 +381,6 @@ $etiquetas = $bdd->query("SELECT DISTINCT TRIM(etiqueta) AS etiqueta FROM libros
                   <th>Editorial</th>
                   <th>Grado</th>
                   <th>Tipo</th>
-                  <th>Etiqueta</th>
                   <th>Precio</th>
                   <th>Presupuesto</th>
                   <th>Estado</th>
@@ -619,6 +618,16 @@ $etiquetas = $bdd->query("SELECT DISTINCT TRIM(etiqueta) AS etiqueta FROM libros
                 </div>
 
                 <div class="ml-field">
+                  <label class="ml-label" for="editar_editorial">Editorial</label>
+                  <select name="editorial" id="editar_editorial" class="ml-select" <?= $solo_ubi_attr ?>>
+                    <option value="">Sin editorial</option>
+                    <?php foreach ($editoriales as $editorial): ?>
+                      <option value="<?= $editorial["id"] ?>"><?= htmlspecialchars($editorial["editorial"]) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+
+                <div class="ml-field">
                   <label class="ml-label" for="editar_etiqueta">Etiqueta</label>
                   <select name="etiqueta" id="editar_etiqueta" class="ml-select" <?= $solo_ubi_attr ?>>
                     <option value="">Sin etiqueta</option>
@@ -718,7 +727,6 @@ $etiquetas = $bdd->query("SELECT DISTINCT TRIM(etiqueta) AS etiqueta FROM libros
   var MATERIAS = <?= json_encode($materias) ?>;
   var GRADOS = <?= json_encode($grados) ?>;
   var EDITORIALES = <?= json_encode($editoriales) ?>;
-  var ETIQUETAS = <?= json_encode($etiquetas) ?>;
 
 $(document).ready(function () {
   $.fn.dataTable.ext.errMode = 'none';
@@ -739,6 +747,10 @@ $(document).ready(function () {
     width: 'resolve'
   });
   $('#editar_etiqueta').select2({
+    dropdownParent: $('#ModalEditarLibro .modal-content'),
+    width: 'resolve'
+  });
+  $('#editar_editorial').select2({
     dropdownParent: $('#ModalEditarLibro .modal-content'),
     width: 'resolve'
   });
@@ -863,6 +875,10 @@ $(document).ready(function () {
     }
     $etiqueta.val(etiqueta).trigger('change');
 
+    // Editorial actual (libros.editorial = id de editoriales; 0 = sin editorial).
+    var idEditorial = String($btn.attr('data-editorial') || '');
+    $('#editar_editorial').val(idEditorial !== '0' ? idEditorial : '').trigger('change');
+
     $('#campo-editar-precio').toggleClass('d-none', esSerie);
 
     // Ubicación actual (si tiene)
@@ -892,6 +908,7 @@ $(document).ready(function () {
       precio:      $('#editar_precio').val() || 0,
       presupuesto: $('#editar_presupuesto').val(),
       etiqueta:    $('#editar_etiqueta').val() || '',
+      editorial:   $('#editar_editorial').val() || 0,
     };
     var payloadUbicacion = {
       id_libro:     payload.id_libro,
@@ -1269,15 +1286,6 @@ $(document).ready(function () {
     return out;
   }
 
-  // Etiqueta del libro nuevo: opcional, de las que ya existen en la tabla de libros.
-  function opcionesEtiqueta(seleccionada) {
-    var out = '<option value="">Sin etiqueta</option>';
-    ETIQUETAS.forEach(function (e) {
-      out += '<option value="' + h(e) + '"' + (String(seleccionada) === e ? ' selected' : '') + '>' + h(e) + '</option>';
-    });
-    return out;
-  }
-
   // Busca en el catálogo local una editorial cuyo nombre coincida (sin
   // distinguir mayúsculas/espacios) con el nombre que trae World Office.
   function buscarIdEditorialPorNombre(nombre) {
@@ -1314,7 +1322,6 @@ $(document).ready(function () {
         idEditorial: buscarIdEditorialPorNombre(datos.editorialWo),
         editorialWo: datos.editorialWo || '',
         idTipo: '',
-        etiqueta: '',
         precio: (datos.precio != null && datos.precio !== '') ? datos.precio : '',
         presupuesto: datos.presupuesto || '',
         idWo: datos.idWo || '',
@@ -1346,7 +1353,6 @@ $(document).ready(function () {
       '<td>—</td>' +
       '<td>—</td>' +
       '<td>—</td>' +
-      '<td>—</td>' +
       '<td>' + fmtMoneda(f.precioActual) + ' → ' + fmtMoneda(f.precioNuevo) + '</td>' +
       '<td>' + fmtPresupuesto(f.presupuestoActual) + ' → ' + fmtPresupuesto(f.presupuestoNuevo) + '</td>' +
       '<td>' + estadoHtml + '</td>';
@@ -1368,9 +1374,7 @@ $(document).ready(function () {
       '<td><select class="ln-crear-input ln-select-mini" data-campo="idMateria">' + opcionesMateria(f.idMateria) + '</select></td>' +
       '<td><select class="ln-crear-input ln-select-mini" data-campo="idEditorial">' + opcionesEditorial(f.idEditorial) + '</select>' + editorialHint + '</td>' +
       '<td><select class="ln-crear-input ln-select-mini" data-campo="idGrado">' + opcionesGrado(f.idGrado) + '</select></td>' +
-      '<td><select class="ln-crear-input ln-select-mini" data-campo="idTipo">' + opcionesTipo(f.idTipo) + '</select></td>' +
-      '<td style="min-width:170px;"><select class="ln-crear-input ln-select-etiqueta" data-campo="etiqueta">' + opcionesEtiqueta(f.etiqueta) + '</select></td>' +
-      '<td><input type="number" step="any" class="ln-crear-input ln-input-mini" data-campo="precio" value="' + h(f.precio) + '" placeholder="Precio"></td>' +
+      '<td><select class="ln-crear-input ln-select-mini" data-campo="idTipo">' + opcionesTipo(f.idTipo) + '</select></td>' +      '<td><input type="number" step="any" class="ln-crear-input ln-input-mini" data-campo="precio" value="' + h(f.precio) + '" placeholder="Precio"></td>' +
       '<td><select class="ln-crear-input ln-select-mini" data-campo="presupuesto">' +
         '<option value=""' + (f.presupuesto === '' ? ' selected' : '') + '>Seleccione</option>' +
         '<option value="1"' + (f.presupuesto === '1' ? ' selected' : '') + '>Sí</option>' +
@@ -1387,12 +1391,8 @@ $(document).ready(function () {
     excelTbody.innerHTML = '';
     filasErrorYActualizar.forEach(renderFilaActualizarOError);
     Object.keys(filasCrear).forEach(function (isbn) { renderFilaCrear(filasCrear[isbn]); });
-    $(excelTbody).find('.ln-select-etiqueta').select2({ width: '100%' });
     actualizarResumenYBoton();
   };
-
-  // select2 dispara el "change" por jQuery, que no llega al addEventListener de abajo.
-  $(excelTbody).on('change', '.ln-select-etiqueta', function () { actualizarCampoCreacion(this); });
 
   function actualizacionesListas() {
     return filasValidas.filter(function (f) { return f.materiaSeleccionada; }).length;
@@ -1535,7 +1535,7 @@ $(document).ready(function () {
       .map(function (f) {
         return {
           isbn: f.isbn, libro: f.libro, id_materia: f.idMateria, id_grado: f.idGrado,
-          id_editorial: f.idEditorial, tipo: f.idTipo, etiqueta: f.etiqueta || '',
+          id_editorial: f.idEditorial, tipo: f.idTipo,
           precio: f.precio, presupuesto: f.presupuesto, id_wo: f.idWo,
         };
       });

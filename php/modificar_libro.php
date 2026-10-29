@@ -27,6 +27,23 @@ if (isset($_POST["etiqueta"])) {
     ]);
 }
 
+// Editorial: id de la tabla editoriales elegido en libros.php (0 = sin editorial).
+if (isset($_POST["editorial"])) {
+    $id_editorial = (int) $_POST["editorial"];
+    if ($id_editorial > 0) {
+        $req_ed = $bdd->prepare("SELECT id FROM editoriales WHERE id=:id");
+        $req_ed->execute([':id' => $id_editorial]);
+        if (!$req_ed->fetchColumn()) {
+            echo json_encode(['success' => false, 'message' => 'La editorial seleccionada no existe.']);
+            exit;
+        }
+    }
+    $bdd->prepare("UPDATE libros SET editorial=:editorial WHERE id=:id")->execute([
+        ':editorial' => $id_editorial,
+        ':id'        => $_POST["id_libro"],
+    ]);
+}
+
 if ($libro_actual["id_grado"] == 15 || $libro_actual["id_grado"] == 16) {
 
     $sql = "UPDATE libros SET isbn=:isbn, libro=:libro, id_materia=:materia, id_grado=:grado, presupuesto=:presupuesto WHERE id=:id";

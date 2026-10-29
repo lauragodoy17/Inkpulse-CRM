@@ -1,7 +1,10 @@
 <?php
-ini_set('display_errors', 1);
+// No mostrar errores en la salida: cualquier aviso (p. ej. "Deprecated" de las librerías con
+// PHP 8.5) se mete dentro del .xlsx y Excel dice que el formato o la extensión no son válidos.
+// Siguen quedando en el log de PHP.
+ini_set('display_errors', 0);
 
-ini_set('display_startup_errors', 1);
+ini_set('display_startup_errors', 0);
 
 error_reporting(E_ALL);
 
@@ -99,7 +102,7 @@ if ($nombre_completo !== '') {
 }
 
 $objSpreadsheet->getActiveSheet()->SetCellValue("A6", "Libro");
-$objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Etiqueta");
+$objSpreadsheet->getActiveSheet()->SetCellValue("B6", "Editorial");
 $objSpreadsheet->getActiveSheet()->SetCellValue("C6", "PVP");
 $objSpreadsheet->getActiveSheet()->SetCellValue("D6", "Población total");
 $objSpreadsheet->getActiveSheet()->SetCellValue("E6", "Compradores activos");
@@ -234,7 +237,7 @@ foreach ($colegios as $colegio) {
     $t_valor_adopcion[$colegio["id"]]= array_sum($valor_adopcion[$colegio["id"]] ?? []);
 
 	$objSpreadsheet->getActiveSheet()->SetCellValue("A$conta", "$colegio[libro]");
-    $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$colegio[etiqueta]");
+    $objSpreadsheet->getActiveSheet()->SetCellValue("B$conta", "$colegio[editorial]");
     $objSpreadsheet->getActiveSheet()->SetCellValue("C$conta", "$colegio[precio]");
 	$objSpreadsheet->getActiveSheet()->SetCellValue("D$conta", $t_poblacion[$colegio["id"]]);
     $objSpreadsheet->getActiveSheet()->SetCellValue("E$conta", $t_castigo[$colegio["id"]]);

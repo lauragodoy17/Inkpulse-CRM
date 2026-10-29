@@ -44,7 +44,7 @@ $stmtActualizar = $bdd->prepare("UPDATE libros SET precio = ?, id_materia = ?, p
 // php/clasificar_libros_bodega.php: 0 Ninguna, 1 General, 4 Muestras General,
 // 3 Ambas). Se elige a mano en la tabla de creación; si no se elige, queda en 0.
 $stmtCrear = $bdd->prepare("INSERT INTO libros (isbn, id_materia, id_grado, libro, precio, presupuesto, etiqueta, pri_sec, columna, editorial, serie, id_wo, tipo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 0, ?, ?)");
+        VALUES (?, ?, ?, ?, ?, ?, '', 0, 0, ?, 0, ?, ?)");
 
 $actualizados = [];
 $creados = [];
@@ -87,8 +87,6 @@ foreach ($nuevas as $n) {
     $precio = isset($n['precio']) && $n['precio'] !== '' ? (float)$n['precio'] : null;
     $presupuesto = isset($n['presupuesto']) && $n['presupuesto'] !== '' ? (int)$n['presupuesto'] : null;
     $idWo = !empty($n['id_wo']) ? (int)$n['id_wo'] : 0;
-    // Etiqueta (opcional) elegida del desplegable de etiquetas ya existentes.
-    $etiqueta = mb_substr(trim((string)($n['etiqueta'] ?? '')), 0, 200);
 
     if ($isbn === '' || $libro === '' || !$idMateria || !$idGrado || !$idEditorial || $precio === null || $presupuesto === null) {
         $omitidos[] = ['isbn' => $isbn ?: null, 'motivo' => 'Datos incompletos'];
@@ -119,7 +117,7 @@ foreach ($nuevas as $n) {
         continue;
     }
 
-    $stmtCrear->execute([$isbn, $idMateria, $idGrado, $libro, $precio, $presupuesto, $etiqueta, $idEditorial, $idWo, $tipo]);
+    $stmtCrear->execute([$isbn, $idMateria, $idGrado, $libro, $precio, $presupuesto, $idEditorial, $idWo, $tipo]);
     $nuevoId = (int)$bdd->lastInsertId();
 
     $creados[] = ['isbn' => $isbn, 'idLibro' => $nuevoId, 'libro' => $libro];
