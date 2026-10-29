@@ -19,6 +19,14 @@ if (!$libro_actual) {
     exit;
 }
 
+// Etiqueta: se elige del desplegable de libros.php (etiquetas ya existentes en la tabla).
+if (isset($_POST["etiqueta"])) {
+    $bdd->prepare("UPDATE libros SET etiqueta=:etiqueta WHERE id=:id")->execute([
+        ':etiqueta' => mb_substr(trim($_POST["etiqueta"]), 0, 200),
+        ':id'       => $_POST["id_libro"],
+    ]);
+}
+
 if ($libro_actual["id_grado"] == 15 || $libro_actual["id_grado"] == 16) {
 
     $sql = "UPDATE libros SET isbn=:isbn, libro=:libro, id_materia=:materia, id_grado=:grado, presupuesto=:presupuesto WHERE id=:id";

@@ -9,7 +9,7 @@ if ($_SESSION["tipo"] != 1 || !isset($_POST["libro"])) {
 }
 
 $sql = "INSERT INTO libros (isbn, id_materia, id_grado, libro, precio, presupuesto, etiqueta, pri_sec, columna, editorial, serie, id_wo)
-        VALUES (:isbn, :materia, :grado, :libro, :precio, :presupuesto, '', 0, 0, 0, 0, :id_wo)";
+        VALUES (:isbn, :materia, :grado, :libro, :precio, :presupuesto, :etiqueta, 0, 0, 0, 0, :id_wo)";
 
 $req = $bdd->prepare($sql);
 $req->execute([
@@ -19,6 +19,8 @@ $req->execute([
     ':libro'       => $_POST["libro"],
     ':precio'      => $_POST["precio"] !== '' ? $_POST["precio"] : 0,
     ':presupuesto' => $_POST["presupuesto"],
+    // Etiqueta elegida del desplegable (etiquetas ya existentes en la tabla); vacía si no se elige.
+    ':etiqueta'    => mb_substr(trim($_POST["etiqueta"] ?? ''), 0, 200),
     // Cuando el libro se crea desde el panel de "libros nuevos" (World Office),
     // el formulario manda el id de WO en un campo oculto para no perder el
     // vínculo; si se crea a mano desde el botón normal, queda en 0.

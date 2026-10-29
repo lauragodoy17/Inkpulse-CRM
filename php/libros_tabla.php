@@ -50,7 +50,7 @@ $stmtFiltered->execute($params);
 $recordsFiltered = $stmtFiltered->fetchColumn();
 
 $dataFrom = "FROM libros l JOIN materias m ON l.id_materia = m.id JOIN grados g ON l.id_grado = g.id LEFT JOIN libros p ON l.pri_sec = p.id $searchSQL";
-$dataSQL = "SELECT l.id, l.isbn, l.libro, l.id_materia, l.id_grado, l.precio, l.presupuesto, l.pri_sec, p.libro as nombre_padre,
+$dataSQL = "SELECT l.id, l.isbn, l.libro, l.id_materia, l.id_grado, l.precio, l.presupuesto, l.etiqueta, l.pri_sec, p.libro as nombre_padre,
             (SELECT COUNT(*) FROM libros c WHERE c.pri_sec = l.id) as num_hijos
             $dataFrom $orderSQL LIMIT :start, :length";
 $stmt = $bdd->prepare($dataSQL);
@@ -151,6 +151,7 @@ foreach ($rows as $libro) {
             . ' data-grado="' . $libro["id_grado"] . '"'
             . ' data-precio="' . htmlspecialchars($libro["precio"], ENT_QUOTES) . '"'
             . ' data-presupuesto="' . (int) $libro["presupuesto"] . '"'
+            . ' data-etiqueta="' . htmlspecialchars(trim($libro["etiqueta"]), ENT_QUOTES) . '"'
             . ' data-serie="' . ($es_serie ? '1' : '0') . '"'
             . ' data-lugar="' . ($ubi_actual['lugar_id'] ?? '') . '"'
             . ' data-piso="' . htmlspecialchars($ubi_actual['piso'] ?? '', ENT_QUOTES) . '"'
