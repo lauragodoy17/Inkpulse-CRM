@@ -38,6 +38,16 @@ set_time_limit(180);
 // otras pestañas del mismo usuario mientras corre.
 session_write_close();
 
+// Un error fatal dejaba la respuesta vacía y el navegador solo mostraba "Unexpected end of JSON
+// input": se responde con el error real (esta página solo la usa tipo=1).
+ini_set('display_errors', '0');
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if (!$error || !in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) return;
+    if (!headers_sent()) header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => 'Error en el servidor: ' . $error['message'] . ' (' . basename($error['file']) . ':' . $error['line'] . ')']);
+});
+
 require_once("../includes/prueba_post2.php");
 require_once("../includes/prueba_get2.php");
 require_once("../includes/api_wo_cliente.php");
