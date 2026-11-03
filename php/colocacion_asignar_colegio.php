@@ -37,9 +37,15 @@
  * un período de Calendario A posterior a 2026 que SÍ sea el vigente, hay que actualizar esa
  * constante a mano — no hay forma de derivarlo automáticamente sin una bandera de "activo" en la
  * tabla `periodos`.
+ *
+ * 2026-11-03: por pedido del usuario, Calendario A pasa a 2027 para los documentos con fecha desde
+ * el 2026-11-01; los anteriores siguen en 2026. Se compara la fecha del documento (no la del día en
+ * que se asigna) para que un documento viejo asignado tarde no caiga en 2027. Calendario B no cambia.
+ * Regla compartida con la sincronización, ver includes/colocacion_cruce.php.
+ *
+ * Recibe uno o varios documentos: `documentos` (JSON, [{id_wo, tipo_documento}, ...]) para asignar
+ * un grupo completo desde el panel de reporte_colocacion.php.
  */
-
-const PERIODO_ACTIVO_CALENDARIO_A = '2026';
 require_once("aut.php");
 
 if (($_SESSION["tipo"] ?? null) != 1) {
@@ -49,13 +55,13 @@ if (($_SESSION["tipo"] ?? null) != 1) {
 }
 
 require_once("../conexion/bdd.php");
+require_once("../includes/colocacion_cruce.php");
 header('Content-Type: application/json');
 
-$id_wo = isset($_POST['id_wo']) ? (int)$_POST['id_wo'] : 0;
-$tipo_documento = trim($_POST['tipo_documento'] ?? '');
+$documentos = json_decode($_POST['documentos'] ?? '', true);
 $id_colegio = isset($_POST['id_colegio']) ? (int)$_POST['id_colegio'] : 0;
 
-if ($id_wo <= 0 || $tipo_documento === '' || $id_colegio <= 0) {
+if (!is_array($documentos) || !$documentos || $id_colegio <= 0) {
     echo json_encode(['success' => false, 'message' => 'Datos inválidos']);
     exit;
 }
@@ -68,24 +74,46 @@ if ($id_calendario_colegio === false) {
     exit;
 }
 
+$periodosA = [];
+$id_periodo_colegio = false;
 if ((int)$id_calendario_colegio === 1) {
-    $stmt = $bdd->prepare("SELECT id FROM periodos WHERE id_calendario = 1 AND periodo = ?");
-    $stmt->execute([PERIODO_ACTIVO_CALENDARIO_A]);
+    foreach ($bdd->query("SELECT periodo, id FROM periodos WHERE id_calendario = 1")->fetchAll(PDO::FETCH_NUM) as [$nombre, $id]) {
+        $periodosA[(string)$nombre] = (int)$id;
+    }
 } else {
     $stmt = $bdd->prepare("SELECT id FROM periodos WHERE id_calendario = ? ORDER BY id DESC LIMIT 1");
     $stmt->execute([$id_calendario_colegio]);
+    $id_periodo_colegio = $stmt->fetchColumn();
+    if ($id_periodo_colegio === false) {
+        echo json_encode(['success' => false, 'message' => 'El colegio no tiene un período activo en su calendario']);
+        exit;
+    }
 }
-$id_periodo_colegio = $stmt->fetchColumn();
-if ($id_periodo_colegio === false) {
-    echo json_encode(['success' => false, 'message' => 'El colegio no tiene un período activo en su calendario']);
+
+$stmtFecha = $bdd->prepare("SELECT fecha FROM wo_documentos_colocacion WHERE id_wo = ? AND tipo_documento = ?");
+$stmtAsignar = $bdd->prepare("UPDATE wo_documentos_colocacion SET id_colegio = ?, id_periodo = ?, asignado_manual = 1, updated_at = NOW() WHERE id_wo = ? AND tipo_documento = ?");
+$asignados = 0;
+$bdd->beginTransaction();
+try {
+    foreach ($documentos as $doc) {
+        $id_wo = (int)($doc['id_wo'] ?? 0);
+        $tipo_documento = trim((string)($doc['tipo_documento'] ?? ''));
+        if ($id_wo <= 0 || $tipo_documento === '') continue;
+        $stmtFecha->execute([$id_wo, $tipo_documento]);
+        $fecha_documento = $stmtFecha->fetchColumn();
+        if ($fecha_documento === false) continue;
+        $id_periodo = (int)$id_calendario_colegio === 1
+            ? colocacion_periodo_calendario_a($periodosA, $fecha_documento)
+            : $id_periodo_colegio;
+        if (!$id_periodo) continue;
+        $stmtAsignar->execute([$id_colegio, $id_periodo, $id_wo, $tipo_documento]);
+        $asignados += $stmtAsignar->rowCount();
+    }
+    $bdd->commit();
+} catch (Exception $e) {
+    $bdd->rollBack();
+    echo json_encode(['success' => false, 'message' => 'No se pudieron guardar las asignaciones.']);
     exit;
 }
 
-try {
-    $bdd->exec("ALTER TABLE wo_documentos_colocacion ADD COLUMN asignado_manual TINYINT(1) NOT NULL DEFAULT 0 AFTER id_colegio");
-} catch (Exception $e) {}
-
-$stmt = $bdd->prepare("UPDATE wo_documentos_colocacion SET id_colegio = ?, id_periodo = ?, asignado_manual = 1, updated_at = NOW() WHERE id_wo = ? AND tipo_documento = ?");
-$stmt->execute([$id_colegio, $id_periodo_colegio, $id_wo, $tipo_documento]);
-
-echo json_encode(['success' => $stmt->rowCount() > 0]);
+echo json_encode(['success' => $asignados > 0, 'asignados' => $asignados, 'message' => $asignados > 0 ? '' : 'No se asignó ningún documento.']);

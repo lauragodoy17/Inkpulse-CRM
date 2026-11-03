@@ -4,11 +4,12 @@
  * Arma las filas del reporte de Colocación (Calendario B): junta datos que ya vive en el CRM
  * (presupuesto, adopciones, población, compradores activos, empresa, cliente) con la caché
  * local de documentos de World Office (wo_documentos_colocacion, sincronizada por
- * php/sync_colocacion_wo.php para REM/FV y php/sync_colocacion_wo_ventas.php para devoluciones
- * DREM y facturas POS). Solo lectura — no llama a la API de World Office.
+ * php/sync_colocacion_wo_rapido.php). Solo lectura — no llama a la API de World Office.
  * Usado por php/colocacion_tabla.php (JSON para la tabla en pantalla) y
  * php/colocacion_excel.php (exportable), para no duplicar esta consulta en los dos.
  */
+
+const COLOCACION_PERIODO_POR_DEFECTO = '2027';
 
 // Periodos disponibles para filtrar el reporte: 2026 en adelante, de Calendario A o B (antes de
 // ese año no hay sincronización con World Office ni datos relevantes para este reporte). Se
@@ -22,13 +23,28 @@ function obtener_periodos_colocacion(PDO $bdd) {
         ORDER BY CAST(p.periodo AS UNSIGNED) DESC, p.id_calendario ASC")->fetchAll(PDO::FETCH_ASSOC);
 }
 
+// Documentos de World Office que no se pudieron cruzar con un colegio, de cualquier período. Las
+// devoluciones solo de prefijo CEUR, igual que en obtener_datos_colocacion().
+function obtener_documentos_sin_cruzar(PDO $bdd) {
+    return $bdd->query("SELECT id_wo, tipo_documento, prefijo, numero, fecha, concepto, colegio_extraido, tercero_externo_nombre, valor_neto
+        FROM wo_documentos_colocacion
+        WHERE id_colegio IS NULL AND (tipo_documento <> 'DREM' OR prefijo = 'CEUR')
+        ORDER BY fecha DESC")->fetchAll(PDO::FETCH_ASSOC);
+}
+
 function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope = null) {
-    // ── Periodo: el pedido por filtro, o Calendario B más reciente por defecto (comportamiento
-    // histórico de este reporte, que nació como "Colocación Calendario B") ──
+    // ── Periodo: el pedido por filtro, o por defecto 2027 de Calendario A (pedido por la usuaria
+    // 2026-11-03; al cambiar de año hay que actualizar esta constante). Si no existe, el Calendario B
+    // más reciente, como era antes. ──
     if ($id_periodo !== null) {
         $id_periodo = (int)$id_periodo;
     } else {
-        $id_periodo = (int)$bdd->query("SELECT id FROM periodos WHERE id_calendario = 2 ORDER BY id DESC LIMIT 1")->fetchColumn();
+        $stmtDefecto = $bdd->prepare("SELECT id FROM periodos WHERE id_calendario = 1 AND periodo = ?");
+        $stmtDefecto->execute([COLOCACION_PERIODO_POR_DEFECTO]);
+        $id_periodo = (int)$stmtDefecto->fetchColumn();
+        if (!$id_periodo) {
+            $id_periodo = (int)$bdd->query("SELECT id FROM periodos WHERE id_calendario = 2 ORDER BY id DESC LIMIT 1")->fetchColumn();
+        }
     }
     $periodoRow = $bdd->query("SELECT p.periodo, p.id_calendario, c.calendario
         FROM periodos p JOIN calendarios c ON c.id = p.id_calendario WHERE p.id = $id_periodo")->fetch(PDO::FETCH_ASSOC);
@@ -50,7 +66,7 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
     }
     $idsColegios = array_column($colegios, 'id');
     if (empty($idsColegios)) {
-        return ['periodo' => $nombre_periodo, 'id_calendario' => $id_calendario, 'calendario' => $nombre_calendario, 'filas' => [], 'sinCruzar' => []];
+        return ['id_periodo' => $id_periodo, 'periodo' => $nombre_periodo, 'id_calendario' => $id_calendario, 'calendario' => $nombre_calendario, 'filas' => []];
     }
     $inPlaceholders = implode(',', array_fill(0, count($idsColegios), '?'));
 
@@ -157,8 +173,11 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
     // usado para REM/FV no expone ningún valor para Recibo de Caja — sí lo expone otro endpoint
     // (`/contabilidad/filtrarPaginado`, ver includes/api_wo_ventas.php), encontrado después de que
     // el usuario mostrara que World Office sí trae valor para RC en su propia interfaz. ──
+    // Devoluciones solo de prefijo CEUR (RE22 son de muestras, pedido por la usuaria 2026-11-03): se
+    // excluyen también al leer porque las asignadas a mano no las borra la sincronización.
+    $soloDevolucionesCeur = "(tipo_documento <> 'DREM' OR prefijo = 'CEUR')";
     $stmt = $bdd->prepare("SELECT id_colegio, tipo_documento, fecha, numero, valor_neto, tercero_externo_nombre
-        FROM wo_documentos_colocacion WHERE id_periodo = $id_periodo AND id_colegio IN ($inPlaceholders) ORDER BY fecha ASC");
+        FROM wo_documentos_colocacion WHERE id_periodo = $id_periodo AND $soloDevolucionesCeur AND id_colegio IN ($inPlaceholders) ORDER BY fecha ASC");
     $stmt->execute($idsColegios);
     $facturaPorColegio = [];
     $colocacionWoPorColegio = [];
@@ -194,14 +213,12 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
         }
     }
 
-    // ── Documentos sin cruzar, para revisión manual ──
-    $sinCruzar = $bdd->query("SELECT id_wo, tipo_documento, numero, fecha, concepto, colegio_extraido
-        FROM wo_documentos_colocacion WHERE id_periodo = $id_periodo AND id_colegio IS NULL ORDER BY fecha DESC")->fetchAll(PDO::FETCH_ASSOC);
-
     // ── Ensamblar filas ──
     $filas = [];
     foreach ($colegios as $c) {
         $id = $c['id'];
+        // Solo colegios con adopción definida en el período (pedido por la usuaria 2026-11-03).
+        if (!isset($adopcionesPorColegio[$id])) continue;
         $empresa = intval($c['cod_zona']) === 0 ? 'Sin asignar' : ($empresaPorCodZona[$c['cod_zona']] ?? 'Sin asignar');
 
         // Cliente: manda `recursos`; si no hay fila ahí o no coincide con el tercero de World
@@ -253,5 +270,5 @@ function obtener_datos_colocacion(PDO $bdd, $id_periodo = null, $cod_zona_scope 
         ];
     }
 
-    return ['periodo' => $nombre_periodo, 'id_calendario' => $id_calendario, 'calendario' => $nombre_calendario, 'filas' => $filas, 'sinCruzar' => $sinCruzar];
+    return ['id_periodo' => $id_periodo, 'periodo' => $nombre_periodo, 'id_calendario' => $id_calendario, 'calendario' => $nombre_calendario, 'filas' => $filas];
 }

@@ -12,7 +12,11 @@
 function normalizar_nombre_colegio($texto) {
     $texto = trim((string)$texto);
     $texto = mb_strtolower($texto, 'UTF-8');
-    $reemplazos = ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n', 'ü' => 'u'];
+    // También tildes graves y diéresis: hay colegios escritos así en la BD ("Santìsimo Sacramento",
+    // "Presentaciòn De Las Ferias") y sin esto la letra se volvía un espacio y no cruzaban.
+    $reemplazos = ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n', 'ü' => 'u',
+                   'à' => 'a', 'è' => 'e', 'ì' => 'i', 'ò' => 'o', 'ù' => 'u',
+                   'ä' => 'a', 'ë' => 'e', 'ï' => 'i', 'ö' => 'o'];
     $texto = strtr($texto, $reemplazos);
     $texto = preg_replace('/[^a-z0-9\s]/', ' ', $texto);
     $texto = preg_replace('/\s+/', ' ', $texto);
@@ -162,8 +166,13 @@ function contiene_palabras_completas($corto, $largo) {
  * se auto-asigna aunque el match sea exacto y único — el texto del concepto no trae ninguna otra
  * pista (ciudad, distribuidor) para saber cuál de los homónimos es el correcto, así que se deja
  * sin cruzar para revisión manual en vez de adivinar.
+ *
+ * $calendarioRequerido (agregado 2026-09-11 para reusar esta función fuera de Colocación, ver
+ * php/backorders_wo_asignar_pedido.php/includes/backorders_datos.php): por defecto 2 (Calendario
+ * B), igual que siempre. Pasar `null` para aceptar un colegio de CUALQUIER calendario — Backorders
+ * no está restringido a un solo calendario como sí lo está el reporte de Colocación.
  */
-function emparejar_colegio($textoExtraido, array $colegiosPrecargados, array $nombresDuplicados = []) {
+function emparejar_colegio($textoExtraido, array $colegiosPrecargados, array $nombresDuplicados = [], $calendarioRequerido = 2) {
     if ($textoExtraido === null || $textoExtraido === '') return null;
     $buscado = quitar_stopwords(normalizar_nombre_colegio($textoExtraido));
     if ($buscado === '') return null;
@@ -171,7 +180,7 @@ function emparejar_colegio($textoExtraido, array $colegiosPrecargados, array $no
     foreach ($colegiosPrecargados as $idColegio => $info) {
         if ($info['norm'] === $buscado) {
             if (isset($nombresDuplicados[$info['norm']])) return null;
-            return $info['calendario'] === 2 ? $idColegio : null;
+            return ($calendarioRequerido === null || $info['calendario'] === $calendarioRequerido) ? $idColegio : null;
         }
     }
 
@@ -198,7 +207,8 @@ function emparejar_colegio($textoExtraido, array $colegiosPrecargados, array $no
     }
     if (count($candidatos) === 1) {
         $idUnico = $candidatos[0];
-        return $colegiosPrecargados[$idUnico]['calendario'] === 2 ? $idUnico : null;
+        $calendarioCandidato = $colegiosPrecargados[$idUnico]['calendario'];
+        return ($calendarioRequerido === null || $calendarioCandidato === $calendarioRequerido) ? $idUnico : null;
     }
 
     return null;
