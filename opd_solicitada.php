@@ -73,7 +73,21 @@ $ent1 = $ent2 = $ent3 = [];
       #opd-mat-table { min-width: 0 !important; }
       #opd-mat-table thead { display: table-header-group; }
       #opd-mat-table tr { page-break-inside: avoid; }
+      /* En impresión: ocultar el select2 y mostrar el título como texto completo */
+      #opd-mat-table .select2-container { display: none !important; }
+      #opd-mat-table .titulo-print { display: inline !important; white-space: normal; word-break: break-word; }
+      #opd-mat-table td.col-titulo { min-width: 0 !important; }
     }
+    .titulo-print { display: none; }
+
+    /* Títulos completos en el select2 de la tabla (sin recortar con "…") */
+    #opd-mat-table td.col-titulo { min-width: 300px; }
+    #opd-mat-table .select2-container .select2-selection--single { height: auto; min-height: 38px; }
+    #opd-mat-table .select2-container .select2-selection--single .select2-selection__rendered {
+      white-space: normal; word-break: break-word; overflow: visible; text-overflow: clip;
+      line-height: 1.35; padding-top: 8px; padding-bottom: 8px; padding-right: 44px;
+    }
+    #opd-mat-table .select2-container .select2-selection--single .select2-selection__arrow { height: 100%; }
     input[type=number] { -moz-appearance: textfield; }
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -426,11 +440,12 @@ $ent1 = $ent2 = $ent3 = [];
                 ?>
                 <tr id="<?= $lid ?>">
                   <td><?= $i ?></td>
-                  <td>
+                  <td class="col-titulo">
                     <?php if ($_SESSION['tipo'] != 8): ?>
                       <select class="form-control libro-select" style="min-width:220px" id="libtitulo<?= $lid ?>" name="libtitulo">
                         <option value="<?= htmlspecialchars($libro['libro']) ?>" selected><?= htmlspecialchars($libro['libro']) ?></option>
                       </select>
+                      <span class="titulo-print" id="tituloprint<?= $lid ?>"><?= htmlspecialchars($libro['libro']) ?></span>
                     <?php else: ?>
                       <?= htmlspecialchars($libro['libro']) ?>
                     <?php endif; ?>
@@ -622,6 +637,7 @@ $(document).ready(function () {
   $(document).on('change', 'select[id^="libtitulo"]', function () {
     var lid = this.id.slice('libtitulo'.length);
     updateLibP(lid);
+    $('#tituloprint' + lid).text($(this).find('option:selected').text() || '');
   });
 
   $('#entregar').on('click', function () { $('#form_pedido').attr('action', 'php/entregar_opd.php').submit(); });
