@@ -14,6 +14,7 @@
 	$tipo_adop  = intval($_POST['tipo_adop'] ?? 0);
 	$definidos  = $_POST['definidos'] ?? [];
 	$en_paquete = $_POST['en_paquete'] ?? [];
+	$en_paquete2 = $_POST['en_paquete2'] ?? [];
 
 	if ($id_colegio <= 0 || $id_periodo <= 0) {
 		http_response_code(400);
@@ -23,7 +24,7 @@
 
 	crear_tablas_paquetes($bdd);
 
-	$paquetes = construir_preview_paquetes($bdd, $id_colegio, $id_periodo, $definidos, $en_paquete, $tipo_adop);
+	$paquetes = construir_preview_paquetes($bdd, $id_colegio, $id_periodo, (array)$definidos, (array)$en_paquete, $tipo_adop, (array)$en_paquete2);
 
 	echo json_encode(["ok" => true, "paquetes" => $paquetes]);
 ?>

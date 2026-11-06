@@ -4,9 +4,8 @@ require_once("conexion/bdd.php");
 require_once("includes/paquetes_colegio.php");
 require_once("includes/fichas_paquete_vista.php");
 
-// Todo lo relacionado con "Tipo de adopción" (incluido este reporte) es exclusivo
-// de Administrador (tipo=1) y Héctor Morales (id=69) — ver puede_usar_tipo_adopcion().
-if (!puede_usar_tipo_adopcion()) {
+// El reporte muestra las fichas técnicas: solo usuarios tipo 1 y 2 (ver puede_ver_fichas_paquete()).
+if (!puede_ver_fichas_paquete()) {
     header("Location: index.php");
     exit;
 }

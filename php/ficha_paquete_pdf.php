@@ -10,7 +10,8 @@ require_once("../includes/paquetes_colegio.php");
 require_once("../lib/FPDF/fpdf.php");
 require_once("../includes/planilla_pdf.php"); // lp_latin1()
 
-if (!puede_usar_tipo_adopcion()) {
+// Fichas técnicas: solo usuarios tipo 1 y 2 (ver puede_ver_fichas_paquete()).
+if (!puede_ver_fichas_paquete()) {
     header("Location: ../index.php");
     exit;
 }

@@ -25,7 +25,7 @@
 		exit;
 	}
 
-	$req_paq = $bdd->prepare("SELECT precio_neto_sumado, id_colegio, id_periodo FROM paquetes_colegio WHERE id=?");
+	$req_paq = $bdd->prepare("SELECT precio_neto_sumado, precio_final, paquete, id_grado, numero, id_colegio, id_periodo FROM paquetes_colegio WHERE id=?");
 	$req_paq->execute([$id_paquete]);
 	$paq = $req_paq->fetch();
 
@@ -64,6 +64,12 @@
 
 	$req = $bdd->prepare("UPDATE paquetes_colegio SET precio_redondeado = ?, precio_final = ?, updated_at = NOW() WHERE id = ?");
 	$req->execute([$precio_redondeado, $precio_final, $id_paquete]);
+
+	require_once(__DIR__ . "/../php/registrar_historial.php");
+	$clave_paq = $paq['id_grado'] . '-' . $paq['numero'];
+	historial_precios_paquetes($bdd, $paq['id_colegio'], intval($_SESSION["id"] ?? 0),
+		[$clave_paq => ['paquete' => $paq['paquete'], 'precio_final' => (float)$paq['precio_final']]],
+		[$clave_paq => ['paquete' => $paq['paquete'], 'precio_final' => (float)$precio_final]]);
 
 	echo json_encode(["ok" => true, "precio_final" => $precio_final]);
 ?>

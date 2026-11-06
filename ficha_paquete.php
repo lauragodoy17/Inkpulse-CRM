@@ -5,9 +5,9 @@ require_once("includes/paquetes_colegio.php");
 require_once("includes/fichas_paquete_vista.php");
 
 // Fichas técnicas de los paquetes de un colegio+periodo (o de uno solo con ?paquete=).
-// Solo Administrador/Héctor Morales (puede_usar_tipo_adopcion()) y solo si el Tipo de
-// adopción guardado es "Paquetes" o "Ambos" — datos_fichas_paquetes() devuelve null en otro caso.
-if (!puede_usar_tipo_adopcion()) {
+// Solo usuarios tipo 1 y 2 (puede_ver_fichas_paquete()) y solo si el Tipo de adopción guardado es
+// "Paquetes" o "Ambos" — datos_fichas_paquetes() devuelve null en otro caso.
+if (!puede_ver_fichas_paquete()) {
     header("Location: index.php");
     exit;
 }
@@ -57,6 +57,7 @@ $url_pdf = 'php/ficha_paquete_pdf.php?colegio=' . $id_colegio . '&periodo=' . $i
           <?php if ($fichas && $fichas['paquetes']): ?>
           <div class="col-md-5 col-sm-12 text-md-right fp-actions" style="margin-top:8px;">
             <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-toggle="modal" data-target="#fp-modal-rotulos"><i class="bi bi-tags"></i> Imprimir rótulos</button>
             <a class="btn btn-primary btn-sm" id="fp-pdf" href="<?= htmlspecialchars($url_pdf) ?>" data-base="<?= htmlspecialchars($url_pdf) ?>"><i class="bi bi-file-earmark-pdf"></i> Descargar PDF</a>
           </div>
           <?php endif; ?>
@@ -93,6 +94,43 @@ $url_pdf = 'php/ficha_paquete_pdf.php?colegio=' . $id_colegio . '&periodo=' . $i
         <div class="fp-grid">
           <?php foreach ($fichas['paquetes'] as $p) render_ficha_paquete($p, $fichas['colegio'], $fichas['periodo']); ?>
         </div>
+
+        <!-- Rótulos: cuántos stickers imprimir de cada paquete (abre ficha_paquete_rotulos.php). -->
+        <div class="modal fade" id="fp-modal-rotulos" tabindex="-1" role="dialog" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
+            <form class="modal-content" id="fp-form-rotulos" action="ficha_paquete_rotulos.php" method="GET" target="_blank" style="border-radius:16px;border:none;">
+              <input type="hidden" name="colegio" value="<?= $id_colegio ?>">
+              <input type="hidden" name="periodo" value="<?= $id_periodo ?>">
+              <div class="modal-header" style="border-bottom:1px solid #e2e8f0;">
+                <div>
+                  <h5 class="modal-title" style="font-size:1rem;font-weight:700;margin:0;">Imprimir rótulos</h5>
+                  <p style="margin:2px 0 0;font-size:.78rem;color:#64748b;">Cuántos rótulos imprimir de cada paquete (0 = ninguno).</p>
+                </div>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">&times;</button>
+              </div>
+              <div class="modal-body" style="max-height:55vh;overflow:auto;">
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                  <input type="number" min="0" max="500" id="fp-rot-todos" class="form-control form-control-sm" style="width:90px;" placeholder="Cant.">
+                  <button type="button" class="btn btn-light btn-sm" id="fp-rot-aplicar">Aplicar a todos</button>
+                </div>
+                <?php foreach ($fichas['paquetes'] as $p): ?>
+                <div class="fp-rot-fila" data-paquete="<?= $p['id_paquete'] ?>" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed #e2e8f0;">
+                  <div style="font-size:.85rem;">
+                    <strong><?= htmlspecialchars($p['grado']) ?></strong>
+                    <span style="display:block;font-size:.72rem;color:#64748b;"><?= htmlspecialchars($p['codigo']) ?> · <?= count($p['libros']) ?> títulos</span>
+                  </div>
+                  <input type="number" min="0" max="500" name="cant[<?= $p['id_paquete'] ?>]" value="1" class="form-control form-control-sm fp-rot-cant" style="width:90px;">
+                </div>
+                <?php endforeach; ?>
+              </div>
+              <div class="modal-footer" style="border-top:1px solid #e2e8f0;">
+                <span id="fp-rot-total" style="margin-right:auto;font-size:.82rem;color:#64748b;"></span>
+                <button type="button" class="btn btn-light btn-sm" data-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-tags"></i> Generar rótulos</button>
+              </div>
+            </form>
+          </div>
+        </div>
       <?php endif; ?>
 
     </div>
@@ -119,7 +157,9 @@ $url_pdf = 'php/ficha_paquete_pdf.php?colegio=' . $id_colegio . '&periodo=' . $i
           $(this).toggleClass('fp-hidden', !ok);
           if (ok) coincidencias++;
         });
-        card.toggleClass('fp-hidden', !visiblePorGrado || (q && coincidencias === 0));
+        // Siempre booleano: con q vacío, (q && …) da '' y toggleClass con un valor no booleano
+        // alterna la clase en vez de fijarla, ocultando también la tarjeta del grado elegido.
+        card.toggleClass('fp-hidden', !visiblePorGrado || (q !== '' && coincidencias === 0));
       });
       // El PDF descarga lo que se está viendo: todos los paquetes o solo el grado elegido.
       var pdf = $('#fp-pdf');
@@ -133,6 +173,31 @@ $url_pdf = 'php/ficha_paquete_pdf.php?colegio=' . $id_colegio . '&periodo=' . $i
       aplicarFiltros();
     });
     $('#fp-buscar').on('input', aplicarFiltros);
+
+    // Rótulos: al abrir, 1 para el grado filtrado (o para todos si está en "Todos") y 0 para el resto.
+    function totalRotulos() {
+      var t = 0;
+      $('.fp-rot-cant').each(function () { t += Math.max(0, parseInt(this.value, 10) || 0); });
+      $('#fp-rot-total').text(t + ' rótulo' + (t === 1 ? '' : 's'));
+      return t;
+    }
+    $('#fp-modal-rotulos').on('show.bs.modal', function () {
+      $('.fp-rot-fila').each(function () {
+        var visible = !paqueteSel || String($(this).data('paquete')) === paqueteSel;
+        $(this).find('.fp-rot-cant').val(visible ? 1 : 0);
+      });
+      totalRotulos();
+    });
+    $('#fp-rot-aplicar').on('click', function () {
+      var v = Math.max(0, parseInt($('#fp-rot-todos').val(), 10) || 0);
+      $('.fp-rot-cant').val(v);
+      totalRotulos();
+    });
+    $(document).on('input', '.fp-rot-cant', totalRotulos);
+    $('#fp-form-rotulos').on('submit', function (e) {
+      if (totalRotulos() === 0) { e.preventDefault(); return; }
+      $('#fp-modal-rotulos').modal('hide');
+    });
 
   });
 </script>

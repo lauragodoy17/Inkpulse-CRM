@@ -25,7 +25,7 @@ include("../conexion/bdd.php");
 require_once("../includes/excel_formato.php");
 require_once(__DIR__ . "/../includes/paquetes_colegio.php");
 
-if (!puede_usar_tipo_adopcion()) {
+if (!puede_ver_fichas_paquete()) { // reporte de paquetes: mismos usuarios que las fichas
 	header("Location: ../index.php");
 	exit;
 }

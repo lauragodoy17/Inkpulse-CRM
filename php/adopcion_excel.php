@@ -115,7 +115,9 @@ $estilo_derecha = [
 
 	$nombre_completo=$usuario["nombres"]." ".$usuario["apellidos"];
 
-	$sql_rec = "SELECT  fecha, observaciones, id_canal FROM recursos WHERE id_periodo='".$_GET["periodo"]."' AND id_colegio='".$_GET["cole"]."'";
+	require_once(__DIR__ . "/../includes/sobrecosto_canal.php");
+	sobrecosto_asegurar_columna($bdd);
+	$sql_rec = "SELECT  fecha, observaciones, id_canal, id_canal2 FROM recursos WHERE id_periodo='".$_GET["periodo"]."' AND id_colegio='".$_GET["cole"]."'";
 
 	$req_rec = $bdd->prepare($sql_rec);
 	$req_rec->execute();
@@ -1321,10 +1323,9 @@ $objSpreadsheet->getActiveSheet()->getStyle('A'.$conta2.':'.'D'.$conta4)->applyF
 $conta4=$conta4+2;
 
 if (!empty($recurso["id_canal"])) {
-	$sql_canal = "SELECT  canal_venta FROM canales_venta WHERE id='".$recurso["id_canal"]."'";
-                           
-	$req_canal = $bdd->prepare($sql_canal);
-	$req_canal->execute();
+	// Una adopción puede tener dos canales de venta: salen juntos en la misma celda.
+	$req_canal = $bdd->prepare("SELECT GROUP_CONCAT(canal_venta ORDER BY id SEPARATOR ' / ') AS canal_venta FROM canales_venta WHERE id IN (?, ?)");
+	$req_canal->execute([(int)$recurso["id_canal"], (int)$recurso["id_canal2"]]);
 	$canal = $req_canal->fetch();
 }
 
@@ -1474,7 +1475,7 @@ require_once(__DIR__ . "/../includes/paquetes_colegio.php");
 crear_tablas_paquetes($bdd);
 
 $sql_paq_excel = "SELECT id, paquete, codigo, cantidad_titulos, precio_neto_sumado, precio_redondeado, precio_final
-                   FROM paquetes_colegio WHERE id_colegio=? AND id_periodo=? ORDER BY id_grado ASC";
+                   FROM paquetes_colegio WHERE id_colegio=? AND id_periodo=? ORDER BY id_grado ASC, numero ASC";
 $req_paq_excel = $bdd->prepare($sql_paq_excel);
 $req_paq_excel->execute([$_GET["cole"], $_GET["periodo"]]);
 $paquetes_excel = $req_paq_excel->fetchAll(PDO::FETCH_ASSOC);
