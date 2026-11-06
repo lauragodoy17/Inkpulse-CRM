@@ -103,6 +103,16 @@ function le_crear_tablas(PDO $bdd) {
         peso DECIMAL(10,2) NULL,
         UNIQUE KEY uniq_lista_caja (id_lista, numero)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Teléfono de la persona que recibe (obligatorio en las nuevas, igual que su nombre) y
+    // observaciones opcionales de la lista (2026-10-20).
+    if (!$bdd->query("SHOW COLUMNS FROM listas_empaque LIKE 'telefono_recibe'")->fetch()) {
+        $bdd->exec("ALTER TABLE listas_empaque ADD COLUMN telefono_recibe VARCHAR(50) NOT NULL DEFAULT '' AFTER persona_recibe,
+                    ADD COLUMN observaciones VARCHAR(1000) NOT NULL DEFAULT '' AFTER empacado_por");
+    }
+    // Dimensiones de cada caja (texto libre, opcional, ej. "40 x 30 x 25 cm"; 2026-10-20).
+    if (!$bdd->query("SHOW COLUMNS FROM listas_empaque_cajas LIKE 'dimensiones'")->fetch()) {
+        $bdd->exec("ALTER TABLE listas_empaque_cajas ADD COLUMN dimensiones VARCHAR(60) NOT NULL DEFAULT '' AFTER peso");
+    }
     $bdd->exec("CREATE TABLE IF NOT EXISTS listas_empaque_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         id_lista INT NOT NULL,
@@ -882,6 +892,8 @@ function le_guardar(PDO $bdd, array $entrada, $idUsuario) {
         $num = $i + 1;
         $peso = trim((string)($c['peso'] ?? ''));
         if ($peso !== '' && (!is_numeric($peso) || (float)$peso < 0)) return ['ok' => false, 'error' => "El peso de la caja $num no es válido."];
+        $dimensiones = trim((string)($c['dimensiones'] ?? ''));
+        if (mb_strlen($dimensiones) > 60) return ['ok' => false, 'error' => "Las dimensiones de la caja $num no pueden superar 60 caracteres."];
         $items = [];
         foreach ((array)($c['items'] ?? []) as $it) {
             $k = (int)($it['id_inventario'] ?? 0);
@@ -892,7 +904,7 @@ function le_guardar(PDO $bdd, array $entrada, $idUsuario) {
             $asignado[$k] = ($asignado[$k] ?? 0) + (int)$cant;
         }
         if (!$items) return ['ok' => false, 'error' => "La caja $num está vacía. Asígnale productos o elimínala."];
-        $cajas[] = ['numero' => $num, 'peso' => $peso === '' ? null : round((float)$peso, 2), 'items' => $items];
+        $cajas[] = ['numero' => $num, 'peso' => $peso === '' ? null : round((float)$peso, 2), 'dimensiones' => $dimensiones, 'items' => $items];
     }
     foreach ($despachado as $k => $it) {
         $a = $asignado[$k] ?? 0;
@@ -908,6 +920,13 @@ function le_guardar(PDO $bdd, array $entrada, $idUsuario) {
     $direccion = mb_substr(trim((string)($entrada['direccion'] ?? '')), 0, 500);
     if ($direccion === '') return ['ok' => false, 'error' => 'Escribe la dirección de entrega.'];
     $personaRecibe = mb_substr(trim((string)($entrada['persona_recibe'] ?? '')), 0, 150);
+    if ($personaRecibe === '') return ['ok' => false, 'error' => 'Escribe el nombre de la persona que recibe.'];
+    $telefonoRecibe = mb_substr(trim((string)($entrada['telefono_recibe'] ?? '')), 0, 50);
+    if ($telefonoRecibe === '') return ['ok' => false, 'error' => 'Escribe el teléfono de la persona que recibe.'];
+    if (!preg_match('/^[0-9+()\-\s]+$/', $telefonoRecibe) || strlen(preg_replace('/\D/', '', $telefonoRecibe)) < 7) {
+        return ['ok' => false, 'error' => 'El teléfono de la persona que recibe no es válido.'];
+    }
+    $observaciones = mb_substr(trim((string)($entrada['observaciones'] ?? '')), 0, 1000);
     $empacadoPor = mb_substr(trim((string)($entrada['empacado_por'] ?? '')), 0, 150);
     if ($empacadoPor === '') return ['ok' => false, 'error' => 'Escribe quién empacó.'];
 
@@ -926,12 +945,12 @@ function le_guardar(PDO $bdd, array $entrada, $idUsuario) {
 
         $bdd->prepare("INSERT INTO listas_empaque
             (consecutivo, id_pedido, id_cliente, pedidos, ops, colegio, empresa, cliente, cliente_id_wo, ciudad, direccion,
-             persona_recibe, peso_neto, empacado_por, total_unidades, total_cajas, cruce_json, id_usuario, fecha)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())")->execute([
+             persona_recibe, telefono_recibe, peso_neto, empacado_por, observaciones, total_unidades, total_cajas, cruce_json, id_usuario, fecha)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())")->execute([
             // Sin pedidos, OP, colegio ni cruce: la lista no tiene relación con el CRM (2026-09-28).
             $consecutivo, 0, count($idsUsados) === 1 ? $idsUsados[0] : null, '', '',
             '', $primero['empresa'], mb_substr(implode(', ', $nombres), 0, 255), count($idsWoUsados) === 1 ? $idsWoUsados[0] : null,
-            $ciudad, $direccion, $personaRecibe, $pesoNeto === '' ? null : round((float)$pesoNeto, 2), $empacadoPor,
+            $ciudad, $direccion, $personaRecibe, $telefonoRecibe, $pesoNeto === '' ? null : round((float)$pesoNeto, 2), $empacadoPor, $observaciones,
             $totalUnidades, count($cajas), '[]', (int)$idUsuario,
         ]);
         $idLista = (int)$bdd->lastInsertId();
@@ -941,10 +960,10 @@ function le_guardar(PDO $bdd, array $entrada, $idUsuario) {
         foreach ($docs as $d) {
             $insDoc->execute([$idLista, $d['id_wo'], $d['tipo'], $d['prefijo'], $d['numero'], $d['fecha'] ?: null, $d['concepto'], 'cliente']);
         }
-        $insCaja = $bdd->prepare("INSERT INTO listas_empaque_cajas (id_lista, numero, peso) VALUES (?, ?, ?)");
+        $insCaja = $bdd->prepare("INSERT INTO listas_empaque_cajas (id_lista, numero, peso, dimensiones) VALUES (?, ?, ?, ?)");
         $insItem = $bdd->prepare("INSERT INTO listas_empaque_items (id_lista, caja, id_inventario_wo, codigo, descripcion, id_libro, cantidad) VALUES (?, ?, ?, ?, ?, ?, ?)");
         foreach ($cajas as $c) {
-            $insCaja->execute([$idLista, $c['numero'], $c['peso']]);
+            $insCaja->execute([$idLista, $c['numero'], $c['peso'], $c['dimensiones']]);
             foreach ($c['items'] as $k => $cant) {
                 $it = $despachado[$k];
                 $insItem->execute([$idLista, $c['numero'], $k, $it['codigo'], mb_substr($it['descripcion'], 0, 255), $it['id_libro'], $cant]);
@@ -981,15 +1000,15 @@ function le_obtener_lista(PDO $bdd, $idLista) {
                            'cliente' => 'Documento del cliente en World Office'][$d['origen']] ?? $d['origen'],
     ], $stmt->fetchAll(PDO::FETCH_ASSOC));
 
-    $stmt = $bdd->prepare("SELECT numero, peso FROM listas_empaque_cajas WHERE id_lista = ? ORDER BY numero");
+    $stmt = $bdd->prepare("SELECT numero, peso, dimensiones FROM listas_empaque_cajas WHERE id_lista = ? ORDER BY numero");
     $stmt->execute([$l['id']]);
     $cajas = [];
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $c) $cajas[(int)$c['numero']] = ['numero' => (int)$c['numero'], 'peso' => $c['peso'], 'items' => [], 'unidades' => 0];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $c) $cajas[(int)$c['numero']] = ['numero' => (int)$c['numero'], 'peso' => $c['peso'], 'dimensiones' => (string)$c['dimensiones'], 'items' => [], 'unidades' => 0];
     $stmt = $bdd->prepare("SELECT caja, codigo, descripcion, cantidad FROM listas_empaque_items WHERE id_lista = ? ORDER BY caja, descripcion");
     $stmt->execute([$l['id']]);
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $it) {
         $n = (int)$it['caja'];
-        if (!isset($cajas[$n])) $cajas[$n] = ['numero' => $n, 'peso' => null, 'items' => [], 'unidades' => 0];
+        if (!isset($cajas[$n])) $cajas[$n] = ['numero' => $n, 'peso' => null, 'dimensiones' => '', 'items' => [], 'unidades' => 0];
         $cajas[$n]['items'][] = $it;
         $cajas[$n]['unidades'] += (int)$it['cantidad'];
     }

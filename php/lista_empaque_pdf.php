@@ -139,7 +139,9 @@ campos($pdf, [
     ['Dirección de entrega', $lista['direccion']],
     ['Ciudad', $lista['ciudad']],
 ], [LE_PDF_ANCHO * 0.36, LE_PDF_ANCHO * 0.44, LE_PDF_ANCHO * 0.20]);
-if (($lista['persona_recibe'] ?? '') !== '') campos($pdf, [['Persona que recibe', $lista['persona_recibe']]], [LE_PDF_ANCHO]);
+if (($lista['persona_recibe'] ?? '') !== '' || ($lista['telefono_recibe'] ?? '') !== '') {
+    campos($pdf, [['Persona que recibe', $lista['persona_recibe'] ?? ''], ['Teléfono', $lista['telefono_recibe'] ?? '']], [LE_PDF_ANCHO * 0.65, LE_PDF_ANCHO * 0.35]);
+}
 
 $docsTxt = implode("\n", array_map(fn($d) => $d['tipo_label'] . ' ' . $d['documento'] . ($d['fecha_doc'] ? ' (' . date('d/m/Y', strtotime($d['fecha_doc'])) . ')' : '')
     . ($d['origen'] === 'manual' ? ' - asociado manualmente' : ''), $lista['documentos']));
@@ -198,7 +200,8 @@ foreach ($lista['cajas'] as $ci => $caja) {
     $pdf->SetFillColor(226, 232, 240);
     $pdf->SetFont('Arial', 'B', 7.8);
     $pdf->SetTextColor(51, 65, 85);
-    $etiqueta = 'Total caja ' . $caja['numero'] . ($caja['peso'] !== null ? ' · Peso ' . number_format((float)$caja['peso'], 2, ',', '.') . ' kg' : '');
+    $etiqueta = 'Total caja ' . $caja['numero'] . ($caja['peso'] !== null ? ' · Peso ' . number_format((float)$caja['peso'], 2, ',', '.') . ' kg' : '')
+        . (($caja['dimensiones'] ?? '') !== '' ? ' · Dimensiones ' . $caja['dimensiones'] : '');
     $pdf->Cell($w[0] + $w[1] + $w[2], 5.5, lp_latin1($etiqueta), 0, 0, 'R', true);
     $pdf->Cell($w[3], 5.5, number_format($caja['unidades'], 0, ',', '.'), 0, 1, 'R', true);
 }
@@ -209,6 +212,14 @@ $pdf->SetTextColor(255, 255, 255);
 $pdf->SetFont('Arial', 'B', 9);
 $pdf->Cell($w[0] + $w[1] + $w[2], 7, lp_latin1('TOTAL: ' . (int)$lista['total_cajas'] . ' caja(s)'), 0, 0, 'R', true);
 $pdf->Cell($w[3], 7, number_format((int)$lista['total_unidades'], 0, ',', '.'), 0, 1, 'R', true);
+
+// Observaciones (opcionales)
+if (($lista['observaciones'] ?? '') !== '') {
+    if ($pdf->GetY() + 18 > $limite) $pdf->AddPage();
+    $pdf->Ln(4);
+    titulo_seccion($pdf, 'Observaciones');
+    campos($pdf, [['Observaciones', $lista['observaciones']]], [LE_PDF_ANCHO]);
+}
 
 // Empacado por + firma
 if ($pdf->GetY() + 30 > $limite) $pdf->AddPage();

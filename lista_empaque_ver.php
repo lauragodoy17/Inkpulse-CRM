@@ -97,6 +97,7 @@ function le_n($v) { return number_format((float)$v, (float)$v == floor((float)$v
             <div><div class="le-label">Dirección de entrega</div><div class="le-valor"><?= le_h($l['direccion']) ?></div></div>
             <div><div class="le-label">Ciudad</div><div class="le-valor"><?= le_h($l['ciudad'] ?: '—') ?></div></div>
             <div><div class="le-label">Persona que recibe</div><div class="le-valor"><?= le_h(($l['persona_recibe'] ?? '') ?: '—') ?></div></div>
+            <div><div class="le-label">Teléfono</div><div class="le-valor"><?= le_h(($l['telefono_recibe'] ?? '') ?: '—') ?></div></div>
             <?php // Solo las listas anteriores al 2026-09-28 guardaban pedido, OP y colegio del CRM. ?>
             <?php if ($l['pedidos'] !== ''): ?>
             <div><div class="le-label"><?= strpos($l['pedidos'], ',') !== false ? 'Pedidos' : 'N.º de pedido' ?></div><div class="le-valor"><?= le_h($l['pedidos']) ?></div></div>
@@ -110,6 +111,9 @@ function le_n($v) { return number_format((float)$v, (float)$v == floor((float)$v
             <div><div class="le-label">Total</div><div class="le-valor"><?= le_n($l['total_unidades']) ?> unidades · <?= (int)$l['total_cajas'] ?> caja(s)</div></div>
             <div><div class="le-label">Peso neto</div><div class="le-valor"><?= $l['peso_neto'] !== null ? le_n($l['peso_neto']) . ' kg' : '—' ?></div></div>
             <div><div class="le-label">Empacado por</div><div class="le-valor"><?= le_h($l['empacado_por']) ?></div></div>
+            <?php if (($l['observaciones'] ?? '') !== ''): ?>
+            <div style="grid-column:1 / -1;"><div class="le-label">Observaciones</div><div class="le-valor"><?= nl2br(le_h($l['observaciones'])) ?></div></div>
+            <?php endif; ?>
           </div>
         </div>
       </div>
@@ -152,7 +156,7 @@ function le_n($v) { return number_format((float)$v, (float)$v == floor((float)$v
               <?php foreach ($c['items'] as $it): ?>
                 <tr><td><strong><?= (int)$c['numero'] ?></strong></td><td><?= le_h($it['codigo']) ?></td><td><?= le_h($it['descripcion']) ?></td><td class="num"><?= le_n($it['cantidad']) ?></td></tr>
               <?php endforeach; ?>
-              <tr style="background:#f1f5f9;"><td colspan="3" class="num" style="font-size:.78rem; font-weight:700;">Total caja <?= (int)$c['numero'] ?><?= $c['peso'] !== null ? ' · Peso ' . le_n($c['peso']) . ' kg' : '' ?></td><td class="num"><strong><?= le_n($c['unidades']) ?></strong></td></tr>
+              <tr style="background:#f1f5f9;"><td colspan="3" class="num" style="font-size:.78rem; font-weight:700;">Total caja <?= (int)$c['numero'] ?><?= $c['peso'] !== null ? ' · Peso ' . le_n($c['peso']) . ' kg' : '' ?><?= ($c['dimensiones'] ?? '') !== '' ? ' · Dimensiones ' . le_h($c['dimensiones']) : '' ?></td><td class="num"><strong><?= le_n($c['unidades']) ?></strong></td></tr>
             <?php endforeach; ?>
             </tbody>
             <tfoot><tr><td colspan="3" class="num">TOTAL</td><td class="num"><?= le_n($l['total_unidades']) ?></td></tr></tfoot>

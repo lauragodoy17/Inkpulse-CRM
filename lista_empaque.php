@@ -141,7 +141,6 @@ le_crear_tablas($bdd);
       <div class="le-section le-hidden" id="le-sec-cajas">
         <div class="le-section-head">
           <p class="le-section-title"><span class="le-paso">3</span> Distribución por cajas</p>
-          <button type="button" class="le-btn le-btn-outline le-btn-sm" id="le-agregar-caja"><i class="bi bi-plus-lg"></i> Agregar caja</button>
         </div>
         <div class="le-section-body">
           <div class="row">
@@ -176,18 +175,26 @@ le_crear_tablas($bdd);
               <label class="le-dato-label">Dirección de entrega *</label>
               <textarea class="form-control form-control-sm" id="le-direccion" rows="2" maxlength="500" autocomplete="off"></textarea>
             </div>
-            <div class="col-md-12 form-group">
-              <label class="le-dato-label">Persona que recibe</label>
+            <div class="col-md-8 form-group">
+              <label class="le-dato-label">Nombre de la persona que recibe *</label>
               <input type="text" class="form-control form-control-sm" id="le-persona-recibe" maxlength="150" autocomplete="off">
             </div>
             <div class="col-md-4 form-group">
+              <label class="le-dato-label">Teléfono de quien recibe *</label>
+              <input type="tel" class="form-control form-control-sm" id="le-telefono-recibe" maxlength="50" autocomplete="off" placeholder="Ej. 300 123 4567">
+            </div>
+            <div class="col-md-4 form-group">
               <label class="le-dato-label">Peso neto total (kg) — opcional</label>
-              <input type="number" class="form-control form-control-sm" id="le-peso-neto" min="0" step="0.01" placeholder="Opcional">
+              <input type="text" inputmode="decimal" class="form-control form-control-sm" id="le-peso-neto" placeholder="Opcional (ej. 12,5)">
               <small class="text-muted" id="le-peso-ayuda"></small>
             </div>
             <div class="col-md-8 form-group">
               <label class="le-dato-label">Empacado por *</label>
               <input type="text" class="form-control form-control-sm" id="le-empacado-por" maxlength="150">
+            </div>
+            <div class="col-md-12 form-group">
+              <label class="le-dato-label">Observaciones — opcional</label>
+              <textarea class="form-control form-control-sm" id="le-observaciones" rows="2" maxlength="1000" autocomplete="off"></textarea>
             </div>
           </div>
           <div id="le-error-final" class="le-aviso le-aviso-error le-hidden"></div>
@@ -227,7 +234,14 @@ le_crear_tablas($bdd);
 setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
 (function () {
   function h(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
-  function n(v) { v = parseFloat(v) || 0; return (v % 1 === 0 ? v : v.toFixed(2)).toLocaleString('es-CO'); }
+  function n(v) { v = parseFloat(v) || 0; return v.toLocaleString('es-CO', { maximumFractionDigits: 2 }); }
+  // Peso escrito con coma o punto decimal ("12,5" / "12.5" / "1.234,5") → "12.5" (o '' si está vacío).
+  function normPeso(s) {
+    s = String(s || '').trim().replace(/\s|kg/gi, '');
+    if (s === '') return '';
+    if (s.indexOf(',') !== -1) s = s.replace(/\./g, '').replace(',', '.');
+    return s;
+  }
   function fecha(f) { if (!f) return '—'; var p = String(f).substr(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : f; }
 
   var datos = null;        // respuesta de php/lista_empaque_documentos.php (documentos elegidos)
@@ -408,14 +422,15 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
 
   // ── Paso 3: cajas ──────────────────────────────────────────────
   $('#le-ir-cajas').on('click', function () {
-    if (!cajas.length) cajas = [{ peso: '', items: [] }];
+    if (!cajas.length) cajas = [{ peso: '', dimensiones: '', items: [] }];
     pintarCajas();
     $('#le-sec-cajas').removeClass('le-hidden');
     prepararDatos();
     $('#le-sec-datos').removeClass('le-hidden');
     $('html,body').animate({ scrollTop: $('#le-sec-cajas').offset().top - 80 }, 250);
   });
-  $('#le-agregar-caja').on('click', function () { cajas.push({ peso: '', items: [] }); pintarCajas(); ocultarDesde('preview'); });
+  // Delegado: el botón se vuelve a pintar debajo de la última caja cada vez.
+  $(document).on('click', '#le-agregar-caja', function () { cajas.push({ peso: '', dimensiones: '', items: [] }); pintarCajas(); ocultarDesde('preview'); });
 
   function asignadoPorProducto() {
     var a = {};
@@ -484,7 +499,8 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
       html += '<div class="le-caja"><div class="le-caja-head"><strong><i class="bi bi-box"></i> Caja ' + (ci + 1) + '</strong>' +
         '<span class="le-badge le-badge-gris">' + n(und) + ' und</span>' +
         '<span style="flex:1"></span>' +
-        '<label style="margin:0; font-size:.75rem; color:#64748b;">Peso (kg, opcional)</label><input type="number" min="0" step="0.01" class="form-control form-control-sm le-caja-peso" data-c="' + ci + '" value="' + h(c.peso) + '" placeholder="—" style="width:95px">' +
+        '<label style="margin:0; font-size:.75rem; color:#64748b;">Peso (kg)</label><input type="text" inputmode="decimal" class="form-control form-control-sm le-caja-peso" data-c="' + ci + '" value="' + h(c.peso_txt !== undefined ? c.peso_txt : c.peso) + '" placeholder="0,00" style="width:80px">' +
+        '<label style="margin:0; font-size:.75rem; color:#64748b;">Dimensiones</label><input type="text" maxlength="60" class="form-control form-control-sm le-caja-dim" data-c="' + ci + '" value="' + h(c.dimensiones || '') + '" placeholder="Largo x ancho x alto (cm)" style="width:170px">' +
         (cajas.length > 1 ? '<button type="button" class="le-btn le-btn-danger le-btn-sm le-quitar-caja" data-c="' + ci + '" title="Eliminar caja"><i class="bi bi-trash"></i></button>' : '') +
         '</div><div class="le-caja-body">';
       c.items.forEach(function (it, ii) {
@@ -498,6 +514,8 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
         '<button type="button" class="le-btn le-btn-outline le-btn-sm le-llenar-caja" data-c="' + ci + '" title="Pone en esta caja todo lo que falta por asignar"><i class="bi bi-box-arrow-in-down"></i> Agregar todo lo pendiente</button>' +
         '</div></div></div>';
     });
+    // "Agregar caja" va debajo de la última caja (se corre a medida que se agregan).
+    html += '<button type="button" class="le-btn le-btn-outline le-btn-sm" id="le-agregar-caja" style="margin-bottom:12px;"><i class="bi bi-plus-lg"></i> Agregar caja</button>';
     $('#le-cajas').html(html);
     pintarControl();
   }
@@ -528,8 +546,14 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
     r += '</tbody></table>';
     $('#le-resumen-cajas').html(hay ? r : '<div class="le-aviso le-aviso-info">Aún no hay productos en cajas.</div>');
 
+    // Referencia para el peso neto total: suma (con decimales) de los pesos de las cajas que lo tienen.
     var pesos = cajas.map(function (c) { return parseFloat(c.peso); }).filter(function (p) { return !isNaN(p); });
-    $('#le-peso-ayuda').text(pesos.length === cajas.length && pesos.length ? 'Suma de los pesos por caja: ' + n(pesos.reduce(function (a, b) { return a + b; }, 0)) + ' kg' : '');
+    var sumaPesos = Math.round(pesos.reduce(function (a, b) { return a + b; }, 0) * 100) / 100;
+    $('#le-peso-ayuda').html(pesos.length
+      ? 'Suma de los pesos por caja' + (pesos.length < cajas.length ? ' (' + pesos.length + ' de ' + cajas.length + ' cajas)' : '') + ': <strong>' +
+        sumaPesos.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg</strong>' +
+        ' · <a href="#" id="le-usar-suma-peso" data-suma="' + sumaPesos + '">Usar como peso neto</a>'
+      : '');
     refrescarFilas();
   }
 
@@ -538,7 +562,18 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
     $('.le-caja').eq(ci).find('.le-caja-head .le-badge').text(n(und) + ' und');
   }
 
-  $(document).on('input', '.le-caja-peso', function () { cajas[$(this).data('c')].peso = this.value; pintarControl(); ocultarDesde('preview'); });
+  $(document).on('input', '.le-caja-peso', function () {
+    var c = cajas[$(this).data('c')];
+    c.peso_txt = this.value;          // lo que se ve (con coma)
+    c.peso = normPeso(this.value);    // lo que se calcula y se guarda (con punto)
+    pintarControl(); ocultarDesde('preview');
+  });
+  $(document).on('input', '.le-caja-dim', function () { cajas[$(this).data('c')].dimensiones = this.value; ocultarDesde('preview'); });
+  $(document).on('click', '#le-usar-suma-peso', function (e) {
+    e.preventDefault();
+    $('#le-peso-neto').val(Number($(this).data('suma')).toLocaleString('es-CO', { maximumFractionDigits: 2, useGrouping: false }));
+    ocultarDesde('preview');
+  });
   $(document).on('change', '.le-item-prod', function () {
     var ci = $(this).data('c'), ii = $(this).data('i'), it = cajas[ci].items[ii];
     // Al cambiar de producto, la fila deja de "reservar" unidades del anterior y toma lo que quede del nuevo.
@@ -598,7 +633,7 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
     // se deja en blanco para que la escriban (pedido del usuario 2026-09-28).
     if (!$('#le-ciudad').val().trim()) $('#le-ciudad').val(docs[0].ciudad || '');
   }
-  $('#le-ciudad, #le-direccion, #le-persona-recibe, #le-peso-neto, #le-empacado-por').on('input', function () { ocultarDesde('preview'); });
+  $('#le-ciudad, #le-direccion, #le-persona-recibe, #le-telefono-recibe, #le-peso-neto, #le-empacado-por, #le-observaciones').on('input', function () { ocultarDesde('preview'); });
 
   // 'docs': cambió la selección del paso 1 → se descarta todo lo que sigue; 'cajas': se rehacen las
   // cajas; 'preview': solo se oculta la vista previa.
@@ -627,8 +662,15 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
       if (a !== despachado[k].cantidad) return despachado[k].descripcion + ': se despacharon ' + n(despachado[k].cantidad) + ' y en las cajas hay ' + n(a) + '.';
     }
     if (!$('#le-direccion').val().trim()) return 'Escribe la dirección de entrega.';
-    var peso = $('#le-peso-neto').val();
-    if (peso !== '' && (isNaN(parseFloat(peso)) || parseFloat(peso) < 0)) return 'El peso neto no es válido.';
+    if (!$('#le-persona-recibe').val().trim()) return 'Escribe el nombre de la persona que recibe.';
+    var tel = $('#le-telefono-recibe').val().trim();
+    if (!tel) return 'Escribe el teléfono de la persona que recibe.';
+    if (!/^[0-9+()\-\s]+$/.test(tel) || tel.replace(/\D/g, '').length < 7) return 'El teléfono de la persona que recibe no es válido.';
+    for (var ci = 0; ci < cajas.length; ci++) {
+      if (cajas[ci].peso !== '' && !(/^\d+(\.\d+)?$/.test(cajas[ci].peso))) return 'El peso de la caja ' + (ci + 1) + ' no es válido (usa números, ej. 12,5).';
+    }
+    var peso = normPeso($('#le-peso-neto').val());
+    if (peso !== '' && !(/^\d+(\.\d+)?$/.test(peso))) return 'El peso neto no es válido (usa números, ej. 12,5).';
     if (!$('#le-empacado-por').val().trim()) return 'Escribe quién empacó.';
     return null;
   }
@@ -650,7 +692,7 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
     var docs = docsElegidos();
     var totalUnd = 0;
     cajas.forEach(function (c) { c.items.forEach(function (it) { totalUnd += parseInt(it.cantidad, 10) || 0; }); });
-    var peso = $('#le-peso-neto').val();
+    var peso = normPeso($('#le-peso-neto').val());
     var hoy = new Date();
     var html = '<div class="le-preview">' +
       '<div class="le-pv-head"><div style="display:flex; gap:16px; align-items:center;"><img src="vendors/images/logo_eureka.png" style="height:52px">' +
@@ -660,7 +702,7 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
 
     html += '<div class="le-pv-sec">Datos del cliente</div><div class="le-grid">' +
       dato('Cliente / empresa', $('#le-cliente').val()) + dato('Dirección de entrega', $('#le-direccion').val()) + dato('Ciudad', $('#le-ciudad').val() || '—') +
-      dato('Persona que recibe', $('#le-persona-recibe').val().trim() || '—') + '</div>';
+      dato('Persona que recibe', $('#le-persona-recibe').val().trim() || '—') + dato('Teléfono', $('#le-telefono-recibe').val().trim() || '—') + '</div>';
     html += '<div class="le-pv-sec">Documentos asociados</div><div class="le-dato-valor">' +
       docs.map(function (d) { return h(d.tipo_label + ' ' + d.documento) + ' (' + fecha(d.fecha) + ')'; }).join('<br>') + '</div>';
     html += '<div class="le-pv-sec">Resumen del despacho</div><div class="le-grid">' +
@@ -673,10 +715,14 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
         und += parseInt(it.cantidad, 10);
         html += '<tr><td><strong>' + (ci + 1) + '</strong></td><td>' + h(d.codigo) + '</td><td>' + h(d.descripcion) + '</td><td class="num">' + n(it.cantidad) + '</td></tr>';
       });
-      html += '<tr style="background:#f1f5f9;"><td colspan="3" class="num" style="font-size:.78rem; font-weight:700;">Total caja ' + (ci + 1) + (c.peso !== '' ? ' · Peso ' + n(c.peso) + ' kg' : '') + '</td><td class="num"><strong>' + n(und) + '</strong></td></tr>';
+      html += '<tr style="background:#f1f5f9;"><td colspan="3" class="num" style="font-size:.78rem; font-weight:700;">Total caja ' + (ci + 1) +
+        (c.peso !== '' ? ' · Peso ' + n(c.peso) + ' kg' : '') + (c.dimensiones && c.dimensiones.trim() ? ' · Dimensiones ' + h(c.dimensiones.trim()) : '') +
+        '</td><td class="num"><strong>' + n(und) + '</strong></td></tr>';
     });
     html += '</tbody><tfoot><tr><td colspan="3" class="num">TOTAL: ' + cajas.length + ' caja(s)</td><td class="num">' + n(totalUnd) + '</td></tr></tfoot></table>';
-    html += '<div class="le-pv-sec">Datos de empaque</div>' + dato('Empacado por', $('#le-empacado-por').val()) + '</div>';
+    var obs = $('#le-observaciones').val().trim();
+    html += '<div class="le-pv-sec">Datos de empaque</div>' + dato('Empacado por', $('#le-empacado-por').val()) +
+      (obs ? dato('Observaciones', obs) : '') + '</div>';
     return html;
   }
 
@@ -687,11 +733,13 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
     var cuerpo = {
       clientes: idsClientes,
       documentos: docsElegidos().map(function (d) { return d.clave; }),
-      cajas: cajas.map(function (c) { return { peso: c.peso, items: c.items.map(function (it) { return { id_inventario: parseInt(it.id_inventario, 10), cantidad: parseInt(it.cantidad, 10) }; }) }; }),
+      cajas: cajas.map(function (c) { return { peso: c.peso, dimensiones: (c.dimensiones || '').trim(), items: c.items.map(function (it) { return { id_inventario: parseInt(it.id_inventario, 10), cantidad: parseInt(it.cantidad, 10) }; }) }; }),
       ciudad: $('#le-ciudad').val(),
       direccion: $('#le-direccion').val(),
       persona_recibe: $('#le-persona-recibe').val(),
-      peso_neto: $('#le-peso-neto').val(),
+      telefono_recibe: $('#le-telefono-recibe').val(),
+      observaciones: $('#le-observaciones').val(),
+      peso_neto: normPeso($('#le-peso-neto').val()),
       empacado_por: $('#le-empacado-por').val()
     };
     $.ajax({ url: 'php/lista_empaque_guardar.php', method: 'POST', contentType: 'application/json', data: JSON.stringify(cuerpo), dataType: 'json' })
