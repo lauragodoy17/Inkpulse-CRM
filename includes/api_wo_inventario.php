@@ -225,3 +225,58 @@ function existencias_general_y_muestras_bulk(array $idsInventario, $concurrencia
     }
     return $resultados;
 }
+
+/**
+ * Busca en World Office el producto de inventario de cada código (ISBN), en paralelo (curl_multi),
+ * con el mismo filtro que la consulta por "Código exacto (ISBN)" (pruebas_api/visualizar_inventario.php).
+ * Devuelve [codigo => idInventario | 0 | null]:
+ *   idInventario  exactamente un producto cuyo código es ese ISBN,
+ *   0             World Office respondió y no hay ninguno (o hay varios: ambiguo, no se usa),
+ *   null          la consulta falló (sin conexión, error de la API): se puede reintentar.
+ */
+function buscar_ids_inventario_por_codigo_bulk(array $codigos, $concurrencia = 15) {
+    $codigos = array_values(array_unique(array_filter(array_map('trim', $codigos), fn($c) => $c !== '')));
+    $resultados = [];
+    foreach (array_chunk($codigos, max(1, (int)$concurrencia)) as $lote) {
+        $mh = curl_multi_init();
+        $handles = [];
+        foreach ($lote as $codigo) {
+            $ch = wo_crear_handle('/inventarios/listarInventarios', 'POST', [
+                "columnaOrdenar" => "id", "pagina" => 0, "registrosPorPagina" => 5, "orden" => "DESC",
+                "canal" => 0, "registroInicial" => 0,
+                "filtros" => [crear_filtro_api('codigo', $codigo, 0, 0)], // 0 = exacto
+            ]);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$codigo] = $ch;
+        }
+        $activos = null;
+        do {
+            $estado = curl_multi_exec($mh, $activos);
+            if ($activos > 0) curl_multi_select($mh);
+        } while ($activos > 0 && $estado === CURLM_OK);
+
+        foreach ($handles as $codigo => $ch) {
+            $data = json_decode((string)curl_multi_getcontent($ch), true);
+            // Sin resultados, World Office responde status BAD_REQUEST con este mensaje (y data null).
+            if (is_array($data) && stripos((string)($data['userMessage'] ?? ''), 'No hay datos de inventario') !== false) {
+                $resultados[$codigo] = 0;
+            } elseif (!is_array($data) || ($data['status'] ?? '') === 'error' || !isset($data['data'])) {
+                $resultados[$codigo] = null;
+            } else {
+                // Se vuelve a comparar el código: solo cuenta la coincidencia exacta (sin importar
+                // mayúsculas ni espacios), nunca un parecido.
+                $ids = [];
+                foreach ($data['data']['content'] ?? [] as $p) {
+                    if (strcasecmp(trim((string)($p['codigo'] ?? '')), $codigo) === 0 && (int)($p['id'] ?? 0) > 0) {
+                        $ids[(int)$p['id']] = true;
+                    }
+                }
+                $resultados[$codigo] = count($ids) === 1 ? (int)array_key_first($ids) : 0;
+            }
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+        curl_multi_close($mh);
+    }
+    return $resultados;
+}
