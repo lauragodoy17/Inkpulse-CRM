@@ -111,6 +111,7 @@ $hayFiltro = implode('', $f) !== '';
                   <td style="white-space:nowrap;">
                     <a href="lista_empaque_ver.php?id=<?= (int)$l['id'] ?>" class="le-btn le-btn-outline le-btn-sm" title="Ver"><i class="bi bi-eye"></i></a>
                     <a href="php/lista_empaque_pdf.php?id=<?= (int)$l['id'] ?>" target="_blank" rel="noopener" class="le-btn le-btn-sm" title="Descargar PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+                    <a href="lista_empaque_stickers.php?id=<?= (int)$l['id'] ?>" target="_blank" rel="noopener" class="le-btn le-btn-sm" title="Imprimir stickers"><i class="bi bi-printer"></i></a>
                   </td>
                 </tr>
               <?php endforeach; ?>
