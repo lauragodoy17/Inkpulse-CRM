@@ -276,6 +276,9 @@
       .wo-result-tipo { display: inline-block; font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
       .wo-result-tipo-FV  { background: #dbeafe; color: #1d4ed8; }
       .wo-result-tipo-REM { background: #fef3c7; color: #b45309; }
+      .wo-result-tipo-DREM { background: #fee2e2; color: #b91c1c; }
+      .wo-result-tipo-NCV { background: #ede9fe; color: #6d28d9; }
+      .wo-result-tipo-POS { background: #dcfce7; color: #15803d; }
       .wo-result-meta { color: #64748b; font-size: .72rem; margin-top: 2px; }
       .wo-result-concepto {
         color: #94a3b8; font-size: .7rem; margin-top: 3px; max-width: 520px;
@@ -1342,6 +1345,9 @@
                 return;
               }
               renderResultados(resp.candidatos || []);
+              if (resp.aviso) {
+                $doc.find('.wo-resultados').prepend($('<p>', { class: 'wo-empty' }).append($('<i>', { class: 'bi bi-info-circle' }), ' ', document.createTextNode(resp.aviso)));
+              }
             })
             .fail(function () {
               $doc.find('.wo-resultados').html('<p class="wo-error"><i class="bi bi-exclamation-triangle"></i> Error al conectar con World Office. Intenta de nuevo.</p>');
