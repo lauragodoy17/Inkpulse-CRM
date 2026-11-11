@@ -1,0 +1,74 @@
+/*
+ * Campos y selectores propios de fecha y hora de venta directa (src/vd-pickers.js).
+ * Los usan Adopciones (ajax/tab_adopciones.php) y el Calendario de venta directa (calendario_venta_directa.php).
+ */
+/* Campo con ícono (fecha, hora y contacto) */
+.vd-inp { position: relative; display: flex; align-items: center; }
+.vd-inp > i { position: absolute; left: 11px; font-size: .9rem; color: #6366f1; pointer-events: none; transition: color .15s; }
+.vd-inp input {
+  width: 100%; height: 38px; padding: 0 12px 0 34px;
+  border: 1px solid #c7d2fe; border-radius: 10px; background: #fff;
+  font-size: .86rem; font-weight: 500; color: #1e293b; font-family: inherit;
+  outline: none; transition: border-color .15s, box-shadow .15s, background .15s;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.vd-inp input::placeholder { color: #a5b4c8; font-weight: 400; }
+.vd-inp input:hover:not(:disabled) { border-color: #a5b4fc; }
+.vd-inp input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, .18); }
+.vd-inp:focus-within > i { color: #4338ca; }
+.vd-inp input:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
+/* Fecha y hora con selector propio (src/vd-pickers.js) */
+.vd-pick .vd-pick-txt { cursor: pointer; padding-right: 28px; caret-color: transparent; }
+.vd-pick .vd-pick-txt:disabled { cursor: not-allowed; }
+.vd-pick .vd-caret { left: auto; right: 10px; font-size: .7rem; color: #94a3b8; transition: transform .15s; }
+.vd-pick.vd-abierto .vd-pick-txt { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, .18); }
+.vd-pick.vd-abierto .vd-caret { transform: rotate(180deg); color: #6366f1; }
+.vd-pick.vd-falta .vd-pick-txt { border-color: #f87171; background: #fef2f2; }
+
+/* Ventana del selector */
+.vdp-pop {
+  position: absolute; z-index: 2000; background: #fff; border: 1px solid #e0e7ff; border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(30, 27, 75, .18), 0 2px 6px rgba(15, 23, 42, .06); padding: 12px;
+  font-family: inherit; animation: vdpIn .12s ease-out;
+}
+@keyframes vdpIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.vdp-pop button { font-family: inherit; }
+.vdp-pop[data-tipo=fecha] { width: 284px; }
+.vdp-pop[data-tipo=hora] { width: 300px; }
+.vdp-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.vdp-titulo { font-weight: 800; font-size: .92rem; color: #1e1b4b; text-transform: capitalize; }
+.vdp-nav { width: 32px; height: 32px; border: none; border-radius: 9px; background: #eef2ff; color: #4338ca; }
+.vdp-nav:hover { background: #e0e7ff; }
+.vdp-sem, .vdp-dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.vdp-sem span { text-align: center; font-size: .68rem; font-weight: 700; color: #94a3b8; padding: 4px 0; }
+.vdp-sem .vdp-finde { color: #c4b5fd; }
+.vdp-dia {
+  height: 34px; border: none; border-radius: 9px; background: transparent; color: #1e293b;
+  font-size: .84rem; font-weight: 600; transition: background .1s, color .1s;
+}
+.vdp-dia:hover { background: #eef2ff; color: #4338ca; }
+.vdp-dia.vdp-finde { color: #7c3aed; }
+.vdp-dia.vdp-pasado { color: #cbd5e1; }
+.vdp-dia.vdp-hoy { box-shadow: inset 0 0 0 1.5px #818cf8; }
+.vdp-dia.vdp-sel, .vdp-dia.vdp-sel:hover { background: linear-gradient(160deg, #6366f1, #4338ca); color: #fff; box-shadow: 0 4px 10px rgba(79, 70, 229, .35); }
+.vdp-pie { display: flex; justify-content: space-between; border-top: 1px solid #eef2ff; margin-top: 10px; padding-top: 8px; }
+.vdp-link { border: none; background: none; font-size: .8rem; font-weight: 600; color: #64748b; padding: 4px 8px; border-radius: 7px; }
+.vdp-link:hover { background: #f1f5f9; }
+.vdp-link-fuerte { color: #4338ca; }
+.vdp-link-fuerte:hover { background: #eef2ff; }
+.vdp-hora { display: grid; grid-template-columns: 112px 1fr; gap: 12px; }
+.vdp-col-tit { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; margin-bottom: 6px; }
+.vdp-horas { height: 216px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding-right: 4px; position: relative; }
+.vdp-horas::-webkit-scrollbar { width: 6px; }
+.vdp-horas::-webkit-scrollbar-thumb { background: #e0e7ff; border-radius: 6px; }
+.vdp-h, .vdp-m {
+  border: none; border-radius: 9px; background: #f8fafc; color: #1e293b; font-size: .82rem; font-weight: 600;
+  transition: background .1s, color .1s;
+}
+.vdp-h { flex: 0 0 32px; text-align: left; padding: 0 10px; }
+.vdp-mins { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.vdp-m { height: 36px; }
+.vdp-h:hover:not(:disabled), .vdp-m:hover:not(:disabled) { background: #eef2ff; color: #4338ca; }
+.vdp-h.vdp-sel, .vdp-m.vdp-sel { background: linear-gradient(160deg, #6366f1, #4338ca); color: #fff; }
+.vdp-h:disabled, .vdp-m:disabled { color: #cbd5e1; background: #f8fafc; cursor: not-allowed; }
+.vdp-ayuda { margin: 8px 0 0; font-size: .74rem; color: #94a3b8; text-align: center; }

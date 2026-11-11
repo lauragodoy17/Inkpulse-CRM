@@ -27,7 +27,7 @@
 
 	$id_usuario_h = intval($_SESSION["id"] ?? 0);
 
-	// "Venta directa - Andrea" exige % de sobrecosto (2026-10-26). Se valida antes de escribir nada.
+	// "Venta directa - Eureka" exige % de sobrecosto (2026-10-26). Se valida antes de escribir nada.
 	require_once(__DIR__ . "/../includes/sobrecosto_canal.php");
 	sobrecosto_asegurar_columna($bdd);
 	$url_adop = '../colegio.php?codigo='.urlencode($_POST["codigo"] ?? '').'&periodo='.intval($_POST["periodo"]).'&tab=adopciones';
@@ -36,14 +36,44 @@
 	$_POST["canal"] = $canales_post[0] ?? 0;
 	$id_canal2 = $canales_post[1] ?? null;
 	$con_sobrecosto = (bool)array_intersect($canales_post, canales_con_sobrecosto($bdd));
-	$sobrecosto_pct = null;
+	// 2026-11-10: ya no hay % de sobrecosto para toda la adopción; cada título trae su propio valor en pesos
+	// (sc_libro[id_libro] / sc_area[cod_area], columna "Sobrecosto por libro"), que se guarda tal cual en presupuestos.sobrecosto.
+
+	// Sobrecosto por libro obligatorio en todos los títulos adoptados, con cualquier canal (2026-11-11); 0 es válido.
+	// Se valida antes de escribir nada: la clave del título es la primera parte de definir[] (id del libro, o cod_area
+	// en el grado "Otro"), la misma de sc_libro[] / sc_area[].
+	$sc_post = (array)($_POST['sc_libro'] ?? []) + (array)($_POST['sc_area'] ?? []);
+	$sc_faltan = [];
+	foreach ((array)($_POST['definir'] ?? []) as $def_sc) {
+		$clave_def = explode('/', (string)$def_sc)[0];
+		if ($clave_def === '' || !array_key_exists($clave_def, $sc_post)) continue;
+		if (preg_replace('/[^0-9]/', '', (string)$sc_post[$clave_def]) === '') $sc_faltan[] = $clave_def;
+	}
+	if ($sc_faltan) {
+		$nombres_sc = [];
+		$st_n = $bdd->prepare("SELECT libro FROM libros WHERE id = ?");
+		$st_a = $bdd->prepare("SELECT l.libro FROM libros l JOIN areas_objetivas a ON l.id = a.id_libro_eureka WHERE a.codigo = ? LIMIT 1");
+		foreach ($sc_faltan as $k) {
+			$st = ctype_digit($k) ? $st_n : $st_a;
+			$st->execute([$k]);
+			$nombres_sc[] = $st->fetchColumn() ?: $k;
+		}
+		header('Location: '.$url_adop.'&ink_status=error&ink_msg='.urlencode('Falta el sobrecosto por libro (puede ser 0) en: '.implode(', ', $nombres_sc).'. No se guardaron los cambios.'));
+		exit;
+	}
+
+	// Venta directa - Eureka (2026-11-10): fechas y horario de venta + contacto del colegio (nombre y celular obligatorios).
+	// Se valida antes de escribir nada.
+	require_once(__DIR__ . "/../includes/adopcion_vd_datos.php");
+	adopcion_vd_asegurar($bdd);
+	$vd_adop = null;
 	if ($con_sobrecosto) {
-		$pct_txt = str_replace(',', '.', trim((string)($_POST['sobrecosto_pct'] ?? '')));
-		if (!is_numeric($pct_txt) || (float)$pct_txt <= 0 || (float)$pct_txt > 100) {
-			header('Location: '.$url_adop.'&ink_status=error&ink_msg='.urlencode('Con este canal de venta el % de sobrecosto es obligatorio (mayor que 0 y hasta 100). No se guardaron los cambios.'));
+		$vd_res = adopcion_vd_del_post($_POST);
+		if (!$vd_res['ok']) {
+			header('Location: '.$url_adop.'&ink_status=error&ink_msg='.urlencode($vd_res['error'].' No se guardaron los cambios.'));
 			exit;
 		}
-		$sobrecosto_pct = round((float)$pct_txt, 2);
+		$vd_adop = $vd_res['datos'];
 	}
 
 	$sql_y = "SELECT 
@@ -730,18 +760,71 @@
 	historial_precios_paquetes($bdd, $_POST["id_colegio"], $id_usuario_h, $paquetes_antes,
 		paquetes_precios_actuales($bdd, $_POST["id_colegio"], $_POST["periodo"]));
 
-	$bdd->prepare("UPDATE recursos SET sobrecosto_pct = ?, id_canal2 = ? WHERE id_colegio = ? AND id_periodo = ?")
-		->execute([$sobrecosto_pct, $id_canal2, (int)$_POST["id_colegio"], (int)$_POST["periodo"]]);
+	$bdd->prepare("UPDATE recursos SET id_canal2 = ? WHERE id_colegio = ? AND id_periodo = ?")
+		->execute([$id_canal2, (int)$_POST["id_colegio"], (int)$_POST["periodo"]]);
+
+	if ($vd_adop !== null) {
+		$vd_nuevas = adopcion_vd_guardar($bdd, (int)$_POST["id_colegio"], (int)$_POST["periodo"], $vd_adop, $id_usuario_h);
+		// Alerta por correo/WhatsApp si otro usuario programó fechas nuevas (includes/alertas_vd.php).
+		if ($vd_nuevas) {
+			require_once(__DIR__ . "/../includes/alertas_vd.php");
+			try { alertas_vd_nueva($bdd, $vd_nuevas, $id_usuario_h); } catch (Throwable $e) { error_log("Alertas venta directa: " . $e->getMessage()); }
+		}
+	}
+
+	// Sobrecosto por libro: se guarda en todas las adopciones, con cualquier canal (2026-11-11). 0 es un valor válido;
+	// vacío deja el campo sin valor (NULL).
+	{
+		$sc_grupos = [
+			'id_libro' => (array)($_POST['sc_libro'] ?? []),
+			'cod_area' => (array)($_POST['sc_area'] ?? []),
+		];
+		foreach ($sc_grupos as $col_sc => $valores_sc) {
+			$st_sc_old = $bdd->prepare("SELECT sobrecosto FROM presupuestos WHERE id_colegio = ? AND id_periodo = ? AND $col_sc = ? LIMIT 1");
+			$st_sc_upd = $bdd->prepare("UPDATE presupuestos SET sobrecosto = ? WHERE id_colegio = ? AND id_periodo = ? AND $col_sc = ?");
+			$st_sc_lib = $col_sc === 'id_libro'
+				? $bdd->prepare("SELECT libro FROM libros WHERE id = ?")
+				: $bdd->prepare("SELECT l.libro FROM libros l JOIN areas_objetivas a ON l.id = a.id_libro_eureka WHERE a.codigo = ? LIMIT 1");
+			foreach ($valores_sc as $clave_sc => $valor_sc) {
+				$txt_sc = preg_replace('/[^0-9.,]/', '', trim((string)$valor_sc));
+				if (preg_match('/^\d{1,3}(\.\d{3})+(,\d+)?$/', $txt_sc)) $txt_sc = str_replace('.', '', $txt_sc); // "5.000" = cinco mil
+				$txt_sc = str_replace(',', '.', $txt_sc);
+				$nuevo_sc = ($txt_sc !== '' && is_numeric($txt_sc) && (float)$txt_sc >= 0) ? round((float)$txt_sc, 2) : null;
+				$params_sc = [(int)$_POST["id_colegio"], (int)$_POST["periodo"], (string)$clave_sc];
+				$st_sc_old->execute($params_sc);
+				$fila_sc = $st_sc_old->fetch(PDO::FETCH_ASSOC);
+				if (!$fila_sc) continue;
+				$viejo_sc = $fila_sc['sobrecosto'] !== null ? (float)$fila_sc['sobrecosto'] : null;
+				if ($viejo_sc === $nuevo_sc || ($viejo_sc !== null && $nuevo_sc !== null && abs($viejo_sc - $nuevo_sc) < 0.005)) continue;
+				$st_sc_upd->execute(array_merge([$nuevo_sc], $params_sc));
+				$st_sc_lib->execute([(string)$clave_sc]);
+				$nombre_sc = $st_sc_lib->fetchColumn() ?: "Libro $clave_sc";
+				registrar_historial($bdd, $_POST["id_colegio"], $id_usuario_h, 'Adopciones',
+					"Sobrecosto por libro - $nombre_sc", $viejo_sc === null ? '' : (string)$viejo_sc, $nuevo_sc === null ? '' : (string)$nuevo_sc);
+			}
+		}
+	}
 
 	// Con estos canales el precio venta padre es obligatorio en los títulos adoptados (la pantalla no deja enviar sin él;
 	// si igual llega vacío, se guarda lo demás y se avisa cuáles faltan).
+	$sin_pp = [];
 	if ($con_sobrecosto) {
 		$st_pp = $bdd->prepare("SELECT l.libro FROM presupuestos p JOIN libros l ON l.id = p.id_libro
 		                        WHERE p.id_colegio = ? AND p.id_periodo = ? AND p.definido = 1 AND COALESCE(p.precio_venta_final, 0) <= 0 ORDER BY l.libro");
 		$st_pp->execute([(int)$_POST["id_colegio"], (int)$_POST["periodo"]]);
 		$sin_pp = $st_pp->fetchAll(PDO::FETCH_COLUMN);
-		if ($sin_pp) {
-			header('Location: '.$url_adop.'&ink_status=error&ink_msg='.urlencode('Se guardó, pero falta el precio venta padre (obligatorio con este canal) en: '.implode(', ', $sin_pp).'.'));
+	}
+	{
+		// Sobrecosto por libro: obligatorio con cualquier canal; 0 cuenta como digitado (2026-11-11).
+		$st_sc_falta = $bdd->prepare("SELECT l.libro FROM presupuestos p JOIN libros l ON l.id = p.id_libro
+		                              WHERE p.id_colegio = ? AND p.id_periodo = ? AND p.definido = 1 AND p.sobrecosto IS NULL ORDER BY l.libro");
+		$st_sc_falta->execute([(int)$_POST["id_colegio"], (int)$_POST["periodo"]]);
+		$sin_sc = $st_sc_falta->fetchAll(PDO::FETCH_COLUMN);
+		$faltas = [];
+		if ($sin_pp) $faltas[] = 'falta el precio venta padre en: '.implode(', ', $sin_pp);
+		if ($sin_sc) $faltas[] = 'falta el sobrecosto por libro en: '.implode(', ', $sin_sc);
+		if ($faltas) {
+			header('Location: '.$url_adop.'&ink_status=error&ink_msg='.urlencode('Se guardó, pero son obligatorios: '.implode('; ', $faltas).'.'));
 			exit;
 		}
 	}
