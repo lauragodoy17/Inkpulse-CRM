@@ -47,6 +47,13 @@ function sobrecosto_asegurar_columna(PDO $bdd) {
             $bdd->exec("ALTER TABLE recursos ADD COLUMN $columna $definicion");
         } catch (Exception $e) {}
     }
+    // Descuentos de la adopción con más decimales (2026-11-11): DECIMAL(10,4) solo guardaba 2 decimales del %; con
+    // DECIMAL(12,8) caben 6 (ej. 51,648352 % para que 45.500 quede en 22.000,00 neto). Solo amplía, no pierde datos.
+    $st_dec = $bdd->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                           AND TABLE_NAME = 'presupuestos' AND COLUMN_NAME IN ('descuento', 'descuento_d') AND NUMERIC_SCALE < 8");
+    foreach ($st_dec->fetchAll(PDO::FETCH_COLUMN) as $col_dec) {
+        try { $bdd->exec("ALTER TABLE presupuestos MODIFY COLUMN $col_dec DECIMAL(12,8) NOT NULL"); } catch (Exception $e) {}
+    }
 }
 
 /** Ids de canal que llegan del formulario de Adopciones: máximo 2, sin repetir. */

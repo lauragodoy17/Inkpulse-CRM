@@ -988,14 +988,15 @@
             return "<td class='col-sc'><span class='precio-padre-wrap'><span class='pp-signo'>$</span><input type='text' class='sc-libro-inp' name='".$campo."[".htmlspecialchars((string)$clave, ENT_QUOTES)."]' value='".$v."'></span></td>";
         };
 
-    // Descuentos con decimales (2026-11-11): se acepta coma o punto ("12,5" = 12.5 %) y hasta 2 decimales. Se normaliza
+    // Descuentos con decimales (2026-11-11): se acepta coma o punto ("12,5" = 12.5 %) y hasta 6 decimales (para cuadrar
+    // un precio neto exacto, ej. 51,648352 % de 45.500 = 22.000,00; presupuestos.descuento(_d) es DECIMAL(12,8)). Se normaliza
     // en el evento input, que corre antes del keyup que recalcula el precio neto (parseFloat solo entiende el punto).
     echo <<<'JS'
 <script>
 $(document).off('input.descDec').on('input.descDec', 'input.desc-dec', function () {
   var v = this.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
   var i = v.indexOf('.');
-  if (i !== -1) v = v.substr(0, i + 1) + v.substr(i + 1).replace(/\./g, '').substr(0, 2);
+  if (i !== -1) v = v.substr(0, i + 1) + v.substr(i + 1).replace(/\./g, '').substr(0, 6);
   if (v !== this.value) this.value = v;
 });
 </script>
@@ -1106,10 +1107,10 @@ JS;
                                         echo "<td><input type='text' size='4' inputmode='decimal' class='desc-dec' name='descuento[]' value='20' id='descuento_d".$libro_p["id"]."' required> %</td>";
                                     }
                                     if ($presup["tasa_compra"] !="" && $presup["tasa_compra_d"] ==0.00) {
-                                        $precio_neto= $presup["precio"] -( $presup["precio"] * $presup["descuento"]);
+                                        $precio_neto= round($presup["precio"] -( $presup["precio"] * $presup["descuento"]), 2);
 
                                         if ($presup["definido"] ==1) {
-                                            $venta_p= $precio_neto * floor($gp["alumnos"] * $presup["tasa_compra"]/100);
+                                            $venta_p= round($precio_neto * floor($gp["alumnos"] * $presup["tasa_compra"]/100));
                                         }else{
                                             $venta_p=0;
                                         }
@@ -1131,10 +1132,10 @@ JS;
                                     }
                                     elseif($presup["tasa_compra_d"] !=""){
 
-                                        $precio_neto= $presup["precio"] -( $presup["precio"] * $presup["descuento_d"]);
+                                        $precio_neto= round($presup["precio"] -( $presup["precio"] * $presup["descuento_d"]), 2);
 
                                         if ($presup["definido"] ==1) {
-                                            $venta_p= $precio_neto * floor($gp["alumnos"] * $presup["tasa_compra_d"]/100);
+                                            $venta_p= round($precio_neto * floor($gp["alumnos"] * $presup["tasa_compra_d"]/100));
                                         }else{
                                             $venta_p=0;
                                         }
@@ -1191,13 +1192,13 @@ JS;
 
                                             descuento= descuento/100;
 
-                                            var precio_neto= pvp - (pvp * descuento);
+                                            var precio_neto= Math.round((pvp - (pvp * descuento)) * 100) / 100;
 
                                             if(isNaN(precio_neto)){
                                               precio_neto=0
                                             }
 
-                                            $('#pn_d".$libro2["id"]."').text(formatNumber.new(precio_neto));
+                                            $('#pn_d".$libro2["id"]."').text(formatNumber.new(precio_neto.toFixed(2)));
 
 
                                             var tasa_c=parseInt($('#tasa_d".$libro2["id"]."').val());
@@ -1206,13 +1207,13 @@ JS;
 
                                             var alumnos=parseInt($('#alm_d".$libro2["id"]."').text());
 
-                                            var vp= precio_neto *(Math.floor(alumnos*tasa_c))
+                                            var vp= Math.round(precio_neto *(Math.floor(alumnos*tasa_c)))
 
                                             if(isNaN(vp)){
                                               vp=0
                                             }
 
-                                            $('#venta_p_d".$libro2["id"]."').text(formatNumber.new(vp));
+                                            $('#venta_p_d".$libro2["id"]."').text(formatNumber.new(Math.round(vp)));
 
                                             $('#venta_ps_d".$libro2["id"]."').val(vp);
                                             
@@ -1248,13 +1249,13 @@ JS;
                                             var descuento=parseFloat($('#descuento_d".$libro2["id"]."').val());
                                             descuento= descuento/100;
 
-                                            var precio_neto= pvp - (pvp * descuento);
+                                            var precio_neto= Math.round((pvp - (pvp * descuento)) * 100) / 100;
 
                                             if(isNaN(precio_neto)){
                                               precio_neto=0
                                             }
 
-                                            $('#pn_d".$libro2["id"]."').text(formatNumber.new(precio_neto));
+                                            $('#pn_d".$libro2["id"]."').text(formatNumber.new(precio_neto.toFixed(2)));
 
 
                                             var tasa_c=parseInt($('#tasa_d".$libro2["id"]."').val());
@@ -1263,13 +1264,13 @@ JS;
 
                                             var alumnos=parseInt($('#alm_d".$libro2["id"]."').text());
 
-                                            var vp= precio_neto *(Math.floor(alumnos*tasa_c))
+                                            var vp= Math.round(precio_neto *(Math.floor(alumnos*tasa_c)))
 
                                             if(isNaN(vp)){
                                               vp=0
                                             }
 
-                                            $('#venta_p_d".$libro2["id"]."').text(formatNumber.new(vp));
+                                            $('#venta_p_d".$libro2["id"]."').text(formatNumber.new(Math.round(vp)));
 
                                             $('#venta_ps_d".$libro2["id"]."').val(vp);
                                             
@@ -1304,13 +1305,13 @@ JS;
                                             var descuento=parseFloat($('#descuento_d".$libro2["id"]."').val());
                                             descuento= descuento/100;
 
-                                            var precio_neto= pvp - (pvp * descuento);
+                                            var precio_neto= Math.round((pvp - (pvp * descuento)) * 100) / 100;
 
                                             if(isNaN(precio_neto)){
                                               precio_neto=0
                                             }
 
-                                            $('#pn_d".$libro2["id"]."').text(formatNumber.new(precio_neto));
+                                            $('#pn_d".$libro2["id"]."').text(formatNumber.new(precio_neto.toFixed(2)));
 
 
                                             var tasa_c=parseInt($('#tasa_d".$libro2["id"]."').val());
@@ -1319,13 +1320,13 @@ JS;
 
                                             var alumnos=parseInt($('#alm_d".$libro2["id"]."').text());
 
-                                            var vp= precio_neto *(Math.floor(alumnos*tasa_c))
+                                            var vp= Math.round(precio_neto *(Math.floor(alumnos*tasa_c)))
 
                                             if(isNaN(vp)){
                                               vp=0
                                             }
 
-                                            $('#venta_p_d".$libro2["id"]."').text(formatNumber.new(vp));
+                                            $('#venta_p_d".$libro2["id"]."').text(formatNumber.new(Math.round(vp)));
 
                                             $('#venta_ps_d".$libro2["id"]."').val(vp);
                                             
@@ -1474,10 +1475,10 @@ JS;
                                           echo "<td><input type='text' size='4' inputmode='decimal' class='desc-dec' name='descuento[]' value='20' id='descuento_d".$libro_p["id"]."' required> %</td>";
                                         }
                                         if ($presup["tasa_compra"] !="" && $presup["tasa_compra_d"] ==0.00) {
-                                          $precio_neto= $presup["precio"] -( $presup["precio"] * $presup["descuento"]);
+                                          $precio_neto= round($presup["precio"] -( $presup["precio"] * $presup["descuento"]), 2);
 
                                           if ($presup["definido"]==1) {
-                                            $venta_p= $precio_neto * floor($gp["alumnos"] * $presup["tasa_compra"]/100);
+                                            $venta_p= round($precio_neto * floor($gp["alumnos"] * $presup["tasa_compra"]/100));
                                           }else{
                                             $venta_p=0;
                                           }
@@ -1500,9 +1501,9 @@ JS;
                                         }
                                         elseif( $presup["tasa_compra_d"] !=""){
 
-                                          $precio_neto= $presup["precio"] -( $presup["precio"] * $presup["descuento_d"]);
+                                          $precio_neto= round($presup["precio"] -( $presup["precio"] * $presup["descuento_d"]), 2);
                                           if ($presup["definido"]==1) {
-                                            $venta_p= $precio_neto * floor($gp["alumnos"] * $presup["tasa_compra_d"]/100);
+                                            $venta_p= round($precio_neto * floor($gp["alumnos"] * $presup["tasa_compra_d"]/100));
                                           }else{
                                              $venta_p= 0;
                                           }
@@ -1647,13 +1648,13 @@ JS;
 
 
 
-                                            var precio_neto= pvp - (pvp * descuento);
+                                            var precio_neto= Math.round((pvp - (pvp * descuento)) * 100) / 100;
 
                                             if(isNaN(precio_neto)){
                                               precio_neto=0
                                             }
 
-                                            $('#pn_d".$libro_p["id"]."').text(formatNumber.new(precio_neto));
+                                            $('#pn_d".$libro_p["id"]."').text(formatNumber.new(precio_neto.toFixed(2)));
 
 
                                             var tasa_c=parseInt($('#tasa_d".$libro_p["id"]."').val());
@@ -1662,13 +1663,13 @@ JS;
 
                                             var alumnos=parseInt($('#alm_d".$libro_p["id"]."').text());
 
-                                            var vp= precio_neto *(Math.floor(alumnos*tasa_c))
+                                            var vp= Math.round(precio_neto *(Math.floor(alumnos*tasa_c)))
 
                                             if(isNaN(vp)){
                                               vp=0;
                                             }
 
-                                            $('#venta_p_d".$libro_p["id"]."').text(formatNumber.new(vp));
+                                            $('#venta_p_d".$libro_p["id"]."').text(formatNumber.new(Math.round(vp)));
 
                                             $('#venta_ps_d".$libro_p["id"]."').val(vp);
 
@@ -1697,13 +1698,13 @@ JS;
                                             var descuento=parseFloat($('#descuento_d".$libro_p["id"]."').val());
                                             descuento= descuento/100;
 
-                                            var precio_neto= pvp - (pvp * descuento);
+                                            var precio_neto= Math.round((pvp - (pvp * descuento)) * 100) / 100;
 
                                             if(isNaN(precio_neto)){
                                               precio_neto=0
                                             }
 
-                                            $('#pn_d".$libro_p["id"]."').text(formatNumber.new(precio_neto));
+                                            $('#pn_d".$libro_p["id"]."').text(formatNumber.new(precio_neto.toFixed(2)));
 
 
                                             var tasa_c=parseInt($('#tasa_d".$libro_p["id"]."').val());
@@ -1712,13 +1713,13 @@ JS;
 
                                             var alumnos=parseInt($('#alm_d".$libro_p["id"]."').text());
 
-                                            var vp= precio_neto *(Math.floor(alumnos*tasa_c))
+                                            var vp= Math.round(precio_neto *(Math.floor(alumnos*tasa_c)))
 
                                             if(isNaN(vp)){
                                               vp=0;
                                             }
 
-                                            $('#venta_p_d".$libro_p["id"]."').text(formatNumber.new(vp));
+                                            $('#venta_p_d".$libro_p["id"]."').text(formatNumber.new(Math.round(vp)));
 
                                             $('#venta_ps_d".$libro_p["id"]."').val(vp);
 
@@ -1748,13 +1749,13 @@ JS;
                                             var descuento=parseFloat($('#descuento_d".$libro_p["id"]."').val());
                                             descuento= descuento/100;
 
-                                            var precio_neto= pvp - (pvp * descuento);
+                                            var precio_neto= Math.round((pvp - (pvp * descuento)) * 100) / 100;
 
                                             if(isNaN(precio_neto)){
                                               precio_neto=0
                                             }
 
-                                            $('#pn_d".$libro_p["id"]."').text(formatNumber.new(precio_neto));
+                                            $('#pn_d".$libro_p["id"]."').text(formatNumber.new(precio_neto.toFixed(2)));
 
 
                                             var tasa_c=parseInt($('#tasa_d".$libro_p["id"]."').val());
@@ -1763,13 +1764,13 @@ JS;
 
                                             var alumnos=parseInt($('#alm_d".$libro_p["id"]."').text());
 
-                                            var vp= precio_neto *(Math.floor(alumnos*tasa_c))
+                                            var vp= Math.round(precio_neto *(Math.floor(alumnos*tasa_c)))
 
                                             if(isNaN(vp)){
                                               vp=0;
                                             }
 
-                                            $('#venta_p_d".$libro_p["id"]."').text(formatNumber.new(vp));
+                                            $('#venta_p_d".$libro_p["id"]."').text(formatNumber.new(Math.round(vp)));
 
                                             $('#venta_ps_d".$libro_p["id"]."').val(vp);
 
@@ -1801,7 +1802,7 @@ JS;
 
                                             descuento= descuento/100;
 
-                                            var precio_neto= pvp - (pvp * descuento);
+                                            var precio_neto= Math.round((pvp - (pvp * descuento)) * 100) / 100;
 
                                             if(isNaN(precio_neto)){
                                               precio_neto=0
@@ -1811,7 +1812,7 @@ JS;
 
                                             var uni_vr=parseInt($('#uni_vr".$libro_p["id"]."').val());
 
-                                            var vr= precio_neto * uni_vr
+                                            var vr= Math.round(precio_neto * uni_vr)
 
                                             if(isNaN(vr)){
                                               vr=0;
