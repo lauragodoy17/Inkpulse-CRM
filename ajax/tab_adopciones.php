@@ -69,6 +69,7 @@
   $costo_anual = ($costo_ia_semanal * 53) + $costo_almacenamiento_anual;
 ?>
 
+<link rel="stylesheet" href="src/vd-pickers.css?v=20261110">
 <style>
   /* ── Contenedor ───────────────────────────────────────────── */
   .adop-wrap { padding: 24px; }
@@ -128,6 +129,110 @@
   .adop-ia-section .adop-card-icon { width: 36px; height: 36px; font-size: 1rem; }
   .adop-ia-section .adop-card-val { font-size: 1rem; }
 
+  /* Venta directa - Eureka: fechas/horario de venta y contacto del colegio */
+  .vd-panel { margin-top: 14px; border: 1px solid #c7d2fe; background: #eef2ff; border-radius: 12px; padding: 14px 16px; }
+  .vd-tit { font-weight: 700; color: #3730a3; font-size: .9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .vd-panel { container-type: inline-size; container-name: vdpanel; }
+  .vd-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  @container vdpanel (min-width: 1180px) { .vd-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+  .vd-sub { font-size: .78rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .vd-panel label { display: block; font-size: .72rem; color: #64748b; font-weight: 600; margin-bottom: 3px; letter-spacing: .01em; }
+  .vd-panel label small { font-weight: 500; color: #94a3b8; }
+  .vd-ob { color: #dc2626; }
+
+  /* Campos con ícono y selectores de fecha y hora: src/vd-pickers.css */
+
+  /* Tarjeta de cada fecha */
+  .vd-jornada {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 10px 12px;
+    background: #fff; border: 1px solid #e0e7ff; border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .05); transition: border-color .15s, box-shadow .15s;
+  }
+  .vd-jornada:focus-within { border-color: #a5b4fc; box-shadow: 0 4px 14px rgba(99, 102, 241, .12); }
+  .vd-jornada.vd-error { border-color: #fca5a5; }
+  .vd-jornada.vd-error .vd-pick[data-tipo=hora] .vd-pick-txt { border-color: #fca5a5; }
+  .vd-dia {
+    flex: 0 0 62px; text-align: center; border-radius: 10px; padding: 6px 4px; line-height: 1.1;
+    background: linear-gradient(160deg, #6366f1, #4338ca); color: #fff;
+  }
+  .vd-dia-sem { display: block; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; opacity: .85; }
+  .vd-dia-num { display: block; font-size: 1.35rem; font-weight: 800; }
+  .vd-dia-mes { display: block; font-size: .64rem; text-transform: capitalize; opacity: .85; white-space: nowrap; }
+  .vd-dia.vd-dia-vacio { background: #eef2ff; color: #a5b4fc; }
+  .vd-campos { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+  .vd-f { min-width: 0; }
+  .vd-pick .vd-pick-txt { text-overflow: ellipsis; }
+  .vd-flecha { color: #a5b4fc; padding-bottom: 9px; }
+  .vd-duracion { align-self: end; margin-bottom: 7px; justify-self: start; font-size: .74rem; font-weight: 700; color: #4338ca; background: #eef2ff; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+  .vd-duracion:empty { display: none; }
+  .vd-duracion.vd-dur-error { color: #b91c1c; background: #fef2f2; }
+  .vd-quitar {
+    flex: 0 0 34px; width: 34px; height: 34px; border: 1px solid #fee2e2; background: #fff; color: #ef4444;
+    border-radius: 10px; transition: background .15s, color .15s;
+  }
+  .vd-quitar:hover:not(:disabled) { background: #fef2f2; color: #b91c1c; }
+  .vd-quitar:disabled, .vd-agregar:disabled { opacity: .5; cursor: not-allowed; }
+  .vd-agregar {
+    width: 100%; border: 1.5px dashed #a5b4fc; background: rgba(255, 255, 255, .6); color: #4338ca;
+    border-radius: 12px; padding: 8px 12px; font-size: .82rem; font-weight: 700; transition: background .15s, border-color .15s;
+  }
+  .vd-agregar:hover:not(:disabled) { background: #fff; border-color: #6366f1; }
+  /* ¿Ya tiene fechas de venta? */
+  .vd-pregunta {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-bottom: 10px;
+    background: #fff; border: 1px solid #e0e7ff; border-radius: 12px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
+  }
+  .vd-pregunta-txt { font-size: .84rem; font-weight: 600; color: #1e293b; }
+  .vd-sino { display: inline-flex; gap: 4px; padding: 3px; background: #eef2ff; border-radius: 10px; border: 1px solid transparent; }
+  .vd-sino.vd-falta { border-color: #f87171; background: #fef2f2; }
+  .vd-sino label { margin: 0; cursor: pointer; }
+  .vd-sino input { position: absolute; opacity: 0; pointer-events: none; }
+  .vd-sino span {
+    display: inline-flex; align-items: center; gap: 6px; min-width: 70px; justify-content: center;
+    padding: 6px 14px; border-radius: 8px; font-size: .82rem; font-weight: 700; color: #4338ca; transition: background .15s, color .15s;
+  }
+  .vd-sino label:hover span { background: rgba(255, 255, 255, .7); }
+  .vd-sino input:checked + span { background: linear-gradient(160deg, #6366f1, #4338ca); color: #fff; box-shadow: 0 3px 8px rgba(79, 70, 229, .3); }
+  .vd-sino input[value="0"]:checked + span { background: #475569; box-shadow: 0 3px 8px rgba(71, 85, 105, .3); }
+  .vd-sino input:focus-visible + span { outline: 2px solid #818cf8; outline-offset: 1px; }
+  .vd-sino input:disabled + span { opacity: .5; cursor: not-allowed; }
+  .vd-sin-fechas { font-size: .8rem; color: #475569; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 10px 12px; }
+  .vd-sin-fechas i { color: #6366f1; margin-right: 4px; }
+  .vd-contacto {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px;
+    background: #fff; border: 1px solid #e0e7ff; border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(15, 23, 42, .05);
+  }
+  /* Validación del celular */
+  .vd-inp .vd-cel-estado { left: auto; right: 11px; font-size: .9rem; }
+  .vd-inp .vd-cel-estado:not([class*="bi-"]) { display: none; }
+  .vd-inp.vd-cel-ok .vd-cel-estado { color: #16a34a; }
+  .vd-inp.vd-cel-mal .vd-cel-estado { color: #dc2626; }
+  .vd-inp.vd-cel-ok input { border-color: #86efac; padding-right: 32px; }
+  .vd-inp.vd-cel-mal input { border-color: #f87171; background: #fef2f2; padding-right: 32px; }
+  .vd-inp.vd-cel-mal input:focus { box-shadow: 0 0 0 3px rgba(248, 113, 113, .2); }
+  .vd-cel-msg { display: block; min-height: 1em; margin-top: 3px; font-size: .72rem; color: #94a3b8; }
+  .vd-cel-msg.vd-cel-msg-error { color: #dc2626; font-weight: 600; }
+  /* Responsive según el ancho real de cada tarjeta (no de la pantalla): el bloque puede quedar angosto en pantallas grandes */
+  .vd-jornada { container-type: inline-size; container-name: vdj; }
+  @container vdj (max-width: 720px) {
+    .vd-campos { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .vd-f-fecha { grid-column: 1 / -1; }
+    .vd-flecha { display: none; }
+    .vd-duracion { grid-column: 1 / -1; margin-bottom: 0; }
+  }
+  @container vdj (max-width: 400px) {
+    .vd-dia { flex-basis: 52px; padding: 5px 3px; }
+    .vd-dia-num { font-size: 1.15rem; }
+    .vd-campos { grid-template-columns: minmax(0, 1fr); }
+  }
+  /* Navegadores sin consultas de contenedor */
+  @supports not (container-type: inline-size) {
+    @media (max-width: 1100px) {
+      .vd-campos { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      .vd-f-fecha, .vd-duracion { grid-column: 1 / -1; }
+      .vd-flecha { display: none; }
+    }
+  }
   .sc-panel { margin-top: 14px; border: 1px solid #fde68a; background: #fffbeb; border-radius: 12px; padding: 14px 16px; }
   .sc-tit { font-weight: 700; color: #92400e; font-size: .9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
   .sc-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
@@ -228,8 +333,11 @@
   #dataTables-adop thead th.sorting_asc,
   #dataTables-adop thead th.sorting_desc { background-image: none !important; padding-right: 8px !important; }
 
+  /* Sobrecosto por libro: oculto si la adopción no tiene canal con sobrecosto */
+  #dataTables-adop.sin-sobrecosto .col-sc { display: none; }
+
   /* Precio venta padre más ancho */
-  input.precio-padre-inp {
+  input.precio-padre-inp, input.sc-libro-inp {
     width: 90px !important;
     border: 1px solid #cbd5e0;
     border-radius: 6px;
@@ -239,7 +347,7 @@
     outline: none;
     transition: border-color .15s, box-shadow .15s;
   }
-  input.precio-padre-inp:focus {
+  input.precio-padre-inp:focus, input.sc-libro-inp:focus {
     border-color: #6366f1;
     background: #fff;
     box-shadow: 0 0 0 2px rgba(99,102,241,.2);
@@ -864,6 +972,35 @@
         }
         $ids_exist_adop = array_values(array_unique($ids_exist_adop));
 
+        // Sobrecosto por libro (2026-11-10): valor en pesos que se digita en cada título (presupuestos.sobrecosto), sin
+        // cálculo. Desde 2026-11-11 la columna se ve y se guarda con cualquier canal; solo con "Venta directa - Eureka"
+        // es obligatoria (0 es válido).
+        require_once(__DIR__ . "/../includes/sobrecosto_canal.php");
+        sobrecosto_asegurar_columna($bdd);
+        $st_sc_tab = $bdd->prepare("SELECT id_canal, id_canal2 FROM recursos WHERE id_periodo = ? AND id_colegio = ? LIMIT 1");
+        $st_sc_tab->execute([(int)$gp_periodo["id"], (int)$_GET["colegio"]]);
+        $rec_sc_tab = $st_sc_tab->fetch(PDO::FETCH_ASSOC);
+        $tab_con_sc = $rec_sc_tab && array_intersect([(int)$rec_sc_tab["id_canal"], (int)$rec_sc_tab["id_canal2"]], canales_con_sobrecosto($bdd));
+        // $campo: 'sc_libro' (clave = id del libro) o 'sc_area' (clave = cod_area, grado "Otro").
+        // 2026-11-11: la columna se muestra y se guarda en todas las adopciones (no solo venta directa) y acepta 0.
+        $celda_sc_libro = function ($campo, $clave, $valor) {
+            $v = ($valor !== null && $valor !== '' && (float)$valor >= 0) ? rtrim(rtrim(number_format((float)$valor, 2, '.', ''), '0'), '.') : '';
+            return "<td class='col-sc'><span class='precio-padre-wrap'><span class='pp-signo'>$</span><input type='text' class='sc-libro-inp' name='".$campo."[".htmlspecialchars((string)$clave, ENT_QUOTES)."]' value='".$v."'></span></td>";
+        };
+
+    // Descuentos con decimales (2026-11-11): se acepta coma o punto ("12,5" = 12.5 %) y hasta 2 decimales. Se normaliza
+    // en el evento input, que corre antes del keyup que recalcula el precio neto (parseFloat solo entiende el punto).
+    echo <<<'JS'
+<script>
+$(document).off('input.descDec').on('input.descDec', 'input.desc-dec', function () {
+  var v = this.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+  var i = v.indexOf('.');
+  if (i !== -1) v = v.substr(0, i + 1) + v.substr(i + 1).replace(/\./g, '').substr(0, 2);
+  if (v !== this.value) this.value = v;
+});
+</script>
+JS;
+
     echo "<form action='php/guardar_definicion.php' class='miFormulario' method='POST' id='form_definicion' name='f2' enctype='multipart/form-data'>";
                               
             echo "<div class='adop-table-wrap mt-2'>
@@ -880,6 +1017,7 @@
                     <th>Precio neto</th>
                     <th>Venta potencial</th>
                     <th>Precio venta padre</th>
+                    <th class='col-sc'>Sobrecosto por libro</th>
                     <th>Adopción <input type='checkbox' id='seleccionar_pre'></th>
                     <th>Unidades venta real</th>
                     <th>Venta real</th>
@@ -898,7 +1036,7 @@
 
                             foreach ($libros2 as $libro2) {
 
-                                $sql_presup = "SELECT id, precio, tasa_compra, descuento, definido, tasa_compra_d, descuento_d, precio_venta_final FROM presupuestos WHERE id_libro='".$libro2["id"]."' AND id_periodo='".$gp_periodo["id"]."' AND id_colegio='".$_GET["colegio"]."'";
+                                $sql_presup = "SELECT id, precio, tasa_compra, descuento, definido, tasa_compra_d, descuento_d, precio_venta_final, sobrecosto FROM presupuestos WHERE id_libro='".$libro2["id"]."' AND id_periodo='".$gp_periodo["id"]."' AND id_colegio='".$_GET["colegio"]."'";
                             
                                 $req_presup = $bdd->prepare($sql_presup);
                                 $req_presup->execute();
@@ -954,18 +1092,18 @@
                                     if ($presup["descuento"] !="" && $presup["descuento_d"] ==0.00) {
 
                                         $presup_m = $presup["descuento"] * 100;
-                                        echo "<td><input type='text' size='2' name='descuento[]' id='descuento_d".$libro2["id"]."' value='".$presup_m."'> %</td>";
+                                        echo "<td><input type='text' size='4' inputmode='decimal' class='desc-dec' name='descuento[]' id='descuento_d".$libro2["id"]."' value='".$presup_m."'> %</td>";
 
                                     }
                                     elseif( $presup["descuento_d"] !=""){
 
                                         $presup_m = $presup["descuento_d"] * 100;
-                                        echo "<td><input type='text' size='2' name='descuento[]' id='descuento_d".$libro2["id"]."' value='".$presup_m."'> %</td>";
+                                        echo "<td><input type='text' size='4' inputmode='decimal' class='desc-dec' name='descuento[]' id='descuento_d".$libro2["id"]."' value='".$presup_m."'> %</td>";
 
                                     }
                                     else {
 
-                                        echo "<td><input type='text' size='2' name='descuento[]' value='20' id='descuento_d".$libro_p["id"]."' required> %</td>";
+                                        echo "<td><input type='text' size='4' inputmode='decimal' class='desc-dec' name='descuento[]' value='20' id='descuento_d".$libro_p["id"]."' required> %</td>";
                                     }
                                     if ($presup["tasa_compra"] !="" && $presup["tasa_compra_d"] ==0.00) {
                                         $precio_neto= $presup["precio"] -( $presup["precio"] * $presup["descuento"]);
@@ -1028,6 +1166,7 @@
                                     }
 
                                     echo "<td><span class='precio-padre-wrap'><span class='pp-signo'>$</span><input type='text' class='precio-padre-inp' name='precio_padre[]' id='precio_padre".$libro2["id"]."' value='".$presup["precio_venta_final"]."'></span></td>";
+                                    echo $celda_sc_libro('sc_libro', $libro2["id"], $presup["sobrecosto"] ?? null);
                                         
                                     if ($presup["tasa_compra"] !=0.00 || $presup["tasa_compra_d"] !=0.00) {
                                         if ($presup["definido"] ==1) {
@@ -1230,11 +1369,11 @@
 
                                   if ($libro_p["id_grado"] != 17) {
 
-                                  $sql_presup = "SELECT id,precio, tasa_compra, descuento, tasa_compra_d, descuento_d, precio_venta_final, definido, uni_vr FROM presupuestos WHERE id_libro='".$libro_p["id"]."' AND id_periodo='".$gp_periodo["id"]."' AND id_colegio='".$_GET["colegio"]."'";
+                                  $sql_presup = "SELECT id,precio, tasa_compra, descuento, tasa_compra_d, descuento_d, precio_venta_final, definido, uni_vr, sobrecosto FROM presupuestos WHERE id_libro='".$libro_p["id"]."' AND id_periodo='".$gp_periodo["id"]."' AND id_colegio='".$_GET["colegio"]."'";
 
                                   }else{
 
-                                    $sql_presup = "SELECT id,precio, tasa_compra, descuento, tasa_compra_d, descuento_d, precio_venta_final, definido, uni_vr  FROM presupuestos WHERE cod_area='".$libro_p["cod_area"]."' AND id_periodo='".$gp_periodo["id"]."' AND id_colegio='".$_GET["colegio"]."'";
+                                    $sql_presup = "SELECT id,precio, tasa_compra, descuento, tasa_compra_d, descuento_d, precio_venta_final, definido, uni_vr, sobrecosto FROM presupuestos WHERE cod_area='".$libro_p["cod_area"]."' AND id_periodo='".$gp_periodo["id"]."' AND id_colegio='".$_GET["colegio"]."'";
 
                                   }
                             
@@ -1321,18 +1460,18 @@
                                       if ($presup["descuento"] !="" && $presup["descuento_d"] ==0.00) {
 
                                           $presup_m = $presup["descuento"] * 100;
-                                          echo "<td><input type='text' size='2' name='descuento[]' id='descuento_d".$libro_p["id"]."' value='".$presup_m."'> %</td>";
+                                          echo "<td><input type='text' size='4' inputmode='decimal' class='desc-dec' name='descuento[]' id='descuento_d".$libro_p["id"]."' value='".$presup_m."'> %</td>";
 
                                         }
                                         elseif( $presup["descuento_d"] !=""){
 
                                           $presup_m = $presup["descuento_d"] * 100;
-                                          echo "<td><input type='text' size='2' name='descuento[]' id='descuento_d".$libro_p["id"]."' value='".$presup_m."'> %</td>";
+                                          echo "<td><input type='text' size='4' inputmode='decimal' class='desc-dec' name='descuento[]' id='descuento_d".$libro_p["id"]."' value='".$presup_m."'> %</td>";
 
                                         }
                                         else {
 
-                                          echo "<td><input type='text' size='2' name='descuento[]' value='20' id='descuento_d".$libro_p["id"]."' required> %</td>";
+                                          echo "<td><input type='text' size='4' inputmode='decimal' class='desc-dec' name='descuento[]' value='20' id='descuento_d".$libro_p["id"]."' required> %</td>";
                                         }
                                         if ($presup["tasa_compra"] !="" && $presup["tasa_compra_d"] ==0.00) {
                                           $precio_neto= $presup["precio"] -( $presup["precio"] * $presup["descuento"]);
@@ -1397,6 +1536,7 @@
 
 
                                           echo "<td><span class='precio-padre-wrap'><span class='pp-signo'>$</span><input type='text' class='precio-padre-inp' name='precio_padre[]' id='precio_padre".$libro_p["id"]."' value='".$presup["precio_venta_final"]."'></span></td>";
+                                          echo $celda_sc_libro($libro_p["id_grado"] == 17 ? 'sc_area' : 'sc_libro', $libro_p["id"], $presup["sobrecosto"] ?? null);
 
                                           if ($presup["tasa_compra"] !=0.00 || $presup["tasa_compra_d"] !=0.00) {
                                             if ($presup["definido"] ==1) {
@@ -1737,7 +1877,7 @@
                                 <td>Total</td>
                                 <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
                                 <td id='total_vp_d'></td>
-                                <td></td><td></td><td></td>
+                                <td></td><td class='col-sc'></td><td></td><td></td>
                                 <td id='total_vr'></td>
                               </tr>
                               </tfoot>
@@ -1785,17 +1925,9 @@
                           }
                           echo '</select></div>';
 
-                          // % de sobrecosto (2026-10-26): solo con "Venta directa - Andrea"; uno para toda
-                          // la adopción. Sobrecosto = unidades vendidas en los formatos de venta directa cerrados × precio × %.
+                          // Sobrecosto (2026-11-10): ya no hay un % para toda la adopción; con "Venta directa - Eureka"
+                          // cada título lleva su propio valor en la columna "Sobrecosto por libro" de la tabla.
                           $con_sobrecosto = (bool)array_intersect($canales_adop, $canales_sobrecosto);
-                          $pct_sobrecosto = $count > 0 && $recursos["sobrecosto_pct"] !== null ? rtrim(rtrim(number_format((float)$recursos["sobrecosto_pct"], 2, '.', ''), '0'), '.') : '';
-                          echo '<div class="col-sm-4" id="sobrecosto_campo"'.($con_sobrecosto ? '' : ' style="display:none"').'>
-                                  <span class="form-label-sm">
-                                    <i class="bi bi-percent"></i> % de sobrecosto <span style="color:#dc2626">*</span>
-                                  </span>
-                                  <input type="number" name="sobrecosto_pct" id="sobrecosto_pct" class="form-control" min="0.01" max="100" step="0.01"
-                                         value="'.htmlspecialchars($pct_sobrecosto).'" placeholder="Ej: 10"'.($con_sobrecosto ? ' required' : ' disabled').'>';
-                          echo '</div>';
                           echo '<script>
                             var canalesSobrecosto = '.json_encode($canales_sobrecosto).';
                             function canalLlevaSobrecosto() {
@@ -1812,46 +1944,62 @@
                             });
                             $("#canal").on("change", function () {
                               var con = canalLlevaSobrecosto();
-                              $("#sobrecosto_campo, #sobrecosto_panel").toggle(con);
-                              $("#sobrecosto_pct").prop("disabled", !con).prop("required", con);
+                              // Fechas y horario de venta + contacto del colegio (2026-11-10).
+                              $("#vd_panel").toggle(con).find(":input").prop("disabled", !con);
+                              if (window.vdAplicarTieneFechas) window.vdAplicarTieneFechas();
                             });
                             // Ventana con los estilos de src/ink-alerts.js: lista los títulos sin precio y al cerrar lleva al primero.
-                            function alertaPrecioPadre(titulos) {
+                            // faltanPp / faltanSc: títulos sin precio venta padre / sin sobrecosto por libro.
+                            function alertaPrecioPadre(faltanPp, faltanSc) {
+                              faltanSc = faltanSc || [];
                               var esc = function (t) { return $("<div>").text(t).html(); };
-                              var lista = titulos.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("");
-                              var $ov = $("<div class=\"ink-overlay\"><div class=\"ink-modal\" style=\"width:420px;\">"
+                              var estiloUl = "max-height:180px;overflow:auto;margin:0 0 14px;padding:10px 14px 10px 30px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:.84rem;color:#78350f;text-align:left;";
+                              var bloque = function (tit, titulos) {
+                                if (!titulos.length) return "";
+                                return "<p style=\"margin:0 0 6px;font-weight:700;font-size:.84rem;text-align:left;\">" + tit + "</p>"
+                                  + "<ul style=\"" + estiloUl + "\">" + titulos.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>";
+                              };
+                              var titulo = faltanPp.length && faltanSc.length ? "Faltan precios y sobrecostos"
+                                : (faltanSc.length ? "Falta el sobrecosto por libro" : "Falta el precio venta padre");
+                              var $ov = $("<div class=\"ink-overlay\"><div class=\"ink-modal\" style=\"width:440px;\">"
                                 + "<div class=\"ink-modal-icon warning\"><i class=\"bi bi-tag-fill\"></i></div>"
-                                + "<p class=\"ink-modal-title\">Falta el precio venta padre</p>"
-                                + "<p class=\"ink-modal-text\" style=\"margin-bottom:12px;\">Con este canal de venta el precio venta padre es obligatorio en los títulos adoptados. Complétalo en:</p>"
-                                + "<ul style=\"max-height:220px;overflow:auto;margin:0 0 20px;padding:10px 14px 10px 30px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:.84rem;color:#78350f;text-align:left;\">" + lista + "</ul>"
-                                + "<div class=\"ink-modal-btns\"><button type=\"button\" class=\"ink-btn-warning\">Entendido</button></div>"
+                                + "<p class=\"ink-modal-title\">" + titulo + "</p>"
+                                + "<p class=\"ink-modal-text\" style=\"margin-bottom:12px;\">Son obligatorios en los títulos adoptados (el sobrecosto puede ser 0). Complétalos en:</p>"
+                                + bloque("Precio venta padre", faltanPp)
+                                + bloque("Sobrecosto por libro", faltanSc)
+                                + "<div class=\"ink-modal-btns\" style=\"margin-top:6px;\"><button type=\"button\" class=\"ink-btn-warning\">Entendido</button></div>"
                                 + "</div></div>");
                               var cerrar = function () {
                                 $ov.remove();
-                                var $primero = $("input.precio-padre-inp").filter(function () { return this.style.borderColor; }).first();
+                                var $primero = $("input.precio-padre-inp, input.sc-libro-inp").filter(function () { return this.style.borderColor; }).first();
                                 if ($primero.length) { $primero[0].scrollIntoView({ block: "center" }); $primero.focus(); }
                               };
                               $ov.on("click", function (e) { if (e.target === this) cerrar(); });
                               $ov.find("button").on("click", cerrar);
                               $("body").append($ov);
                             }
-                            // Con "Venta directa - Andrea" el precio venta padre es obligatorio en los títulos adoptados.
+                            // Con "Venta directa - Eureka" el precio venta padre y el sobrecosto por libro son obligatorios
+                            // en los títulos adoptados.
                             $("#form_definicion").on("submit", function (e) {
-                              if (!canalLlevaSobrecosto()) return;
-                              var faltan = [];
-                              $(this).find("input.precio-padre-inp").css("border-color", "");
+                              // Sobrecosto por libro: obligatorio con cualquier canal (0 es válido). Precio venta padre: solo con venta directa.
+                              var conVd = canalLlevaSobrecosto();
+                              var faltanPp = [], faltanSc = [];
+                              var vacio = function ($i) { return !(parseFloat(String($i.val()).replace(/[^0-9.,]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")) > 0); };
+                              // El sobrecosto por libro admite 0: solo falta si está vacío.
+                              var vacioSc = function ($i) { return String($i.val()).replace(/[^0-9]/g, "") === ""; };
+                              $(this).find("input.precio-padre-inp, input.sc-libro-inp").css("border-color", "");
                               $(this).find("input.definir:checked").each(function () {
                                 var $tr = $(this).closest("tr");
+                                var nombre = $.trim($tr.find("td").first().text());
                                 var $pp = $tr.find("input.precio-padre-inp").first();
-                                if ($pp.length && !(parseFloat(String($pp.val()).replace(/[^0-9.]/g, "")) > 0)) {
-                                  faltan.push($.trim($tr.find("td").first().text()));
-                                  $pp.css("border-color", "#dc2626");
-                                }
+                                if (conVd && $pp.length && vacio($pp)) { faltanPp.push(nombre); $pp.css("border-color", "#dc2626"); }
+                                var $sc = $tr.find("input.sc-libro-inp").first();
+                                if ($sc.length && !$sc.prop("disabled") && vacioSc($sc)) { faltanSc.push(nombre); $sc.css("border-color", "#dc2626"); }
                               });
-                              if (faltan.length) {
+                              if (faltanPp.length || faltanSc.length) {
                                 e.preventDefault();
                                 e.stopImmediatePropagation();
-                                alertaPrecioPadre(faltan);
+                                alertaPrecioPadre(faltanPp, faltanSc);
                                 return false;
                               }
                             });
@@ -1938,38 +2086,227 @@
                               echo '<div class="col-sm-4"></div>';
                             }
 
-                            // Panel del sobrecosto: unidades vendidas en los formatos de venta directa cerrados × precio × %.
-                            $res_sc = sobrecosto_resumen($bdd, (int)$_GET["colegio"], (int)$gp_periodo["id"]);
-                            $pz = function ($v) { return '$ ' . number_format((float)$v, 0, ',', '.'); };
-                            echo '<div class="col-12" id="sobrecosto_panel"'.($con_sobrecosto ? '' : ' style="display:none"').'>
-                                    <div class="sc-panel">
-                                      <div class="sc-tit"><i class="bi bi-percent"></i> Sobrecosto <span id="sc-pct-txt">'.($pct_sobrecosto !== '' ? $pct_sobrecosto.' %' : '').'</span></div>
-                                      <div class="sc-cards">
-                                        <div><span>Unidades vendidas</span><strong>'.$res_sc['vendidas'].'</strong><small>'.$res_sc['formatos'].' formato(s) de venta directa cerrado(s)</small></div>
-                                        <div><span>Valor vendido</span><strong>'.$pz($res_sc['total_venta']).'</strong><small>Unidades vendidas × precio</small></div>
-                                        <div class="sc-total"><span>Sobrecosto</span><strong id="sc-total" data-base="'.$res_sc['total_venta'].'">'.$pz($res_sc['sobrecosto']).'</strong><small>Valor vendido × %</small></div>
-                                      </div>';
-                            if ($res_sc['detalle']) {
-                                echo '<div class="table-responsive"><table class="sc-tabla"><thead><tr><th>Paquete / título</th><th class="c">Vendidas</th><th class="r">Precio</th><th class="r">Valor vendido</th><th class="r">Sobrecosto</th></tr></thead><tbody>';
-                                foreach ($res_sc['detalle'] as $d) {
-                                    echo '<tr><td>'.htmlspecialchars($d['descripcion']).($d['tipo'] === 'titulo' ? ' <span class="sc-tag">Título suelto</span>' : '').'</td>'
-                                       . '<td class="c">'.$d['vendidas'].'</td><td class="r">'.$pz($d['precio']).'</td><td class="r">'.$pz($d['total']).'</td>'
-                                       . '<td class="r sc-fila" data-base="'.$d['total'].'">'.$pz($d['total'] * $res_sc['pct'] / 100).'</td></tr>';
-                                }
-                                echo '</tbody></table></div>';
-                            } else {
-                                echo '<p class="sc-vacio">Aún no hay ventas cerradas: el sobrecosto se calcula cuando un formato de venta directa del colegio en este período tenga el cierre del inventario.</p>';
-                            }
-                            echo '  </div>
+                            // 2026-11-10: se quitó el panel "Sobrecosto" (unidades vendidas × precio × %): el sobrecosto ya no es un
+                            // % de la adopción sino un valor por libro (columna "Sobrecosto por libro" de la tabla).
+
+                            // Venta directa - Eureka (2026-11-10): fechas y horario de venta y contacto del colegio. Solo se ve
+                            // (y se envía) con ese canal; nombre y celular del contacto obligatorios, correo opcional.
+                            require_once(__DIR__ . "/../includes/adopcion_vd_datos.php");
+                            $vd_adop = adopcion_vd_leer($bdd, (int)$_GET["colegio"], (int)$gp_periodo["id"]);
+                            $vd_jornadas = $vd_adop['jornadas'] ?: [['fecha' => '', 'hora_inicio' => '', 'hora_fin' => '']];
+                            $vd_tiene = $vd_adop['tiene_fechas']; // true / false / null (sin responder)
+                            $vd_dis = $con_sobrecosto ? '' : ' disabled';
+                            $vd_e = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES); };
+                            $vd_fila = function ($j) use ($vd_dis, $vd_e) {
+                                return '<div class="vd-jornada">
+                                          <div class="vd-dia" aria-hidden="true"><span class="vd-dia-sem">Día</span><strong class="vd-dia-num">--</strong><span class="vd-dia-mes">&nbsp;</span></div>
+                                          <div class="vd-campos">
+                                            <div class="vd-f vd-f-fecha"><label>Fecha <span class="vd-ob">*</span></label>
+                                              <div class="vd-inp vd-pick" data-tipo="fecha" data-requerido><i class="bi bi-calendar3"></i><input type="text" class="vd-pick-txt" readonly placeholder="Elegir fecha"'.$vd_dis.'><input type="hidden" name="vd_fecha[]" value="'.$vd_e($j['fecha']).'"'.$vd_dis.'><i class="bi bi-chevron-down vd-caret"></i></div></div>
+                                            <div class="vd-f"><label>Desde <span class="vd-ob">*</span></label>
+                                              <div class="vd-inp vd-pick" data-tipo="hora" data-rol="ini" data-requerido><i class="bi bi-clock"></i><input type="text" class="vd-pick-txt" readonly placeholder="--:--"'.$vd_dis.'><input type="hidden" name="vd_hora_ini[]" value="'.$vd_e($j['hora_inicio']).'"'.$vd_dis.'><i class="bi bi-chevron-down vd-caret"></i></div></div>
+                                            <span class="vd-flecha" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
+                                            <div class="vd-f"><label>Hasta <span class="vd-ob">*</span></label>
+                                              <div class="vd-inp vd-pick" data-tipo="hora" data-rol="fin" data-requerido><i class="bi bi-clock-history"></i><input type="text" class="vd-pick-txt" readonly placeholder="--:--"'.$vd_dis.'><input type="hidden" name="vd_hora_fin[]" value="'.$vd_e($j['hora_fin']).'"'.$vd_dis.'><i class="bi bi-chevron-down vd-caret"></i></div></div>
+                                            <span class="vd-duracion"></span>
+                                          </div>
+                                          <button type="button" class="vd-quitar" title="Quitar esta fecha"'.$vd_dis.'><i class="bi bi-trash"></i></button>
+                                        </div>';
+                            };
+                            echo '<div class="col-12" id="vd_panel"'.($con_sobrecosto ? '' : ' style="display:none"').'>
+                                    <div class="vd-panel">
+                                      <div class="vd-tit"><i class="bi bi-shop"></i> Venta directa - Eureka</div>
+                                          <div class="vd-pregunta">
+                                            <span class="vd-pregunta-txt">¿El colegio ya tiene fechas de venta? <span class="vd-ob">*</span></span>
+                                            <div class="vd-sino" role="radiogroup">
+                                              <label><input type="radio" name="vd_tiene_fechas" value="1"'.($vd_tiene === true ? ' checked' : '').$vd_dis.'><span><i class="bi bi-check-circle"></i> Sí</span></label>
+                                              <label><input type="radio" name="vd_tiene_fechas" value="0"'.($vd_tiene === false ? ' checked' : '').$vd_dis.'><span><i class="bi bi-x-circle"></i> No</span></label>
+                                            </div>
+                                          </div>
+                                          <div class="vd-sin-fechas" id="vd_sin_fechas"'.($vd_tiene === false ? '' : ' style="display:none"').'><i class="bi bi-info-circle"></i> Sin fechas por ahora: puedes guardar la adopción. Cuando las tengan, vuelve aquí y marca <strong>Sí</strong> para registrar las fechas y el contacto.</div>
+                                      <div class="vd-grid" id="vd_contenido"'.($vd_tiene === true ? '' : ' style="display:none"').'>
+                                        <div>
+                                          <div class="vd-sub"><i class="bi bi-calendar-event"></i> Fechas y horario de venta</div>
+                                          <div id="vd_jornadas">';
+                            foreach ($vd_jornadas as $j) echo $vd_fila($j);
+                            echo '        </div>
+                                          <button type="button" class="vd-agregar" id="vd_agregar"'.$vd_dis.'><i class="bi bi-plus-circle"></i> Agregar fecha</button>
+                                        </div>
+                                        <div>
+                                          <div class="vd-sub"><i class="bi bi-person-lines-fill"></i> Contacto del colegio</div>
+                                          <div class="vd-contacto">
+                                            <div class="vd-f"><label>Nombre <span class="vd-ob">*</span></label>
+                                              <div class="vd-inp"><i class="bi bi-person"></i><input type="text" name="vd_contacto_nombre" maxlength="150" placeholder="Nombre y apellido" value="'.$vd_e($vd_adop['contacto']['nombre']).'" required'.$vd_dis.'></div></div>
+                                            <div class="vd-f"><label>Celular <span class="vd-ob">*</span></label>
+                                              <div class="vd-inp"><i class="bi bi-phone"></i><input type="tel" name="vd_contacto_celular" id="vd_celular" maxlength="17" inputmode="tel" autocomplete="tel" placeholder="300 000 0000" value="'.$vd_e($vd_adop['contacto']['celular']).'" required'.$vd_dis.'><i class="bi vd-cel-estado"></i></div>
+                                              <small class="vd-cel-msg" id="vd_celular_msg"></small></div>
+                                            <div class="vd-f"><label>Correo <small>(opcional)</small></label>
+                                              <div class="vd-inp"><i class="bi bi-envelope"></i><input type="email" name="vd_contacto_correo" maxlength="150" placeholder="correo@colegio.edu.co" value="'.$vd_e($vd_adop['contacto']['correo']).'"'.$vd_dis.'></div></div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
+                                  <script src="src/vd-pickers.js?v=20261110"></script>
+                                  <template id="vd_plantilla">'.$vd_fila(['fecha' => '', 'hora_inicio' => '', 'hora_fin' => '']).'</template>
                                   <script>
-                                    // Recalcula al escribir el %, antes de guardar.
-                                    $("#sobrecosto_pct").on("input", function () {
-                                      var pct = parseFloat(String(this.value).replace(",", ".")) || 0;
-                                      var fmt = function (v) { return "$ " + Math.round(v).toLocaleString("es-CO"); };
-                                      $("#sc-pct-txt").text(pct ? pct + " %" : "");
-                                      $("#sc-total").text(fmt(parseFloat($("#sc-total").data("base")) * pct / 100));
-                                      $(".sc-fila").each(function () { $(this).text(fmt(parseFloat($(this).data("base")) * pct / 100)); });
+                                    // Tarjeta de cada fecha: día de la semana, duración y aviso si "hasta" no es posterior a "desde".
+                                    function vdPintar($fila) {
+                                      var f = $fila.find("input[name=\"vd_fecha[]\"]").val();
+                                      var ini = $fila.find("input[name=\"vd_hora_ini[]\"]").val();
+                                      var fin = $fila.find("input[name=\"vd_hora_fin[]\"]").val();
+                                      var d = f ? new Date(f + "T12:00:00") : null;
+                                      var ok = d && !isNaN(d);
+                                      $fila.find(".vd-dia").toggleClass("vd-dia-vacio", !ok);
+                                      $fila.find(".vd-dia-sem").text(ok ? d.toLocaleDateString("es-CO", { weekday: "short" }).replace(".", "") : "Día");
+                                      $fila.find(".vd-dia-num").text(ok ? d.getDate() : "--");
+                                      $fila.find(".vd-dia-mes").html(ok ? ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][d.getMonth()] + " " + d.getFullYear() : "&nbsp;");
+                                      var $dur = $fila.find(".vd-duracion").removeClass("vd-dur-error").text("");
+                                      $fila.removeClass("vd-error");
+                                      if (ini && fin) {
+                                        var m = (parseInt(fin.substr(0, 2), 10) * 60 + parseInt(fin.substr(3, 2), 10)) - (parseInt(ini.substr(0, 2), 10) * 60 + parseInt(ini.substr(3, 2), 10));
+                                        if (m > 0) {
+                                          $dur.text((Math.floor(m / 60) ? Math.floor(m / 60) + " h" : "") + (m % 60 ? " " + (m % 60) + " min" : ""));
+                                        } else {
+                                          $dur.addClass("vd-dur-error").html("<i class=\"bi bi-exclamation-triangle\"></i> Revisa el horario");
+                                          $fila.addClass("vd-error");
+                                        }
+                                      }
+                                    }
+                                    // ¿Ya tiene fechas de venta? Sí: se muestran y exigen las fechas. No: se ocultan y no se envían.
+                                    window.vdAplicarTieneFechas = function () {
+                                      var $panel = $("#vd_panel");
+                                      var activo = !$panel.find("input[name=vd_tiene_fechas]").first().prop("disabled");
+                                      var v = $panel.find("input[name=vd_tiene_fechas]:checked").val();
+                                      $("#vd_contenido").toggle(v === "1").find(":input").prop("disabled", !activo || v !== "1");
+                                      if (v === "1" && window.vdRevisarCelular) vdRevisarCelular(false);
+                                      $("#vd_sin_fechas").toggle(v === "0");
+                                      $panel.find(".vd-sino").removeClass("vd-falta");
+                                      if (v !== "1") window.vdPickers.cerrar(false);
+                                    };
+                                    $("#vd_panel").on("change", "input[name=vd_tiene_fechas]", function () {
+                                      window.vdAplicarTieneFechas();
+                                      if (this.value === "1") {
+                                        var $vacio = $("#vd_jornadas .vd-pick-txt").filter(function () { return !$(this).siblings("input[type=hidden]").val(); }).first();
+                                        if ($vacio.length) $vacio.trigger("click").trigger("focus");
+                                      }
+                                    });
+                                    window.vdAplicarTieneFechas();
+                                    // Selectores propios de fecha y hora: src/vd-pickers.js.
+                                    window.vdPickers.sincronizar($("#vd_panel .vd-pick"));
+                                    $("#vd_jornadas .vd-jornada").each(function () { vdPintar($(this)); });
+                                    $("#vd_jornadas").on("input change", "input", function () {
+                                      var $fila = $(this).closest(".vd-jornada");
+                                      // Si "Desde" queda igual o después de "Hasta", se vacía "Hasta" para elegirla de nuevo.
+                                      if ($(this).attr("name") === "vd_hora_ini[]") {
+                                        var $fin = $fila.find("input[name=\"vd_hora_fin[]\"]");
+                                        if ($fin.val() && this.value && $fin.val() <= this.value) { $fin.val(""); window.vdPickers.sincronizar($fin.closest(".vd-pick")); }
+                                      }
+                                      vdPintar($fila);
+                                    });
+                                    $("#vd_agregar").on("click", function () {
+                                      var $f = $($("#vd_plantilla").html());
+                                      $f.find(":input").prop("disabled", false);
+                                      $("#vd_jornadas").append($f);
+                                      vdPintar($f);
+                                      $f.find(".vd-pick-txt").first().trigger("click").trigger("focus");
+                                    });
+                                    $("#vd_jornadas").on("click", ".vd-quitar", function () {
+                                      window.vdPickers.cerrar(false);
+                                      var $fila = $(this).closest(".vd-jornada");
+                                      var quitar = function () {
+                                        var $filas = $("#vd_jornadas .vd-jornada");
+                                        if ($filas.length > 1) $fila.remove();
+                                        else { $filas.find("input").val(""); vdPintar($filas); }
+                                      };
+                                      // Fila vacía: se quita sin preguntar. Con fecha: confirmar (2026-11-11).
+                                      var f = $fila.find("input[name=\"vd_fecha[]\"]").val() || "";
+                                      if (!f) { quitar(); return; }
+                                      var ini = $fila.find("input[name=\"vd_hora_ini[]\"]").val() || "", fin = $fila.find("input[name=\"vd_hora_fin[]\"]").val() || "";
+                                      var h12 = function (h) { if (!h) return ""; var hh = parseInt(h.substr(0, 2), 10); return (hh % 12 || 12) + ":" + h.substr(3, 2) + (hh < 12 ? " a. m." : " p. m."); };
+                                      var txt = f.substr(8, 2) + "/" + f.substr(5, 2) + "/" + f.substr(0, 4) + (ini ? " de " + h12(ini) + (fin ? " a " + h12(fin) : "") : "");
+                                      var opts = { type: "danger", title: "¿Segura que quieres eliminar esta venta?", text: "Se quitará la venta del " + txt + ". El cambio queda en firme al guardar la adopción.", btnOk: "Sí, eliminar" };
+                                      if (window.inkConfirm) window.inkConfirm(opts, quitar);
+                                      else if (confirm(opts.title + " " + opts.text)) quitar();
+                                    });
+                                    // Celular colombiano: 10 dígitos que empiezan por 3 (con o sin +57). Misma regla que
+                                    // adopcion_vd_celular() en includes/adopcion_vd_datos.php.
+                                    function vdCelular(v) {
+                                      v = String(v || "").trim();
+                                      if (!v) return { ok: false, vacio: true, msg: "El celular es obligatorio." };
+                                      if (!/^[0-9+\s().-]+$/.test(v)) return { ok: false, msg: "Solo se permiten números." };
+                                      if (v.indexOf("+") > 0 || (v.match(/\+/g) || []).length > 1) return { ok: false, msg: "El + solo puede ir al inicio (+57)." };
+                                      var d = v.replace(/\D/g, "");
+                                      if (d.length === 12 && d.substr(0, 2) === "57") d = d.substr(2);
+                                      else if (v.charAt(0) === "+") return { ok: false, msg: "Solo se aceptan celulares de Colombia (+57)." };
+                                      if (d.charAt(0) && d.charAt(0) !== "3") return { ok: false, msg: "Un celular en Colombia empieza por 3." };
+                                      if (d.length < 10) return { ok: false, incompleto: true, msg: (10 - d.length === 1 ? "Falta " : "Faltan ") + (10 - d.length) + " dígito" + (10 - d.length === 1 ? "" : "s") + " (debe tener 10)." };
+                                      if (d.length > 10) return { ok: false, msg: "Tiene " + d.length + " dígitos; un celular tiene 10." };
+                                      if (/^3(\d)\1{8}$/.test(d)) return { ok: false, msg: "Ese número no parece real." };
+                                      return { ok: true, numero: d.substr(0, 3) + " " + d.substr(3, 3) + " " + d.substr(6) };
+                                    }
+                                    function vdRevisarCelular(estricto) {
+                                      var el = document.getElementById("vd_celular");
+                                      if (!el) return true;
+                                      var r = vdCelular(el.value);
+                                      var $w = $(el).closest(".vd-inp");
+                                      // Mientras escribe no se marca en rojo lo que solo está incompleto.
+                                      var mostrarError = !r.ok && (estricto || !(r.incompleto || r.vacio));
+                                      el.setCustomValidity(r.ok || el.disabled ? "" : r.msg);
+                                      $w.toggleClass("vd-cel-ok", r.ok).toggleClass("vd-cel-mal", mostrarError);
+                                      $w.find(".vd-cel-estado").attr("class", "bi vd-cel-estado " + (r.ok ? "bi-check-circle-fill" : (mostrarError ? "bi-exclamation-circle-fill" : "")));
+                                      $("#vd_celular_msg").text(mostrarError ? r.msg : (r.ok ? "" : (el.value ? r.msg : "10 dígitos, empieza por 3")))
+                                        .toggleClass("vd-cel-msg-error", mostrarError);
+                                      return r.ok;
+                                    }
+                                    $("#vd_celular").on("input", function () {
+                                      // Formato 300 123 4567 al escribir (si no trae indicativo).
+                                      var d = this.value.replace(/\D/g, "");
+                                      if (this.value.indexOf("+") === -1 && /^[0-9\s().-]*$/.test(this.value) && d.length <= 10) {
+                                        var f = d.substr(0, 3) + (d.length > 3 ? " " + d.substr(3, 3) : "") + (d.length > 6 ? " " + d.substr(6) : "");
+                                        if (f !== this.value) this.value = f;
+                                      }
+                                      vdRevisarCelular(false);
+                                    }).on("blur", function () {
+                                      var r = vdCelular(this.value);
+                                      if (r.ok) this.value = r.numero; // +57 300... queda como 300 ...
+                                      vdRevisarCelular(!!this.value);
+                                    });
+                                    vdRevisarCelular(false);
+                                    $("#form_definicion").on("submit", function (e) {
+                                      var el = document.getElementById("vd_celular");
+                                      if (!el || el.disabled || !$("#vd_panel").is(":visible")) return;
+                                      if (vdRevisarCelular(true)) return;
+                                      e.preventDefault();
+                                      e.stopImmediatePropagation();
+                                      var msg = "Celular del contacto: " + vdCelular(el.value).msg;
+                                      if (typeof window.inkToast === "function") window.inkToast(msg, "warn"); else alert(msg);
+                                      el.scrollIntoView({ block: "center" });
+                                      el.focus();
+                                      return false;
+                                    });
+                                    // Los campos de fecha/hora no son inputs nativos: se revisan antes de enviar.
+                                    $("#form_definicion").on("submit", function (e) {
+                                      var $panel = $("#vd_panel");
+                                      if (!$panel.is(":visible")) return;
+                                      if (!$panel.find("input[name=vd_tiene_fechas]:checked").length) {
+                                        e.preventDefault();
+                                        e.stopImmediatePropagation();
+                                        var m = "Indica si el colegio ya tiene fechas de venta (Sí / No).";
+                                        if (typeof window.inkToast === "function") window.inkToast(m, "warn"); else alert(m);
+                                        var $sino = $panel.find(".vd-sino").addClass("vd-falta");
+                                        $sino[0].scrollIntoView({ block: "center" });
+                                        return false;
+                                      }
+                                      var $f = window.vdPickers.faltantes($panel);
+                                      var malHorario = $panel.find(".vd-jornada.vd-error").length > 0;
+                                      if (!$f.length && !malHorario) return;
+                                      e.preventDefault();
+                                      e.stopImmediatePropagation();
+                                      var msg = $f.length ? "Completa las fechas y el horario de venta (Venta directa - Eureka)." : "En una fecha de venta la hora \"hasta\" debe ser posterior a la hora \"desde\".";
+                                      if (typeof window.inkToast === "function") window.inkToast(msg, "warn"); else alert(msg);
+                                      ($f.length ? $f.first() : $panel.find(".vd-jornada.vd-error").first())[0].scrollIntoView({ block: "center" });
+                                      return false;
                                     });
                                   </script>';
 
