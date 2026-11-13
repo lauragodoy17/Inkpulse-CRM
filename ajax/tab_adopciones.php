@@ -974,7 +974,7 @@
 
         // Sobrecosto por libro (2026-11-10): valor en pesos que se digita en cada título (presupuestos.sobrecosto), sin
         // cálculo. Desde 2026-11-11 la columna se ve y se guarda con cualquier canal; solo con "Venta directa - Eureka"
-        // es obligatoria (0 es válido).
+        // es obligatoria (0 es válido); con los demás canales es opcional (2026-11-13).
         require_once(__DIR__ . "/../includes/sobrecosto_canal.php");
         sobrecosto_asegurar_columna($bdd);
         $st_sc_tab = $bdd->prepare("SELECT id_canal, id_canal2 FROM recursos WHERE id_periodo = ? AND id_colegio = ? LIMIT 1");
@@ -1982,7 +1982,7 @@ JS;
                             // Con "Venta directa - Eureka" el precio venta padre y el sobrecosto por libro son obligatorios
                             // en los títulos adoptados.
                             $("#form_definicion").on("submit", function (e) {
-                              // Sobrecosto por libro: obligatorio con cualquier canal (0 es válido). Precio venta padre: solo con venta directa.
+                              // Precio venta padre y sobrecosto por libro (0 es válido): obligatorios solo con venta directa; con otros canales el sobrecosto es opcional (2026-11-13).
                               var conVd = canalLlevaSobrecosto();
                               var faltanPp = [], faltanSc = [];
                               var vacio = function ($i) { return !(parseFloat(String($i.val()).replace(/[^0-9.,]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")) > 0); };
@@ -1995,7 +1995,7 @@ JS;
                                 var $pp = $tr.find("input.precio-padre-inp").first();
                                 if (conVd && $pp.length && vacio($pp)) { faltanPp.push(nombre); $pp.css("border-color", "#dc2626"); }
                                 var $sc = $tr.find("input.sc-libro-inp").first();
-                                if ($sc.length && !$sc.prop("disabled") && vacioSc($sc)) { faltanSc.push(nombre); $sc.css("border-color", "#dc2626"); }
+                                if (conVd && $sc.length && !$sc.prop("disabled") && vacioSc($sc)) { faltanSc.push(nombre); $sc.css("border-color", "#dc2626"); }
                               });
                               if (faltanPp.length || faltanSc.length) {
                                 e.preventDefault();

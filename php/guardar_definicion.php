@@ -39,7 +39,8 @@
 	// 2026-11-10: ya no hay % de sobrecosto para toda la adopción; cada título trae su propio valor en pesos
 	// (sc_libro[id_libro] / sc_area[cod_area], columna "Sobrecosto por libro"), que se guarda tal cual en presupuestos.sobrecosto.
 
-	// Sobrecosto por libro obligatorio en todos los títulos adoptados, con cualquier canal (2026-11-11); 0 es válido.
+	// Sobrecosto por libro obligatorio en los títulos adoptados solo con "Venta directa - Eureka"; con los demás canales es
+	// opcional (2026-11-13, la usuaria). 0 es válido.
 	// Se valida antes de escribir nada: la clave del título es la primera parte de definir[] (id del libro, o cod_area
 	// en el grado "Otro"), la misma de sc_libro[] / sc_area[].
 	$sc_post = (array)($_POST['sc_libro'] ?? []) + (array)($_POST['sc_area'] ?? []);
@@ -49,7 +50,7 @@
 		if ($clave_def === '' || !array_key_exists($clave_def, $sc_post)) continue;
 		if (preg_replace('/[^0-9]/', '', (string)$sc_post[$clave_def]) === '') $sc_faltan[] = $clave_def;
 	}
-	if ($sc_faltan) {
+	if ($con_sobrecosto && $sc_faltan) {
 		$nombres_sc = [];
 		$st_n = $bdd->prepare("SELECT libro FROM libros WHERE id = ?");
 		$st_a = $bdd->prepare("SELECT l.libro FROM libros l JOIN areas_objetivas a ON l.id = a.id_libro_eureka WHERE a.codigo = ? LIMIT 1");
@@ -815,11 +816,11 @@
 		$sin_pp = $st_pp->fetchAll(PDO::FETCH_COLUMN);
 	}
 	{
-		// Sobrecosto por libro: obligatorio con cualquier canal; 0 cuenta como digitado (2026-11-11).
+		// Sobrecosto por libro: obligatorio solo con "Venta directa - Eureka"; 0 cuenta como digitado (2026-11-13).
 		$st_sc_falta = $bdd->prepare("SELECT l.libro FROM presupuestos p JOIN libros l ON l.id = p.id_libro
 		                              WHERE p.id_colegio = ? AND p.id_periodo = ? AND p.definido = 1 AND p.sobrecosto IS NULL ORDER BY l.libro");
 		$st_sc_falta->execute([(int)$_POST["id_colegio"], (int)$_POST["periodo"]]);
-		$sin_sc = $st_sc_falta->fetchAll(PDO::FETCH_COLUMN);
+		$sin_sc = $con_sobrecosto ? $st_sc_falta->fetchAll(PDO::FETCH_COLUMN) : [];
 		$faltas = [];
 		if ($sin_pp) $faltas[] = 'falta el precio venta padre en: '.implode(', ', $sin_pp);
 		if ($sin_sc) $faltas[] = 'falta el sobrecosto por libro en: '.implode(', ', $sin_sc);
