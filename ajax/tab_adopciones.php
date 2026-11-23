@@ -2096,7 +2096,12 @@ JS;
                             } else {
                               echo '<div class="col-sm-4"></div>';
                             }
+                          }
 
+                          // 2026-11-23: el panel de venta directa (¿ya tiene fechas de venta?) se muestra a todos los usuarios.
+                          // Antes estaba dentro del bloque de los tipos 1, 2, 3 y 10, y los demás no lo veían, pero
+                          // php/guardar_definicion.php sí lo exige con el canal "Venta directa - Eureka", así que no podían guardar.
+                          {
                             // 2026-11-10: se quitó el panel "Sobrecosto" (unidades vendidas × precio × %): el sobrecosto ya no es un
                             // % de la adopción sino un valor por libro (columna "Sobrecosto por libro" de la tabla).
 
@@ -2320,7 +2325,9 @@ JS;
                                       return false;
                                     });
                                   </script>';
+                          }
 
+                          if (in_array($_SESSION['tipo'], [1, 2, 3, 10])) {
                             echo '
                             </div>
                             <br><div class="row">';
