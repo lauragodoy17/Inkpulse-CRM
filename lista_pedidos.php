@@ -428,29 +428,94 @@ $(document).ready(function () {
     if (!ids.length || !bulkCfg) return;
 
     confirmar(bulkCfg.confirm_title, ids.length + ' pedido(s). ' + bulkCfg.confirm_text, function () {
-      // Con descarga (PDF): target="_blank" para que esta página nunca navegue
-      // y quede libre para refrescar la tabla de inmediato. Sin descarga: se
-      // deja navegar normal, el endpoint redirige de vuelta a la misma lista.
+      // Con descarga (planilla PDF): por AJAX, sin salir de la página. El endpoint
+      // responde JSON con una o dos planillas (2026-11-18: los pedidos de venta
+      // directa salen en una planilla aparte, con su propio consecutivo).
+      if (bulkCfg.download) {
+        lpGenerarPlanillas(ids);
+        return;
+      }
+      // Sin descarga: se deja navegar normal, el endpoint redirige de vuelta a la misma lista.
       var $form = $('<form>', { method: 'POST', action: bulkCfg.endpoint });
-      if (bulkCfg.download) $form.attr('target', '_blank');
       // Un solo campo con los ids separados por coma: con "seleccionar todos"
       // pueden ser miles y como ids[] chocarían con max_input_vars.
       $form.append($('<input>', { type: 'hidden', name: 'ids_csv', value: ids.join(',') }));
       $('body').append($form);
       $form.submit();
-
-      if (bulkCfg.download) {
-        $form.remove();
-        var n = ids.length;
-        selectedIds = {};
-        lpUpdateSelBar();
-        table.ajax.reload(null, false);
-        if (window.inkToast) {
-          window.inkToast(n + ' pedido(s) actualizado(s). La planilla se está descargando en una pestaña nueva.', 'ok');
-        }
-      }
     });
   });
+
+  function lpDescargarPdf(archivo, b64) {
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+    var url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = archivo;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
+
+  function lpEsc(s) { return $('<div>').text(s == null ? '' : String(s)).html(); }
+
+  // Alerta con el mismo modal de src/ink-alerts.js (clases ink-*), con un botón por
+  // planilla para volver a descargarla si el navegador bloqueó la descarga automática.
+  function lpAlertaPlanillas(planillas) {
+    var total = 0, lineas = '';
+    planillas.forEach(function (pl, i) {
+      total += pl.cantidad;
+      lineas += '<button type="button" class="ink-btn-' + (pl.tipo === 'vd' ? 'warning' : 'info') + '" data-i="' + i +
+        '" style="width:100%;margin-top:8px;"><i class="bi bi-download"></i> No. ' + lpEsc(pl.consecutivo) + ' — ' +
+        lpEsc(pl.label) + ' (' + pl.cantidad + ')</button>';
+    });
+    var texto = total + ' pedido(s) pasaron a Procesando. ' + (planillas.length > 1
+      ? 'Entre ellos había pedidos de venta directa, así que se descargaron 2 planillas, cada una con su consecutivo:'
+      : 'Se descargó la planilla:');
+    var ov = document.createElement('div');
+    ov.className = 'ink-overlay';
+    ov.innerHTML =
+      '<div class="ink-modal">'
+      + '<div class="ink-modal-icon success"><i class="bi bi-check-circle-fill"></i></div>'
+      + '<p class="ink-modal-title">' + (planillas.length > 1 ? 'Planillas generadas' : 'Planilla generada') + '</p>'
+      + '<p class="ink-modal-text" style="margin-bottom:6px;">' + texto + '</p>'
+      + '<div class="ink-modal-btns" style="flex-direction:column;gap:0;">' + lineas + '</div>'
+      + '<div class="ink-modal-btns" style="margin-top:16px;"><button type="button" class="ink-btn-cancel" data-cerrar="1">Cerrar</button></div>'
+      + '</div>';
+    document.body.appendChild(ov);
+    $(ov).on('click', 'button[data-i]', function () {
+      var pl = planillas[+$(this).data('i')];
+      lpDescargarPdf(pl.archivo, pl.pdf_b64);
+    });
+    $(ov).on('click', 'button[data-cerrar]', function () { ov.remove(); });
+  }
+
+  function lpGenerarPlanillas(ids) {
+    var $btn = $('#lp-btn-procesar').prop('disabled', true);
+    $.ajax({
+      url: bulkCfg.endpoint,
+      type: 'POST',
+      data: { ids_csv: ids.join(',') },
+      dataType: 'json'
+    }).done(function (resp) {
+      if (!resp || !resp.ok) {
+        var err = (resp && resp.error) || 'No se pudo generar la planilla.';
+        if (window.inkToast) window.inkToast(lpEsc(err), 'error'); else alert(err);
+        table.ajax.reload(null, false);
+        return;
+      }
+      selectedIds = {};
+      lpUpdateSelBar();
+      table.ajax.reload(null, false);
+      resp.planillas.forEach(function (pl, i) {
+        setTimeout(function () { lpDescargarPdf(pl.archivo, pl.pdf_b64); }, i * 600);
+      });
+      lpAlertaPlanillas(resp.planillas);
+    }).fail(function () {
+      if (window.inkToast) window.inkToast('No se pudo generar la planilla. Recarga la página e intenta de nuevo.', 'error');
+      table.ajax.reload(null, false);
+    }).always(function () {
+      lpUpdateSelBar();
+    });
+  }
 
   <?php if ($tp == 6): ?>
   $('#lf-btn-enviar').on('click', function () {

@@ -70,7 +70,7 @@ $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <select class="form-control" id="hist_modulo" style="min-width:190px">
       <option value="">Todos los módulos</option>
       <?php
-      $modulos_lista = ['Información básica','Información de contacto','Población','Presupuesto','Adopciones','Atenciones al cliente','Adjuntos'];
+      $modulos_lista = ['Información básica','Información de contacto','Población','Presupuesto','Adopciones','Venta directa','Atenciones al cliente','Adjuntos'];
       foreach ($modulos_lista as $m) {
           $sel = ($modulo_f === $m) ? 'selected' : '';
           echo '<option value="'.htmlspecialchars($m).'" '.$sel.'>'.htmlspecialchars($m).'</option>';

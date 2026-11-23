@@ -13,8 +13,8 @@ if (!defined('UMBRAL_STOCK_BAJO')) define('UMBRAL_STOCK_BAJO', 50);
 
 /**
  * @param PDO   $bdd
- * @param array $idsPedido ids de pedidos.id (origen='pedidos') o pedidos2.id (origen='pedidos2')
- * @param string $origen 'pedidos' | 'pedidos2'
+ * @param array $idsPedido ids de pedidos.id (origen='pedidos'), pedidos2.id (origen='pedidos2') o pedidos_vd.id (origen='venta_directa')
+ * @param string $origen 'pedidos' | 'pedidos2' | 'venta_directa'
  * @return array [id_pedido => [['id_libro'=>, 'libro'=>, 'existencia'=>], ...]] — solo pedidos con al menos un libro bajo
  */
 function libros_bajo_stock_pedidos(PDO $bdd, array $idsPedido, $origen = 'pedidos') {
@@ -24,7 +24,13 @@ function libros_bajo_stock_pedidos(PDO $bdd, array $idsPedido, $origen = 'pedido
 
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
 
-    if ($origen === 'pedidos2') {
+    if ($origen === 'venta_directa') {
+        // Pedidos de venta directa (includes/venta_directa_datos.php).
+        $sql = "SELECT DISTINCT lv.id_pedido_vd AS id_pedido, l.id AS id_libro, l.id_wo, l.libro
+                FROM libros_pedidos_vd lv
+                JOIN libros l ON l.id = lv.id_libro
+                WHERE lv.id_pedido_vd IN ($placeholders) AND lv.cantidad != 0 AND l.id_wo IS NOT NULL";
+    } elseif ($origen === 'pedidos2') {
         $sql = "SELECT DISTINCT pe.id AS id_pedido, l.id AS id_libro, l.id_wo, l.libro
                 FROM pedidos2 pe
                 JOIN libros_pedidos2 lp ON lp.cod_pedido = pe.codigo

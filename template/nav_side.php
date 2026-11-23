@@ -9,7 +9,9 @@ $agenda_active       = $current_page === 'agenda.php';
 $muestreo_active     = in_array($current_page, ['solicitar_muestreo.php','legalizaciones_muestras.php','lista_muestreo.php','ver_muestreo.php','muestras_entregadas.php']);
 $pedidos_active      = in_array($current_page, ['ver_pedidos.php','lista_pedidos.php','agrupar_pedidos.php','pedido_colegio.php']);
 $devoluciones_active = in_array($current_page, ['devol_muestras_sa.php','devoluciones_muestras.php','devoluciones_ventas.php','saldos_colegio.php','ver_devol_muestras.php','ver_devol_ventas.php','ver_devol_proveedores.php','proveedores.php']);
-$venta_directa_active = in_array($current_page, ['formatos_venta_directa.php','formato_venta_directa.php','ver_formato_venta_directa.php','devoluciones_venta_directa.php','ver_devol_venta_directa.php','ver_saldos_devolucion.php','ver_saldo_devolucion.php']);
+$venta_directa_active = in_array($current_page, ['formatos_venta_directa.php','formato_venta_directa.php','ver_formato_venta_directa.php','devoluciones_venta_directa.php','ver_saldo_devolucion.php','reporte_venta_directa.php','calendario_venta_directa.php']);
+// devoluciones_ventas.php?vd=1 = Devolución de venta directa (2026-11-10): se resalta el menú Venta directa, no Devoluciones.
+if ($current_page === 'devoluciones_ventas.php' && (string)($_REQUEST['vd'] ?? '') === '1') { $venta_directa_active = true; $devoluciones_active = false; }
 $pedidos_sa_active   = in_array($current_page, ['solicitar_pedido_sa.php','ver_pedidos_sa.php','lista_pedidos_sa.php','pedido_colegio_sa.php']);
 $presupuesto_active  = $current_page === 'colegios_presup.php';
 $atenciones_active   = $current_page === 'lista_atenciones.php';
@@ -17,13 +19,25 @@ $ops_active          = in_array($current_page, ['solicitar_op.php','lista_op.php
 $empaque_active      = in_array($current_page, ['lista_empaque.php','listas_empaque.php','lista_empaque_ver.php']);
 $opds_active         = in_array($current_page, ['solicitar_orden_pd.php','ver_opds.php','reporte_opd.php']);
 $oe_active           = in_array($current_page, ['solicitar_orden_externa.php','ver_ordenes_externas.php','oe_solicitada.php']);
-$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_stock.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php','reporte_paquetes.php','reporte_backorders.php','reporte_editorial.php','reporte_planillas_procesamiento.php']);
+$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_stock.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php','reporte_paquetes.php','reporte_backorders.php','reporte_editorial.php','reporte_planillas_procesamiento.php','reporte_ventas_cobrar.php']);
 $libros_active       = $current_page === 'libros.php';
 $libros_bodega_active = $current_page === 'libros_bodega.php';
 $usuarios_active     = $current_page === 'usuarios.php';
 $zonas_active        = $current_page === 'zonas.php';
 $ubicaciones_active  = in_array($current_page, ['ubicaciones.php','ubicacion_detalle.php']);
 $periodos_active     = $current_page === 'periodos.php';
+
+// Recordatorio de ventas directas cercanas (includes/alertas_vd.php, 2026-11-10): como máximo cada 30 minutos, al
+// terminar de servir la página, para no demorar a quien navega. Nunca rompe la página.
+register_shutdown_function(function () use ($bdd) {
+    try {
+        if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+        require_once(__DIR__ . '/../includes/alertas_vd.php');
+        alertas_vd_recordatorios($bdd);
+    } catch (Throwable $e) {
+        error_log('Alertas venta directa (recordatorio): ' . $e->getMessage());
+    }
+});
 ?>
 <!--<div class="pre-loader">
 			<div class="pre-loader-box">
@@ -477,10 +491,11 @@ $periodos_active     = $current_page === 'periodos.php';
 									><span class="mtext">Venta directa</span>
 								</a>
 								<ul class="submenu">
-									<li><a href="devoluciones_venta_directa.php">Legalización venta directa</a></li>
+									<!-- 2026-11-10: sin "Legalización venta directa" ni devolución propia; las devoluciones de venta directa se hacen en Devoluciones → Devolución de ventas (devoluciones_ventas.php). -->
 									<li><a href="formatos_venta_directa.php">Formatos de venta directa</a></li>
-									<li><a href="ver_devol_venta_directa.php">Ver legalizaciones venta directa</a></li>
-									<li><a href="ver_saldos_devolucion.php">Saldos de devolución</a></li>
+									<!-- 2026-11-13: sin "Ver devoluciones venta directa" ni "Saldos de devolución" (ya no se manejan desde aquí; las devoluciones se ven en Devoluciones → Ver devoluciones de ventas). -->
+									<li><a href="calendario_venta_directa.php">Calendario</a></li>
+									<li><a href="reporte_venta_directa.php">Reporte</a></li>
 								</ul>
 							</li>
 
@@ -576,6 +591,12 @@ $periodos_active     = $current_page === 'periodos.php';
 							<a href="guias_web.php" class="dropdown-toggle no-arrow <?= $current_page === 'guias_web.php' ? 'active' : '' ?>">
 								<span class="micon bi bi-truck"></span
 								><span class="mtext">Gestión de guías – Web</span>
+							</a>
+						</li>
+						<li>
+							<a href="faltantes_paquetes.php" class="dropdown-toggle no-arrow <?= $current_page === 'faltantes_paquetes.php' ? 'active' : '' ?>">
+								<span class="micon bi bi-box2"></span
+								><span class="mtext">Faltantes página web</span>
 							</a>
 						</li>
 						<?php }?>
@@ -744,6 +765,7 @@ $periodos_active     = $current_page === 'periodos.php';
 											<li><a href="reporte_stock.php">Stock</a></li>
 											<li><a href="reporte_devoluciones.php">Devoluciones</a></li>
 											<li><a href="reporte_colocacion.php">Colocación</a></li>
+											<li><a href="reporte_ventas_cobrar.php">Ventas por cobrar por cliente</a></li>
 											<li><a href="reporte_backorders.php">Backorders</a></li>
 											<li><a href="reporte_seguimiento_gerencia.php">Seguimiento gerencia</a></li>
 											<li><a href="reporte_editorial.php">Informe Cumplimiento</a></li>

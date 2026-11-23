@@ -20,6 +20,7 @@ $search_val  = trim($_POST['search']['value'] ?? '');
 $estado      = trim($_POST['estado'] ?? '');
 $fecha_desde = trim($_POST['fecha_desde'] ?? '');
 $fecha_hasta = trim($_POST['fecha_hasta'] ?? '');
+$tipo_dev    = trim($_POST['tipo_devolucion'] ?? ''); // 'corte' | 'normal' (NULL = normal)
 
 list($from, $where, $params) = ver_devol_ventas_query_parts();
 
@@ -29,8 +30,15 @@ $records_total = intval($req->fetchColumn());
 
 $extra = [];
 if ($search_val !== '') {
-  $extra[] = "(p.id LIKE :s OR CONCAT(u.nombres,' ',u.apellidos) LIKE :s OR i.colegio LIKE :s OR cal.calendario LIKE :s OR c.cliente LIKE :s OR e.estado LIKE :s)";
+  $extra[] = "(p.id LIKE :s OR CONCAT(u.nombres,' ',u.apellidos) LIKE :s OR i.colegio LIKE :s OR cal.calendario LIKE :s OR c.cliente LIKE :s OR e.estado LIKE :s"
+            . " OR ((p.ids_pedidos IS NOT NULL OR p.id_pedido_vd IS NOT NULL) AND 'venta directa' LIKE :s) OR CONCAT('formato ', f.consecutivo) LIKE :s"
+            . " OR (p.tipo_devolucion = 'corte' AND 'de corte' LIKE :s) OR (COALESCE(p.tipo_devolucion, 'normal') <> 'corte' AND ('física' LIKE :s OR 'fisica' LIKE :s)))";
   $params[':s'] = '%' . $search_val . '%';
+}
+if ($tipo_dev === 'corte') {
+  $extra[] = "p.tipo_devolucion = 'corte'";
+} elseif ($tipo_dev === 'normal') {
+  $extra[] = "(p.tipo_devolucion IS NULL OR p.tipo_devolucion <> 'corte')";
 }
 if ($estado !== '') {
   $extra[] = "e.estado = :estado_f";
@@ -51,13 +59,14 @@ $req->execute($params);
 $records_filtered = intval($req->fetchColumn());
 
 $order_map     = ['id' => 'p.id', 'fecha_d' => 'p.fecha', 'colegio' => 'i.colegio',
-                   'calendario' => 'cal.calendario', 'cliente' => 'c.cliente', 'estado' => 'e.estado'];
+                   'calendario' => 'cal.calendario', 'cliente' => 'c.cliente', 'estado' => 'e.estado', 'tipo_dev' => 'p.tipo_devolucion'];
 $order_col_idx = intval($_POST['order'][0]['column'] ?? 0);
 $order_dir     = (strtolower($_POST['order'][0]['dir'] ?? 'desc') === 'asc') ? 'ASC' : 'DESC';
 $order_field   = $_POST['columns'][$order_col_idx]['data'] ?? 'id';
 $order_sql     = $order_map[$order_field] ?? 'p.id';
 
-$sql = "SELECT p.id, p.fecha, u.nombres, u.apellidos, e.estado, c.cliente, i.colegio, cal.calendario
+$sql = "SELECT p.id, p.fecha, u.nombres, u.apellidos, e.estado, c.cliente, i.colegio, cal.calendario,
+               (p.ids_pedidos IS NOT NULL OR p.id_pedido_vd IS NOT NULL) AS venta_directa, f.consecutivo AS formato_consecutivo, p.tipo_devolucion
         $from $where_f
         ORDER BY $order_sql $order_dir
         LIMIT :start, :length";
@@ -78,6 +87,11 @@ foreach ($rows as $p) {
     'calendario' => htmlspecialchars($p['calendario'] ?? '—'),
     'cliente'    => htmlspecialchars($p['cliente'] ?? ''),
     'estado'     => htmlspecialchars($p['estado'] ?? ''),
+    // Tipo de devolución: De corte / Física (las anteriores, sin tipo, son físicas).
+    'tipo_dev'   => dvv_etiqueta_tipo($p['tipo_devolucion']),
+    'es_corte'   => dvv_tipo_devolucion((string)$p['tipo_devolucion']) === 'corte',
+    // Devolución de venta directa: etiqueta con su formato (ver includes/ver_devol_ventas_query.php).
+    'origen'     => $p['venta_directa'] ? 'Venta directa' . ($p['formato_consecutivo'] ? ' · Formato No. ' . (int)$p['formato_consecutivo'] : '') : '',
   ];
 }
 

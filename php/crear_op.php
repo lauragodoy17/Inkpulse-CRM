@@ -2,13 +2,15 @@
 	require_once("../php/aut.php");
 	include("../conexion/bdd.php");
 	require_once("../includes/tipos_doc_op.php");
+	require_once("../includes/venta_directa_datos.php");
+	vd_asegurar_tablas($bdd); // columnas ordenes_pedidos.id_pedido_vd / consecutivo_vd
 
 		// El tipo de documento depende del origen de la OP (ver includes/tipos_doc_op.php):
 		// se valida aquí también, no solo en la lista del formulario.
 		if (!tipo_doc_op_permitido($bdd, $_POST, $_POST['tipo_doc'] ?? 0)) {
 			$msg = 'El tipo de documento elegido no corresponde a este tipo de OP.';
 			$volver = '';
-			foreach (['id_pedido', 'id_pedido_dist', 'id_muestreo', 'id_devol_c', 'id_devol_p', 'id_devol_v'] as $k) {
+			foreach (['id_pedido', 'id_pedido_vd', 'id_pedido_dist', 'id_muestreo', 'id_devol_c', 'id_devol_p', 'id_devol_v'] as $k) {
 				if (!empty($_POST[$k])) { $volver = $k . '=' . urlencode($_POST[$k]) . '&'; break; }
 			}
 			if (!empty($_POST['pedidos_agp'])) {
@@ -31,6 +33,16 @@
 		}
 
 		if (!isset($_POST['pedidos_agp'])) {
+
+			// Venta directa: una sola OP activa por pedido (no hay OP agrupadas en ese módulo).
+			if (!empty($_POST["id_pedido_vd"])) {
+				$op_vd = vd_op_activa($bdd, intval($_POST["id_pedido_vd"]));
+				if ($op_vd) {
+					header('Location: ../solicitar_op.php?id_pedido_vd=' . intval($_POST["id_pedido_vd"])
+						. '&ink_status=error&ink_msg=' . urlencode('Esta venta directa ya tiene una OP activa (' . $op_vd['etiqueta'] . '). No se generó una nueva.'));
+					exit;
+				}
+			}
 
 			// Un pedido de venta (tabla `pedidos`) solo puede tener UNA OP activa —
 			// directa (ordenes_pedidos.id_pedido) o agrupada (op_pedidos_agrupados).
@@ -71,6 +83,11 @@
 			if ($sth_z == false) {
 			 print_r($query_z->errorInfo());
 			 die ('Erreur execute');
+			}
+
+			// OP de venta directa: numeración propia OPVD-n (ver includes/venta_directa_datos.php).
+			if (!empty($_POST["id_pedido_vd"])) {
+				vd_asignar_consecutivo_op($bdd, $bdd->lastInsertId(), intval($_POST["id_pedido_vd"]));
 			}
 
 		}else{

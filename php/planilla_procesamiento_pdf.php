@@ -45,7 +45,7 @@ if (empty($procesados)) ppp_error('Esta planilla no tiene pedidos asociados (pue
 // La etiqueta "Tipo:" dentro del PDF usa el mismo texto que ya escribían
 // php/generar_planilla_procesamiento*.php originalmente ("Con adopción" en vez de "Pedidos de
 // venta"), para que una planilla re-descargada se vea idéntica a como salió la primera vez.
-$tipoLabelPdf = ['venta' => 'Con adopción', 'muestreo' => 'Muestreo', 'sa' => 'Sin adopción'][$tipo];
+$tipoLabelPdf = ['venta' => 'Con adopción', 'vd' => 'Pedidos venta directa', 'muestreo' => 'Muestreo', 'sa' => 'Sin adopción'][$tipo];
 
 $cols = planilla_pdf_columnas();
 // Fecha y hora ORIGINALES (cuando se generó/descargó la primera vez, guardadas en

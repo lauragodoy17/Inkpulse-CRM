@@ -4,10 +4,12 @@
  * 2026-09-30). Se identifican por el código `tipo_doc.tipo` (sin espacios de más: "FVE " está
  * guardado con uno al final).
  *   pedidos (uno o agrupados)  FVE o REM RCEUR — hay que elegir uno, sin valor por defecto
+ *   venta directa              igual que pedidos (OP con numeración propia OPVD-n)
  *   muestreo                   REM22 (fijo)
  *   devolución de muestras     DEV REM 22 (fijo)
  *   devolución de proveedores  DEV PROV (fijo)
- *   devolución de venta        DEV RCEUR o NC — hay que elegir uno
+ *   devolución de venta        física: DEV RCEUR o NC — hay que elegir uno; de corte
+ *                              (devoluciones_v.tipo_devolucion = 'corte'): DCOR (fijo)
  *   pedido sin adopción        según pedidos2.tipo: Venta (1) igual que pedidos; Muestras (2) REM22 fijo.
  *                              Los antiguos sin tipo (0) siguen con la lista completa.
  * Cualquier otro origen (OP manual) sigue con la lista completa.
@@ -15,6 +17,7 @@
 
 function tipos_doc_op_codigos(PDO $bdd, array $origen) {
     if (!empty($origen['pedidos_agp']) || !empty($origen['id_pedido'])) return ['FVE', 'REM RCEUR'];
+    if (!empty($origen['id_pedido_vd'])) return ['FVE', 'REM RCEUR']; // venta directa: igual que pedidos
     if (!empty($origen['id_pedido_dist'])) {
         $stmt = $bdd->prepare("SELECT tipo FROM pedidos2 WHERE id = ?");
         $stmt->execute([intval($origen['id_pedido_dist'])]);
@@ -26,7 +29,12 @@ function tipos_doc_op_codigos(PDO $bdd, array $origen) {
     if (!empty($origen['id_muestreo'])) return ['REM22'];
     if (!empty($origen['id_devol_c']))  return ['DEV REM 22'];
     if (!empty($origen['id_devol_p']))  return ['DEV PROV'];
-    if (!empty($origen['id_devol_v']))  return ['DEV RCEUR', 'NC'];
+    if (!empty($origen['id_devol_v'])) {
+        $stmt = $bdd->prepare("SELECT tipo_devolucion FROM devoluciones_v WHERE id = ?");
+        $stmt->execute([intval($origen['id_devol_v'])]);
+        if ($stmt->fetchColumn() === 'corte') return ['DCOR'];
+        return ['DEV RCEUR', 'NC'];
+    }
     return null; // sin restricción
 }
 

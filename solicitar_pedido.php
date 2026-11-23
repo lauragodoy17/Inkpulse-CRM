@@ -5,16 +5,16 @@ require_once("conexion/bdd.php");
 $id_colegio = intval($_GET["id_colegio"] ?? 0);
 $periodo_id = intval($_GET["periodo"] ?? 0);
 
-$sql = "SELECT l.id, l.id_grado, l.libro, p.tasa_compra, p.tasa_compra_d, m.materia, p.cod_area
-        FROM libros l
-        JOIN presupuestos p ON l.id=p.id_libro
-        JOIN materias m ON l.id_materia=m.id
-        WHERE p.id_colegio='{$id_colegio}' AND p.id_periodo='{$periodo_id}' AND p.definido='1'";
-$req = $bdd->prepare($sql);
-$req->execute();
-$libros = $req->fetchAll();
+// Qué se puede pedir según el Tipo de adopción (2026-11-10): Libros sueltos → todo suelto; Paquetes → todo en
+// paquete; Ambos → paquetes + los títulos marcados "Libro suelto". Ver includes/pedido_paquetes.php.
+require_once("includes/pedido_paquetes.php");
+$opciones_pedido = pedido_opciones($bdd, $id_colegio, $periodo_id);
+$paquetes_pedido = $opciones_pedido['paquetes'];
+$libros          = $opciones_pedido['sueltos'];
+$tipo_adop_ped   = $opciones_pedido['tipo_adop'];
+$ver_plataforma  = ($_SESSION['tipo'] == 3 || $_SESSION['zona'] == '5656');
 
-$cole_info    = $bdd->query("SELECT colegio FROM colegios WHERE id={$id_colegio}")->fetch();
+$cole_info    = $bdd->query("SELECT colegio, direccion FROM colegios WHERE id={$id_colegio}")->fetch();
 $periodo_info = $bdd->query("SELECT periodo FROM periodos WHERE id={$periodo_id}")->fetch();
 $tipos_doc    = $bdd->query("SELECT id, tipo, descrip FROM tipo_doc WHERE act=1")->fetchAll();
 
@@ -168,13 +168,32 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
     .sp-books-table tbody tr:last-child td { border-bottom: none; }
     .sp-books-table tbody tr:nth-child(even) td { background: #eff6ff; }
     .sp-books-table tbody tr:hover td { background: #dbeafe !important; }
-    .sp-qty-input {
-      width: 80px; padding: 7px 10px; border: 1.5px solid #d1d5db; border-radius: 7px;
-      font-size: .875rem; color: #1e293b; background: #f9fafb; text-align: center;
-      outline: none; transition: border-color .15s;
+    .sp-qty {
+      display: inline-flex; align-items: stretch; border: 1.5px solid #d1d5db; border-radius: 8px;
+      background: #f9fafb; overflow: hidden; transition: border-color .15s;
     }
-    .sp-qty-input:focus { border-color: #2563eb; background: #fff; }
+    .sp-qty:focus-within { border-color: #2563eb; background: #fff; }
+    .sp-qty-btn {
+      width: 32px; border: 0; background: #eef2f7; color: #1e293b; font-size: 1rem; font-weight: 700;
+      cursor: pointer; line-height: 1; padding: 0; transition: background .15s;
+    }
+    .sp-qty-btn:hover { background: #dbeafe; color: #1d4ed8; }
+    .sp-qty-btn:disabled { opacity: .4; cursor: not-allowed; background: #eef2f7; color: #1e293b; }
+    .sp-qty-input {
+      width: 58px; padding: 7px 4px; border: 0; font-size: .875rem; color: #1e293b;
+      background: transparent; text-align: center; outline: none; -moz-appearance: textfield;
+    }
+    .sp-qty-input::-webkit-outer-spin-button,
+    .sp-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .sop-hint { font-size: .74rem; color: #6b7280; margin: 0; }
+    .sop-select:disabled { background: #eef2f7; color: #475569; cursor: not-allowed; }
     .sp-plat-check { width: 18px; height: 18px; cursor: pointer; accent-color: #2563eb; }
+    /* Títulos de cada paquete (desplegable) */
+    .sp-paq-libros summary { cursor: pointer; color: #1d4ed8; font-weight: 600; font-size: .82rem; list-style: none; }
+    .sp-paq-libros summary::-webkit-details-marker { display: none; }
+    .sp-paq-libros summary::before { content: '\25B8'; display: inline-block; margin-right: 5px; transition: transform .15s; }
+    .sp-paq-libros[open] summary::before { transform: rotate(90deg); }
+    .sp-paq-libros ul { margin: 6px 0 0; padding-left: 18px; font-size: .8rem; color: #475569; }
 
     /* Agregar libro button */
     .sp-btn-add {
@@ -251,7 +270,16 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
             </div>
             <div class="mc-card">
               <div class="mc-card-icon orange"><i class="bi bi-journal-text"></i></div>
-              <div><p class="mc-card-label">Títulos disponibles</p><p class="mc-card-val"><?= count($libros) ?></p></div>
+              <div><p class="mc-card-label">Disponibles para pedir</p><p class="mc-card-val"><?php
+                $partes_disp = [];
+                if ($paquetes_pedido) $partes_disp[] = count($paquetes_pedido) . ' paquete' . (count($paquetes_pedido) === 1 ? '' : 's');
+                if ($libros || !$paquetes_pedido) $partes_disp[] = count($libros) . ' libro' . (count($libros) === 1 ? '' : 's') . ' suelto' . (count($libros) === 1 ? '' : 's');
+                echo implode(' · ', $partes_disp);
+              ?></p></div>
+            </div>
+            <div class="mc-card">
+              <div class="mc-card-icon blue"><i class="bi bi-boxes"></i></div>
+              <div><p class="mc-card-label">Tipo de pedido</p><p class="mc-card-val"><?= htmlspecialchars(pedido_tipo_texto($opciones_pedido['tipo_pedido'])) ?></p></div>
             </div>
           </div>
 
@@ -280,102 +308,15 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
                 </select>
               </div>
 
-              <?php if ($_SESSION['tipo']==3 || $_SESSION['zona']=='5656' || $_SESSION['tipo']==10): ?>
-              <div class="sop-field">
-                <label class="sop-label">Tipo de pedido<span class="req">*</span></label>
-                <select name="tipo" id="tipo" class="sop-select" required>
-                  <option value="">Seleccionar</option>
-                  <option value="1">Libros sueltos</option>
-                  <option value="2">Paquetes</option>
-                </select>
-              </div>
-              <?php endif; ?>
-
               <div class="sop-field">
                 <label class="sop-label">Factura o Remisión<span class="req">*</span></label>
                 <select name="fac_rem" id="fac_rem" class="sop-select" required>
-                  <option value="0">Seleccionar</option>
+                  <option value="">Seleccionar</option>
                   <option value="1">Factura</option>
                   <option value="2">Remisión</option>
                 </select>
               </div>
 
-            </div>
-
-            <hr class="sop-divider" />
-
-            <!-- Libros -->
-            <p class="sop-section-title"><i class="bi bi-book"></i> Libros del pedido</p>
-            <div class="sp-books-wrap">
-              <table class="sp-books-table">
-                <thead>
-                  <tr>
-                    <th>Título</th>
-                    <th>Materia</th>
-                    <th>Grado</th>
-                    <th>Compradores activos</th>
-                    <th>Cantidad<span style="color:#fca5a5"> *</span></th>
-                    <?php if ($_SESSION['tipo']==3 || $_SESSION['zona']=='5656'): ?>
-                    <th>Plataforma</th>
-                    <?php endif; ?>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach ($libros as $libro):
-                    $sql_go = "SELECT id_grado_otro FROM areas_objetivas WHERE codigo='".$libro["cod_area"]."'";
-                    $req_go = $bdd->prepare($sql_go); $req_go->execute();
-                    $go = $req_go->fetch();
-
-                    $sql_plat = "SELECT lp.plataforma FROM libros_pedidos lp JOIN pedidos p ON p.codigo=lp.cod_pedido WHERE lp.id_libro='".$libro["id"]."' AND p.id_periodo='".$periodo_id."'";
-                    $req_plat = $bdd->prepare($sql_plat); $req_plat->execute();
-                    $plataf = $req_plat->fetch();
-
-                    if ($go["id_grado_otro"] == 0) {
-                      $req_grado = $bdd->prepare("SELECT grado FROM grados WHERE id='".$libro["id_grado"]."'");
-                      $req_grado->execute(); $grado = $req_grado->fetch();
-                      $req_alm = $bdd->prepare("SELECT SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_grado='".$libro["id_grado"]."' AND id_periodo='".$periodo_id."' AND id_colegio='".$id_colegio."'");
-                      $req_alm->execute(); $alm = $req_alm->fetch();
-                    } else {
-                      $req_grado = $bdd->prepare("SELECT grado FROM grados WHERE id='".$go["id_grado_otro"]."'");
-                      $req_grado->execute(); $grado = $req_grado->fetch();
-                      $req_alm = $bdd->prepare("SELECT SUM(alumnos) as alumnos FROM grados_paralelos WHERE id_grado='".$go["id_grado_otro"]."' AND id_periodo='".$periodo_id."' AND id_colegio='".$id_colegio."'");
-                      $req_alm->execute(); $alm = $req_alm->fetch();
-                    }
-
-                    $comp_act = ($libro["tasa_compra_d"] == 0.00)
-                      ? $alm["alumnos"] * $libro["tasa_compra"]
-                      : $alm["alumnos"] * $libro["tasa_compra_d"];
-                    $comp_act = floor($comp_act);
-
-                    $key     = $libro["cod_area"] != "" ? $libro["cod_area"] : $libro["id"];
-                    $has_area = $libro["cod_area"] != "" ? "1" : "0";
-                  ?>
-                  <tr>
-                    <td><?= htmlspecialchars($libro["libro"]) ?></td>
-                    <td><?= htmlspecialchars($libro["materia"]) ?></td>
-                    <td><?= htmlspecialchars($grado["grado"] ?? '—') ?></td>
-                    <td><?= $comp_act ?></td>
-                    <td>
-                      <input type="number" id="cantidad<?= $key ?>" class="sp-qty-input" value="0" min="0"
-                             data-key="<?= $key ?>"
-                             data-lib-id="<?= $libro['id'] ?>"
-                             data-has-area="<?= $has_area ?>"
-                             data-max="<?= $comp_act ?>">
-                    </td>
-                    <?php if ($_SESSION['tipo']==3 || $_SESSION['zona']=='5656'): ?>
-                    <td>
-                      <input type="checkbox" id="plat<?= $key ?>" class="sp-plat-check"
-                             data-key="<?= $key ?>"
-                             <?= ($plataf["plataforma"] != 0) ? 'checked' : '' ?>>
-                    </td>
-                    <?php endif; ?>
-                    <td class="d-none">
-                      <input type="hidden" name="libro[]" id="libro<?= $key ?>">
-                    </td>
-                  </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
             </div>
 
             <hr class="sop-divider" />
@@ -386,16 +327,125 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
               <div class="sop-field">
                 <label class="sop-label">Fecha de recogida<span class="req">*</span></label>
                 <input type="date" class="sop-input" name="fecha_r" id="fecha_r" required />
+                <p class="sop-hint" id="fecha_r_nota" style="display:none"></p>
               </div>
               <div class="sop-field sop-span2">
                 <label class="sop-label">Dirección de entrega<span class="req">*</span></label>
                 <input type="text" class="sop-input" name="dir_ent" id="dir_ent" placeholder="Dirección de entrega" required />
               </div>
-              <div class="sop-field sop-full">
+              <div class="sop-field sop-full" id="obs_pedido_campo">
                 <label class="sop-label">Observaciones</label>
                 <textarea class="sop-textarea" name="observaciones" id="observaciones" placeholder="Escribe las observaciones..." maxlength="300" data-contador></textarea>
               </div>
             </div>
+
+            <hr class="sop-divider" />
+
+            <?php if (in_array($tipo_adop_ped, [2, 3], true)): ?>
+            <!-- Paquetes (Tipo de adopción "Paquetes" o "Ambos"): cada paquete pedido lleva sus libros con la misma cantidad. -->
+            <p class="sop-section-title"><i class="bi bi-box-seam"></i> Paquetes del pedido</p>
+            <?php if (!$paquetes_pedido): ?>
+              <div class="sop-no-arch"><i class="bi bi-exclamation-triangle-fill"></i>
+                <span>La adopción es por <strong>paquetes</strong> pero aún no tiene paquetes guardados. Guárdalos en la pestaña <strong>Adopciones</strong> del colegio.</span></div>
+            <?php else: ?>
+            <div class="sp-books-wrap">
+              <table class="sp-books-table">
+                <thead>
+                  <tr>
+                    <th>Paquete</th>
+                    <th>Grado</th>
+                    <th>Títulos incluidos</th>
+                    <th>Compradores activos</th>
+                    <th>Cantidad de paquetes</th>
+                    <?php if ($ver_plataforma): ?><th>Plataforma</th><?php endif; ?>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach ($paquetes_pedido as $paq): $pk = 'paq' . $paq['id']; ?>
+                  <tr>
+                    <td><strong><?= htmlspecialchars($paq['paquete']) ?></strong></td>
+                    <td><?= htmlspecialchars($paq['grado'] ?: '—') ?></td>
+                    <td>
+                      <details class="sp-paq-libros">
+                        <summary><?= count($paq['libros']) ?> título<?= count($paq['libros']) === 1 ? '' : 's' ?></summary>
+                        <ul><?php foreach ($paq['libros'] as $pl): ?><li><?= htmlspecialchars($pl['libro']) ?></li><?php endforeach; ?></ul>
+                      </details>
+                    </td>
+                    <td><?= $paq['comp_act'] ?: '—' ?></td>
+                    <td>
+                      <div class="sp-qty">
+                        <button type="button" class="sp-qty-btn" data-paso="-1" aria-label="Restar" disabled>−</button>
+                        <input type="number" id="cantidad<?= $pk ?>" class="sp-qty-input" value="0" min="0"
+                               data-key="<?= $pk ?>" data-paquete="<?= $paq['id'] ?>" data-max="<?= $paq['comp_act'] ?>">
+                        <button type="button" class="sp-qty-btn" data-paso="1" aria-label="Sumar">+</button>
+                      </div>
+                    </td>
+                    <?php if ($ver_plataforma): ?>
+                    <td><input type="checkbox" id="plat<?= $pk ?>" class="sp-plat-check" data-key="<?= $pk ?>"></td>
+                    <?php endif; ?>
+                    <td class="d-none"><input type="hidden" name="paquete[]" id="libro<?= $pk ?>"></td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+            <?php endif; ?>
+            <?php endif; ?>
+
+            <?php if ($tipo_adop_ped !== 2): ?>
+            <!-- Libros sueltos (Tipo de adopción "Libros sueltos": todos los adoptados; "Ambos": los marcados "Libro suelto"). -->
+            <p class="sop-section-title"><i class="bi bi-book"></i> <?= $tipo_adop_ped === 3 ? 'Libros sueltos del pedido' : 'Libros del pedido' ?></p>
+            <?php if (!$libros): ?>
+              <p class="sop-hint" style="margin-bottom:24px"><?= $tipo_adop_ped === 3 ? 'No hay títulos marcados como "Libro suelto" en la adopción.' : 'No hay títulos adoptados.' ?></p>
+            <?php else: ?>
+            <div class="sp-books-wrap">
+              <table class="sp-books-table">
+                <thead>
+                  <tr>
+                    <th>Título</th>
+                    <th>Materia</th>
+                    <th>Grado</th>
+                    <th>Compradores activos</th>
+                    <th>Cantidad</th>
+                    <?php if ($ver_plataforma): ?><th>Plataforma</th><?php endif; ?>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach ($libros as $libro):
+                    $key      = $libro["cod_area"] !== "" ? $libro["cod_area"] : $libro["id_libro"];
+                    $has_area = $libro["cod_area"] !== "" ? "1" : "0";
+                  ?>
+                  <tr>
+                    <td><?= htmlspecialchars($libro["libro"]) ?></td>
+                    <td><?= htmlspecialchars($libro["materia"]) ?></td>
+                    <td><?= htmlspecialchars($libro["grado"]) ?></td>
+                    <td><?= $libro["comp_act"] ?></td>
+                    <td>
+                      <div class="sp-qty">
+                        <button type="button" class="sp-qty-btn" data-paso="-1" aria-label="Restar" disabled>−</button>
+                        <input type="number" id="cantidad<?= $key ?>" class="sp-qty-input" value="0" min="0"
+                               data-key="<?= $key ?>"
+                               data-lib-id="<?= $libro['id_libro'] ?>"
+                               data-has-area="<?= $has_area ?>"
+                               data-max="<?= $libro["comp_act"] ?>">
+                        <button type="button" class="sp-qty-btn" data-paso="1" aria-label="Sumar">+</button>
+                      </div>
+                    </td>
+                    <?php if ($ver_plataforma): ?>
+                    <td>
+                      <input type="checkbox" id="plat<?= $key ?>" class="sp-plat-check" data-key="<?= $key ?>"<?= $libro['plataforma'] ? ' checked' : '' ?>>
+                    </td>
+                    <?php endif; ?>
+                    <td class="d-none">
+                      <input type="hidden" name="libro[]" id="libro<?= $key ?>">
+                    </td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+            <?php endif; ?>
+            <?php endif; ?>
 
             <!-- Hidden inputs -->
             <input type="hidden" name="id_colegio" value="<?= $id_colegio ?>">
@@ -450,6 +500,8 @@ function buildLibroVal(key) {
   var hasArea = $qty.data('has-area') == '1';
   var cant   = parseInt($qty.val()) || 0;
   var plat   = $('#plat' + key).prop('checked') ? 1 : 0;
+  // Paquete: "id_paquete/cantidad/plataforma" (php/pedido.php lo convierte en un renglón por libro del paquete).
+  if ($qty.data('paquete')) return $qty.data('paquete') + '/' + cant + '/' + plat;
   return hasArea
     ? libId + '/' + cant + '/' + plat + '/' + key
     : libId + '/' + cant + '/' + plat;
@@ -465,21 +517,57 @@ $(document).on('input', '.sp-qty-input', function () {
     $(this).val(0);
   }
   $('#libro' + key).val(buildLibroVal(key));
+  actualizarBotonesQty($(this));
 });
+
+/* ── Sube y baja de cantidades ── */
+function actualizarBotonesQty($qty) {
+  var max = parseInt($qty.data('max')) || 0;
+  var val = parseInt($qty.val()) || 0;
+  var $caja = $qty.closest('.sp-qty');
+  $caja.find('[data-paso="-1"]').prop('disabled', val <= 0);
+  $caja.find('[data-paso="1"]').prop('disabled', max > 0 && val >= max);
+}
+$(document).on('click', '.sp-qty-btn', function () {
+  var $qty = $(this).siblings('.sp-qty-input');
+  var max = parseInt($qty.data('max')) || 0;
+  var val = (parseInt($qty.val()) || 0) + parseInt($(this).data('paso'));
+  if (val < 0) val = 0;
+  if (max > 0 && val > max) val = max;
+  $qty.val(val).trigger('input');
+});
+// Al entrar a la casilla se quita el 0 para escribir directo; si se sale vacía vuelve a 0.
+$(document).on('focus', '.sp-qty-input', function () {
+  if ($(this).val() === '0') $(this).val('');
+});
+$(document).on('blur', '.sp-qty-input', function () {
+  if ($(this).val() === '') $(this).val(0).trigger('input');
+});
+// La rueda del mouse no cambia la cantidad: suelta el campo y la página sigue bajando.
+$(document).on('wheel', '.sp-qty-input', function () { $(this).blur(); });
 
 $(document).on('change', '.sp-plat-check', function () {
   var key = $(this).data('key');
   $('#libro' + key).val(buildLibroVal(key));
 });
 
-// Garantiza que todos los hidden inputs estén poblados al enviar
-$('form[action="php/pedido.php"]').on('submit', function () {
+// Garantiza que todos los hidden inputs estén poblados al enviar; debe ir al menos un paquete o libro.
+$('form[action="php/pedido.php"]').on('submit', function (e) {
+  var total = 0;
   $('.sp-qty-input').each(function () {
     var key = $(this).data('key');
     $('#libro' + key).val(buildLibroVal(key));
+    total += parseInt($(this).val()) || 0;
   });
+  if (total <= 0) {
+    e.preventDefault();
+    var msg = 'Indica la cantidad de al menos un paquete o libro.';
+    if (typeof window.inkToast === 'function') window.inkToast(msg, 'warn'); else alert(msg);
+    return false;
+  }
 });
 </script>
 <script src="src/contador-caracteres.js"></script>
+<script src="src/ink-alerts.js"></script>
 </body>
 </html>

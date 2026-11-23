@@ -29,7 +29,7 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
       color: #fff; border: none; cursor: pointer; text-decoration: none; height: 31px;
     }
     .pp-btn:hover { opacity: .9; color: #fff; text-decoration: none; }
-    .pp-resumen-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+    .pp-resumen-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 20px; }
     @media (max-width: 860px) { .pp-resumen-grid { grid-template-columns: 1fr 1fr; } }
     .pp-resumen-card { border-radius: 10px; padding: 14px 16px; text-align: center; background: #f8fafc; }
     .pp-resumen-card .num { font-size: 1.5rem; font-weight: 800; color: #0f172a; }
@@ -37,6 +37,7 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
     .pp-resumen-card.venta { background: #eff6ff; } .pp-resumen-card.venta .num { color: #1d4ed8; }
     .pp-resumen-card.muestreo { background: #f5f3ff; } .pp-resumen-card.muestreo .num { color: #7c3aed; }
     .pp-resumen-card.sa { background: #f0fdf4; } .pp-resumen-card.sa .num { color: #16a34a; }
+    .pp-resumen-card.vd { background: #fdf4ff; } .pp-resumen-card.vd .num { color: #a21caf; }
 
     .pp-filtros { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; margin-bottom: 18px; }
     .pp-filtros label { display: block; font-size: .75rem; color: #64748b; margin-bottom: 4px; }
@@ -55,6 +56,7 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
     .pp-badge-venta { background: #dbeafe; color: #1e40af; }
     .pp-badge-muestreo { background: #ede9fe; color: #5b21b6; }
     .pp-badge-sa { background: #dcfce7; color: #15803d; }
+    .pp-badge-vd { background: #fae8ff; color: #a21caf; }
 
     .pp-fila-detalle td { background: #f8fafc; padding: 0; }
     .pp-fila-detalle .pp-detalle-wrap { padding: 12px 20px; }
@@ -85,6 +87,7 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
         <div class="pp-resumen-grid">
           <div class="pp-resumen-card"><div class="num" id="pp-total-todas">0</div><div class="lbl">Total planillas</div></div>
           <div class="pp-resumen-card venta"><div class="num" id="pp-total-venta">0</div><div class="lbl">Pedidos de venta</div></div>
+          <div class="pp-resumen-card vd"><div class="num" id="pp-total-vd">0</div><div class="lbl">Pedidos venta directa</div></div>
           <div class="pp-resumen-card muestreo"><div class="num" id="pp-total-muestreo">0</div><div class="lbl">Muestras</div></div>
           <div class="pp-resumen-card sa"><div class="num" id="pp-total-sa">0</div><div class="lbl">Pedidos sin adopción</div></div>
         </div>
@@ -103,6 +106,7 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
             <select id="pp-tipo" class="form-control form-control-sm">
               <option value="">Todos</option>
               <option value="venta">Pedidos de venta</option>
+              <option value="vd">Pedidos venta directa</option>
               <option value="muestreo">Muestras</option>
               <option value="sa">Pedidos sin adopción</option>
             </select>
@@ -145,7 +149,7 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
 <script src="vendors/scripts/layout-settings.js"></script>
 <script>
 (function () {
-  var BADGE_CLASE = { venta: 'pp-badge-venta', muestreo: 'pp-badge-muestreo', sa: 'pp-badge-sa' };
+  var BADGE_CLASE = { venta: 'pp-badge-venta', vd: 'pp-badge-vd', muestreo: 'pp-badge-muestreo', sa: 'pp-badge-sa' };
 
   function h(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
   function fechaCorta(v) {
@@ -178,10 +182,11 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
   }
 
   function renderResumen(filas) {
-    var totales = { venta: 0, muestreo: 0, sa: 0 };
+    var totales = { venta: 0, vd: 0, muestreo: 0, sa: 0 };
     filas.forEach(function (f) { if (totales[f.tipo] !== undefined) totales[f.tipo]++; });
     document.getElementById('pp-total-todas').textContent = filas.length;
     document.getElementById('pp-total-venta').textContent = totales.venta;
+    document.getElementById('pp-total-vd').textContent = totales.vd;
     document.getElementById('pp-total-muestreo').textContent = totales.muestreo;
     document.getElementById('pp-total-sa').textContent = totales.sa;
   }

@@ -9,6 +9,9 @@ $tpConfig = [
     4 => ['label' => 'OP anuladas',   'icon' => 'bi-x-circle',         'hbg' => '#fff1f2', 'hborder' => '#dc2626', 'hcolor' => '#991b1b'],
 ];
 $cfg = $tpConfig[$tp] ?? $tpConfig[1];
+// vd=1: OP de venta directa (numeración propia OPVD-n); ver includes/venta_directa_datos.php.
+$vd = !empty($_GET['vd']);
+if ($vd) $cfg['label'] = str_replace('OP', 'OP de venta directa', $cfg['label']) . ' (OPVD)';
 $req_estados = $bdd->query("SELECT id, estado FROM estados_op ORDER BY id");
 $estados_list = $req_estados->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -155,7 +158,7 @@ $(document).ready(function () {
     autoWidth:  false,
     dom:        '<"top"l>rt<"bottom"ip>',
     ajax: {
-      url: 'ajax/ops.php?tp=<?= $tp ?>',
+      url: 'ajax/ops.php?tp=<?= $tp ?><?= $vd ? '&vd=1' : '' ?>',
       data: function (d) {
         d.filter_estado  = $('#lo-filter-estado').val();
         d.filter_cliente = $('#lo-filter-cliente').val();

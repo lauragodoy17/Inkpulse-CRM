@@ -1,11 +1,13 @@
 <?php
   require_once("php/aut.php");
   require_once('conexion/bdd.php');
+  require_once('includes/venta_directa_datos.php');
+  vd_asegurar_tablas($bdd); // columnas ordenes_pedidos.id_pedido_vd / consecutivo_vd
 
   $sql = "SELECT o.id as opid, o.op_per, o.fecha, o.n_doc, o.solicitante, o.valor, o.guia,
                  o.fecha_entrega, o.archivo, o.observaciones, o.estado, o.transportista,
                  o.obs_envio, o.adjunto_envio, o.fecha_anu, o.motivo_anu, o.ciudad_destino,
-                 o.usuario_anu, o.id_pedido, o.id_pedido_dist, o.id_muestreo,
+                 o.usuario_anu, o.id_pedido, o.id_pedido_dist, o.id_muestreo, o.id_pedido_vd, o.consecutivo_vd,
                  o.id_devol_c, o.id_devol_p, o.id_devol_v, o.fecha_at, o.usuario_at,
                  o.año, t.tipo, t.descrip, c.*, CONCAT(u.nombres,' ',u.apellidos) AS usuario
           FROM ordenes_pedidos o
@@ -29,7 +31,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>OP <?= htmlspecialchars($op['año'].'-'.$op['opid']) ?></title>
+  <title><?= (int)$op['id_pedido_vd'] > 0 ? htmlspecialchars(vd_etiqueta_op($op['consecutivo_vd'])) : 'OP ' . htmlspecialchars($op['año'].'-'.$op['opid']) ?></title>
   <link rel="stylesheet" type="text/css" href="vendors/styles/core.css" />
   <link rel="stylesheet" type="text/css" href="vendors/styles/style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -196,7 +198,7 @@
   <div class="op-header">
     <div class="op-header-left">
       <div class="op-header-icon"><i class="bi bi-file-earmark-text"></i></div>
-      <h1 class="op-title">Orden de pedido # <?= htmlspecialchars($op['año'].' - '.$op['opid']) ?></h1>
+      <h1 class="op-title"><?php if ((int)$op['id_pedido_vd'] > 0): ?>Orden de pedido de venta directa <?= htmlspecialchars(vd_etiqueta_op($op['consecutivo_vd'])) ?><?php else: ?>Orden de pedido # <?= htmlspecialchars($op['año'].' - '.$op['opid']) ?><?php endif; ?></h1>
     </div>
     <span class="op-status">
       <?php if ($op['estado']==1): ?><i class="bi bi-clock"></i>
@@ -310,6 +312,14 @@
       </div>
       <?php } ?>
 
+      <?php if ($op['id_pedido_vd'] != 0): ?>
+      <div class="op-field">
+        <div class="op-field-icon"><i class="bi bi-bag-check"></i></div>
+        <div class="op-field-body"><p class="op-field-label">Venta directa</p>
+          <p class="op-field-val"><?= vd_numero($op['id_pedido_vd']) ?></p></div>
+      </div>
+      <?php endif; ?>
+
       <?php
         // Pedido distribuidor
         if ($op['id_pedido_dist'] != 0) {
@@ -366,7 +376,7 @@
 
       <?php
         // Pedidos agrupados
-        if ($op['id_pedido']==0 && $op['id_pedido_dist']==0 && $op['id_muestreo']==0
+        if ($op['id_pedido']==0 && $op['id_pedido_dist']==0 && $op['id_muestreo']==0 && $op['id_pedido_vd']==0
           && $op['id_devol_c']==0 && $op['id_devol_p']==0 && $op['id_devol_v']==0) {
           $r_ag = $bdd->prepare("SELECT id_pedido FROM op_pedidos_agrupados WHERE op='".$op['opid']."'");
           $r_ag->execute(); $agps = $r_ag->fetchAll();

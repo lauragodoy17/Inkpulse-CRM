@@ -143,6 +143,26 @@
 
                   $libros = $req->fetchAll();
 
+                  // Orden (2026-11-23): por curso; en cada curso los libros particulares alfabético y luego el plan lector alfabético. El curso
+                  // y la materia salen del área objetiva cuando la línea tiene cod_area (como en la adopción).
+                  require_once("includes/plan_lector.php");
+                  $areas_ord = [];
+                  $cods_ord = array_values(array_unique(array_filter(array_map(fn($l) => (string)$l["cod_area"], $libros))));
+                  if ($cods_ord) {
+                    $st_ord = $bdd->prepare("SELECT codigo, id_grado_otro, id_materia FROM areas_objetivas WHERE codigo IN (" . implode(',', array_fill(0, count($cods_ord), '?')) . ")");
+                    $st_ord->execute($cods_ord);
+                    foreach ($st_ord->fetchAll(PDO::FETCH_ASSOC) as $r_ord) $areas_ord[$r_ord["codigo"]] = $r_ord;
+                  }
+                  $mat_ord = [];
+                  $ids_ord = array_values(array_unique(array_map(fn($l) => (int)$l["id"], $libros)));
+                  if ($ids_ord) $mat_ord = $bdd->query("SELECT id, id_materia FROM libros WHERE id IN (" . implode(',', $ids_ord) . ")")->fetchAll(PDO::FETCH_KEY_PAIR);
+                  $clave_ord = function ($l) use ($areas_ord, $mat_ord) {
+                    $ao = (string)$l["cod_area"] !== '' ? ($areas_ord[$l["cod_area"]] ?? null) : null;
+                    return ['plan' => (int)($mat_ord[(int)$l["id"]] ?? 0) === MATERIA_PLAN_LECTOR || (int)($ao["id_materia"] ?? 0) === MATERIA_PLAN_LECTOR,
+                            'grado' => $ao && (int)$ao["id_grado_otro"] > 0 ? (int)$ao["id_grado_otro"] : (int)$l["id_grado"], 'titulo' => $l["libro"]];
+                  };
+                  usort($libros, fn($a, $b) => plan_lector_comparar($clave_ord($a), $clave_ord($b)));
+
                   $sql = "SELECT id FROM ordenes_pedidos WHERE id_pedido='".$_GET["id_pedido"]."' AND estado!=4";
 
 
@@ -196,7 +216,7 @@
                       <?php if ($pedido["petipo"] ==1) { ?>
                         <td>Tipo de pedido: Libros sueltos</td>
                       <?php }else{ ?>
-                        <td>Tipo de pedido: Paquete</td>
+                        <td>Tipo de pedido: <?= $pedido["petipo"] == 3 ? "Paquetes y libros sueltos" : "Paquete" ?></td>
                       <?php } ?>
                     <?php } ?>
                     </tr>

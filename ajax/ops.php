@@ -4,12 +4,16 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 require_once("../php/aut.php");
 require_once('../conexion/bdd.php');
+require_once('../includes/venta_directa_datos.php');
+vd_asegurar_tablas($bdd);
 
 $draw        = $_GET['draw'];
 $start       = intval($_GET['start']);
 $length      = intval($_GET['length']);
 $searchValue = trim($_GET['search']['value'] ?? '');
 $tp          = intval($_GET['tp'] ?? 1);
+// vd=1: OP de venta directa (numeración propia OPVD-n, lista aparte); sin vd: las OP de siempre, sin las de venta directa.
+$vd          = !empty($_GET['vd']);
 
 $filterEstado  = isset($_GET['filter_estado'])  ? intval($_GET['filter_estado'])  : 0;
 $filterCliente = trim($_GET['filter_cliente'] ?? '');
@@ -33,7 +37,7 @@ $baseJoin = "FROM ordenes_pedidos o
              JOIN estados_op e ON e.id = o.estado";
 
 // --- Condiciones base por tp (para recordsTotal sin filtros extra) ---
-$tpCond = [];
+$tpCond = [$vd ? "o.id_pedido_vd > 0" : "o.id_pedido_vd = 0"];
 if ($tp == 2) $tpCond[] = "o.estado = 1";
 if ($tp == 3) $tpCond[] = "o.estado = 2";
 if ($tp == 4) $tpCond[] = "o.estado = 4";
@@ -46,7 +50,8 @@ $conditions = $tpCond;
 $params     = [];
 
 if (!empty($searchValue)) {
-    $conditions[]    = "(c.cliente LIKE :search OR CAST(o.id AS CHAR) LIKE :search)";
+    $conditions[]    = $vd ? "(c.cliente LIKE :search OR CONCAT('OPVD-', o.consecutivo_vd) LIKE :search OR CAST(o.consecutivo_vd AS CHAR) LIKE :search OR CONCAT('VD-', o.id_pedido_vd) LIKE :search)"
+                            : "(c.cliente LIKE :search OR CAST(o.id AS CHAR) LIKE :search)";
     $params[':search'] = "%" . $searchValue . "%";
 }
 if ($filterEstado > 0) {
@@ -76,7 +81,7 @@ $filtered = $stmtFiltered->fetchColumn();
 // Datos paginados
 $dataSQL = "SELECT o.id as opid, o.usuario, o.fecha, o.n_doc, o.solicitante, o.valor, o.guia,
             o.fecha_entrega, o.archivo, o.fecha_at, o.usuario_at, o.usuario_anu, o.fecha_anu,
-            o.año, t.tipo, c.*, CONCAT(u.nombres,' ',u.apellidos) AS usuario, e.estado
+            o.año, o.id_pedido_vd, o.consecutivo_vd, t.tipo, c.*, CONCAT(u.nombres,' ',u.apellidos) AS usuario, e.estado
             $baseJoin $whereSQL $orderSQL LIMIT :start, :length";
 
 $stmt = $bdd->prepare($dataSQL);
@@ -99,6 +104,12 @@ foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $op) {
         $op["id"] = $op["opid"];
     } else {
         $op["id"] = "<a href='op_pendiente.php?op=".$op["opid"]."'>".$op["año"]." - ".$op["opid"]."</a>";
+    }
+
+    if ((int)$op['id_pedido_vd'] > 0) {
+        // OP de venta directa: se muestra con su numeración propia.
+        $etq = vd_etiqueta_op($op['consecutivo_vd']) . " <small style='color:#64748b'>(" . vd_numero($op['id_pedido_vd']) . ")</small>";
+        $op["id"] = $tp == 4 ? $etq : "<a href='op_pendiente.php?op=".$op["opid"]."'>" . $etq . "</a>";
     }
 
     $op["acciones"] = "<a href='formato_op.php?op=".$op["opid"]."' target='_blank' class='btn-ver-detalle' title='Imprimir OP'><i class='bi bi-printer'></i></a>";

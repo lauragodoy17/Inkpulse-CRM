@@ -367,6 +367,7 @@
     font-size: 0.81rem;
   }
   #dataTables-adop tbody td:first-child { text-align: left; font-weight: 500; padding-left: 14px; }
+  #dataTables-adop tbody td.col-isbn { white-space: nowrap; color: #475569; font-size: 0.78rem; }
 
   /* venta potencial / venta real */
   .venta { color: #ea580c; font-weight: 600; }
@@ -954,7 +955,7 @@
   </div>
     <?php
                             
-        $sql = "SELECT p.id,p.cod_area, b.materia, c.grado,l.id, l.libro,l.id_materia, l.id_grado, l.pri_sec, l.precio, desc_max, desc_max_dist FROM presupuestos p JOIN libros l ON p.id_libro=l.id JOIN materias b ON l.id_materia=b.id JOIN grados c ON l.id_grado=c.id WHERE id_colegio='".$_GET["colegio"]."' AND id_periodo='".$gp_periodo["id"]."' AND p.aprobado < 2 AND p.pre_definido='1' AND p.probabilidad !=3 ORDER BY l.id_grado ASC";
+        $sql = "SELECT p.id,p.cod_area, b.materia, c.grado,l.id, l.libro, l.isbn,l.id_materia, l.id_grado, l.pri_sec, l.precio, desc_max, desc_max_dist FROM presupuestos p JOIN libros l ON p.id_libro=l.id JOIN materias b ON l.id_materia=b.id JOIN grados c ON l.id_grado=c.id WHERE id_colegio='".$_GET["colegio"]."' AND id_periodo='".$gp_periodo["id"]."' AND p.aprobado < 2 AND p.pre_definido='1' AND p.probabilidad !=3 ORDER BY l.id_grado ASC, l.libro ASC";
 
 
         $req = $bdd->prepare($sql);
@@ -971,6 +972,11 @@
             $ids_exist_adop[] = $ex["id_grado"] == 17 ? $ex["id_libro_eureka"]."|".$ex["id_grado_otro"] : (string)$ex["id_libro_eureka"];
         }
         $ids_exist_adop = array_values(array_unique($ids_exist_adop));
+
+        // Orden de la tabla (2026-11-23): por curso; en cada curso los libros particulares alfabético y luego el plan lector alfabético.
+        // La celda Grado lleva la clave en data-order (DataTables ordena por ella y luego por el título).
+        require_once(__DIR__ . "/../includes/plan_lector.php");
+        $orden_adop = fn($esPlan, $idGrado) => plan_lector_clave($esPlan, $idGrado);
 
         // Sobrecosto por libro (2026-11-10): valor en pesos que se digita en cada título (presupuestos.sobrecosto), sin
         // cálculo. Desde 2026-11-11 la columna se ve y se guarda con cualquier canal; solo con "Venta directa - Eureka"
@@ -1009,6 +1015,7 @@ JS;
                 <thead>
                   <tr>
                     <th>Título</th>
+                    <th>ISBN</th>
                     <th>Materia</th>
                     <th>Grado</th>
                     <th>Alumnos</th>
@@ -1029,7 +1036,7 @@ JS;
 
                         if ($libro_p["id_grado"] == 15 || $libro_p["id_grado"] == 16 ) {
 
-                            $sq_l2 = "SELECT l.id, l.libro,l.id_grado, l.precio, g.grado, m.materia FROM libros l JOIN materias m ON l.id_materia=m.id JOIN grados g ON l.id_grado=g.id WHERE l.pri_sec='".$libro_p["lib_eureka"]."'";
+                            $sq_l2 = "SELECT l.id, l.libro, l.isbn, l.id_grado, l.precio, g.grado, m.materia FROM libros l JOIN materias m ON l.id_materia=m.id JOIN grados g ON l.id_grado=g.id WHERE l.pri_sec='".$libro_p["lib_eureka"]."'";
                             
                             $req_l2 = $bdd->prepare($sq_l2);
                             $req_l2->execute();
@@ -1053,8 +1060,9 @@ JS;
 
                                  echo "<tr data-adoptado='".($presup["definido"]==1?'1':'0')."'>
                                     <td>".$libro."</td>
+                                    <td class='col-isbn'>".htmlspecialchars((string)$libro2["isbn"])."</td>
                                     <td>".$libro2["materia"]."</td>
-                                    <td>".$libro2["grado"]."</td>
+                                    <td data-order='".$orden_adop(false, $libro2["id_grado"])."'>".$libro2["grado"]."</td>
                                     <!--<td>".$gp["paralelos"]."</td>-->
                                     <td id='alm_d".$libro2["id"]."'>".$gp["alumnos"]."</td>";
                                       
@@ -1411,20 +1419,22 @@ JS;
 
                                   echo "<tr data-adoptado='".($presup["definido"]==1?'1':'0')."'>
                                       <td>".$libro_p["libro"]."</td>
+                                      <td class='col-isbn'>".htmlspecialchars((string)$libro_p["isbn"])."</td>
                                       <td>".$libro_p["materia"]."</td>";
 
                                     if ($libro_p["id_grado"] != 17) {
-                                        echo "<td>".$libro_p["grado"]."</td>";
-                                      
+                                        echo "<td data-order='".$orden_adop($libro_p["id_materia"] == MATERIA_PLAN_LECTOR, $libro_p["id_grado"])."'>".$libro_p["grado"]."</td>";
+
                                     }else {
 
-                                      $sql_otrg = "SELECT g.grado FROM grados g JOIN areas_objetivas a ON g.id=a.id_grado_otro WHERE a.codigo='".$libro_p["cod_area"]."'";
+                                      $sql_otrg = "SELECT g.id, g.grado, a.id_materia FROM grados g JOIN areas_objetivas a ON g.id=a.id_grado_otro WHERE a.codigo='".$libro_p["cod_area"]."'";
 
                                       $req_otrg = $bdd->prepare($sql_otrg);
                                       $req_otrg->execute();
                                       $otrg = $req_otrg->fetch();
 
-                                      echo "<td>".$otrg["grado"]."</td>";
+                                      $es_plan = $libro_p["id_materia"] == MATERIA_PLAN_LECTOR || (int)($otrg["id_materia"] ?? 0) === MATERIA_PLAN_LECTOR;
+                                      echo "<td data-order='".$orden_adop($es_plan, $otrg["id"] ?? 99)."'>".($otrg["grado"] ?? '')."</td>";
                                     }
                                       
                                       echo"<!--<td>".$gp["paralelos"]."</td>-->
@@ -1876,7 +1886,7 @@ JS;
                               <tfoot>
                               <tr>
                                 <td>Total</td>
-                                <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+                                <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
                                 <td id='total_vp_d'></td>
                                 <td></td><td class='col-sc'></td><td></td><td></td>
                                 <td id='total_vr'></td>
@@ -2609,7 +2619,7 @@ JS;
                             '<thead><tr><th>Paquete</th><th>Código</th><th>Títulos incluidos</th><th>Precio neto (sumatoria)</th><th>Precio redondeado</th><th>Precio de venta</th></tr></thead><tbody>';
                           // Con Tipo de adopción "Paquetes": ISBN por libro, piso del precio y ficha técnica.
                           var modoPaquetes = $('#tipo_adop').val() == '2';
-                          var precioConPiso = tipoAdopGuardado === 2;
+                          var precioConPiso = tipoAdopGuardado === 2 || tipoAdopGuardado === 3; // Paquetes o Ambos
                           paquetes.forEach(function(p){
                             var titulos;
                             if (modoPaquetes) {
@@ -2629,6 +2639,7 @@ JS;
                               var conPiso = precioConPiso && p.precio_minimo !== null && p.precio_minimo !== undefined;
                               redondeado = '<span class="precio-padre-wrap"><span class="pp-signo">$</span>' +
                                 '<input type="text" class="precio-padre-inp precio-paquete-inp" data-id-paquete="' + p.id_paquete + '" ' +
+                                'data-suma="' + p.precio_neto_sumado + '" data-paquete="' + escHtmlPaquete(p.paquete) + '" ' +
                                 (conPiso ? 'data-precio-minimo="' + p.precio_minimo + '" ' : '') +
                                 'data-valor-previo="' + escHtmlPaquete(valorInput) + '" ' +
                                 'value="' + escHtmlPaquete(valorInput) + '" placeholder="Sin definir"></span>' +
@@ -2637,11 +2648,11 @@ JS;
                               // Paquete aún sin guardar: el precio se escribe ya y se guarda con "Guardar cambios".
                               var clave = p.id_grado + '-' + p.numero;
                               var pend = preciosPendientes[clave] !== undefined ? preciosPendientes[clave] : '';
-                              var conPisoPend = $('#tipo_adop').val() == '2' && p.precio_minimo !== null && p.precio_minimo !== undefined;
+                              var conPisoPend = ($('#tipo_adop').val() == '2' || $('#tipo_adop').val() == '3') && p.precio_minimo !== null && p.precio_minimo !== undefined;
                               if (pend !== '') p.precio_final = Number(pend);
                               redondeado = '<span class="precio-padre-wrap"><span class="pp-signo">$</span>' +
                                 '<input type="text" class="precio-padre-inp precio-paquete-pend" data-clave="' + clave + '" ' +
-                                'data-suma="' + p.precio_neto_sumado + '" ' +
+                                'data-suma="' + p.precio_neto_sumado + '" data-paquete="' + escHtmlPaquete(p.paquete) + '" ' +
                                 (conPisoPend ? 'data-precio-minimo="' + p.precio_minimo + '" ' : '') +
                                 'value="' + escHtmlPaquete(pend) + '" placeholder="Sin definir"></span>' +
                                 (conPisoPend ? '<div class="text-muted" style="font-size:.74rem;">Mínimo ' + formatCopPaquete(p.precio_minimo) + '</div>' : '') +
@@ -2667,21 +2678,68 @@ JS;
                           cont.html(html);
                         }
 
+                        // Precio escrito a mano -> número en texto ("765.000" y "765000.00" dan 765000).
+                        function leerPrecioPaquete(v) {
+                          v = String(v == null ? '' : v).trim().replace(/[$\s]/g, '');
+                          if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(v)) return v.replace(/\./g, '').replace(',', '.');
+                          return v.replace(',', '.');
+                        }
+
+                        // Alerta (modal de src/ink-alerts.js, cargado en colegio.php) cuando el precio escrito
+                        // queda más de $1.000 por debajo de la sumatoria: muestra el detalle y deja usar el mínimo.
+                        function alertaPrecioPaquete(input, valor, minimo, alUsarMinimo) {
+                          var suma = Number(input.attr('data-suma'));
+                          var nombre = input.attr('data-paquete') || 'Paquete';
+                          var fila = function (etq, val, color) {
+                            return '<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #f1f5f9;">' +
+                              '<span>' + etq + '</span><strong style="color:' + (color || '#0f172a') + ';white-space:nowrap;">' + val + '</strong></div>';
+                          };
+                          var ov = document.createElement('div');
+                          ov.className = 'ink-overlay';
+                          ov.innerHTML =
+                            '<div class="ink-modal" style="width:380px;">' +
+                              '<div class="ink-modal-icon warning"><i class="bi bi-exclamation-triangle-fill"></i></div>' +
+                              '<p class="ink-modal-title">Precio por debajo del mínimo</p>' +
+                              '<p class="ink-modal-text" style="margin-bottom:12px;">El precio de <strong>' + escHtmlPaquete(nombre) + '</strong> solo puede bajar hasta $1.000 de la sumatoria de sus libros, redondeado al mil.</p>' +
+                              '<div style="font-size:.85rem;color:#475569;margin-bottom:20px;">' +
+                                (isNaN(suma) ? '' : fila('Precio neto (sumatoria)', formatCopPaquete(suma))) +
+                                fila('Precio escrito', formatCopPaquete(valor), '#dc2626') +
+                                fila('Mínimo permitido', formatCopPaquete(minimo), '#16a34a') +
+                              '</div>' +
+                              '<div class="ink-modal-btns">' +
+                                '<button type="button" class="ink-btn-cancel" data-accion="cerrar">Corregir</button>' +
+                                '<button type="button" class="ink-btn-warning" data-accion="minimo">Usar ' + formatCopPaquete(minimo) + '</button>' +
+                              '</div>' +
+                            '</div>';
+                          document.body.appendChild(ov);
+                          var cerrar = function () { ov.remove(); input.trigger('focus'); };
+                          $(ov).on('click', '[data-accion="cerrar"]', cerrar);
+                          $(ov).on('click', '[data-accion="minimo"]', function () {
+                            ov.remove();
+                            input.val(Number(minimo).toFixed(2));
+                            alUsarMinimo();
+                          });
+                          $(ov).on('click', function (e) { if (e.target === ov) cerrar(); });
+                        }
+
+                        function avisoPaquete(msg) {
+                          if (typeof window.inkToast === 'function') window.inkToast(escHtmlPaquete(msg), 'error'); else alert(msg);
+                        }
+
                         // Precio de un paquete aún sin guardar: se valida y se deja pendiente para "Guardar cambios".
                         $(document).on('change', '.precio-paquete-pend', function(){
                           var input = $(this);
                           var clave = String(input.data('clave'));
-                          var valor = input.val().trim().replace(/[$\s.]/g, '').replace(',', '.');
+                          var valor = leerPrecioPaquete(input.val());
                           var minimo = input.attr('data-precio-minimo');
                           if (valor !== '' && !(Number(valor) >= 0)) {
-                            alert('Escribe un precio válido.');
+                            avisoPaquete('Escribe un precio válido para el paquete.');
                             input.val(preciosPendientes[clave] || '');
                             return;
                           }
                           if (minimo !== undefined && valor !== '' && !(Number(valor) >= Number(minimo))) {
-                            alert('El precio del paquete no puede ser menor a ' + formatCopPaquete(minimo) +
-                                  ' (se permite bajar como máximo $1.000 del precio original).');
                             input.val(preciosPendientes[clave] || '');
+                            alertaPrecioPaquete(input, valor, minimo, function () { input.trigger('change'); });
                             return;
                           }
                           if (valor === '') delete preciosPendientes[clave]; else preciosPendientes[clave] = valor;
@@ -2694,16 +2752,20 @@ JS;
                         $(document).on('change', '.precio-paquete-inp', function(){
                           var input = $(this);
                           var idPaquete = input.data('id-paquete');
-                          var valor = input.val().trim();
+                          var valor = leerPrecioPaquete(input.val());
                           var valorPrevio = String(input.attr('data-valor-previo') || '');
+                          if (valor !== '' && !(Number(valor) >= 0)) {
+                            avisoPaquete('Escribe un precio válido para el paquete.');
+                            input.val(valorPrevio);
+                            return;
+                          }
 
-                          // Tipo de adopción "Paquetes": como máximo $1.000 por debajo del precio original
+                          // Tipo de adopción "Paquetes" o "Ambos": como máximo $1.000 por debajo del precio original
                           // (misma regla que precio_minimo_paquete() en el servidor, que es la que manda).
                           var minimo = input.attr('data-precio-minimo');
                           if (minimo !== undefined && valor !== '' && !(Number(valor) >= Number(minimo))) {
-                            alert('El precio del paquete no puede ser menor a ' + formatCopPaquete(minimo) +
-                                  ' (se permite bajar como máximo $1.000 del precio original).');
                             input.val(valorPrevio);
+                            alertaPrecioPaquete(input, valor, minimo, function () { input.trigger('change'); });
                             return;
                           }
 
@@ -2717,14 +2779,20 @@ JS;
                                 input.attr('data-valor-previo', valor);
                                 $('#precio-final-paq' + idPaquete).text(formatCopPaquete(resp.precio_final));
                               } else {
-                                if (minimo !== undefined) input.val(valorPrevio);
-                                alert('No se pudo guardar el precio del paquete.');
+                                input.val(valorPrevio);
+                                avisoPaquete((resp && resp.error) || 'No se pudo guardar el precio del paquete.');
                               }
                             },
                             error: function(xhr){
-                              if (minimo !== undefined) input.val(valorPrevio);
-                              var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'No se pudo guardar el precio del paquete.';
-                              alert(msg);
+                              input.val(valorPrevio);
+                              var r = xhr.responseJSON || {};
+                              // El servidor (que manda) también rechazó el precio por el mínimo: misma alerta detallada.
+                              if (r.precio_minimo !== undefined) {
+                                input.attr('data-precio-minimo', r.precio_minimo);
+                                alertaPrecioPaquete(input, valor, r.precio_minimo, function () { input.trigger('change'); });
+                              } else {
+                                avisoPaquete(r.error || 'No se pudo guardar el precio del paquete.');
+                              }
                             }
                           });
                         });
@@ -2801,6 +2869,10 @@ JS;
 
     $(document).ready(function () {
         $.fn.dataTable.ext.errMode = 'none';
+        // Título alfabético en español, sin distinguir mayúsculas ni tildes ("Álgebra" va con la A).
+        var tituloEs = function (a, b) { return String(a).trim().localeCompare(String(b).trim(), 'es', { sensitivity: 'base', numeric: true }); };
+        $.fn.dataTable.ext.type.order['titulo-es-asc'] = tituloEs;
+        $.fn.dataTable.ext.type.order['titulo-es-desc'] = function (a, b) { return tituloEs(b, a); };
         $('#dataTables-adop').dataTable({
           "language": {
             "lengthMenu": "Display _MENU_ registros por página",
@@ -2820,11 +2892,16 @@ JS;
           "paging": false,
           "searching": false,
           "ordering": true,
-          order: [[2, 'asc']],
+          // Por grado y, dentro del grado, alfabético por título (2026-11-20); orderData mantiene el título como
+          // segundo criterio también cuando se hace clic en el encabezado Grado. 2026-11-23: la celda Grado trae en
+          // data-order "04-0" / "04-1": por curso y en cada curso los particulares antes que el plan lector.
+          order: [[3, 'asc']],
           columnDefs: [
-            { type: 'natural', targets: 2 },
+            // Columna Grado = 3 desde que se agregó ISBN (2026-11-23).
+            { type: 'string', targets: 3, orderData: [3, 0] },
+            { type: 'titulo-es', targets: 0 },
             { orderable: false, targets: '_all' },
-            { orderable: true,  targets: 2 }
+            { orderable: true,  targets: 3 }
           ],
         });
     });

@@ -27,6 +27,14 @@ return [
 'tabla_detalle' => 'planillas_procesamiento_muestreo_pedidos',
 'tabla_origen' => 'muestreos',
 ],
+// 2026-11-18: los pedidos de venta (tabla pedidos) de venta directa salen en una planilla aparte,
+// con su propio consecutivo (ver php/generar_planilla_procesamiento.php).
+'vd' => [
+'label' => 'Pedidos venta directa',
+'tabla_planilla' => 'planillas_procesamiento_vd',
+'tabla_detalle' => 'planillas_procesamiento_vd_pedidos',
+'tabla_origen' => 'pedidos',
+],
 'sa' => [
 'label' => 'Pedidos sin adopción',
 'tabla_planilla' => 'planillas_procesamiento_sa',
@@ -96,7 +104,7 @@ if (!isset($tipos[$tipo])) return [];
 $info = $tipos[$tipo];
 $idPlanilla = (int)$idPlanilla;
 
-if ($tipo === 'venta') {
+if ($tipo === 'venta' || $tipo === 'vd') {
 $sql = "SELECT o.id, o.fecha, c.colegio,
                         CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos)) AS responsable,
                         COALESCE(NULLIF(TRIM(CONCAT(TRIM(u.nombres),' ',TRIM(u.apellidos))),''),

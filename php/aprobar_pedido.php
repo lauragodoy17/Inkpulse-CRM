@@ -2,6 +2,7 @@
 require_once("../php/aut.php");
 require_once("../conexion/bdd.php");
 require_once("../includes/historial_estados.php");
+require_once("../includes/pedidos_venta_directa.php");
 
 header("Content-Type:text/html;charset=utf-8");
 
@@ -11,6 +12,7 @@ $tp        = intval($_POST['tp'] ?? 3);
 
 $bdd->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 crear_tabla_historial_estados($bdd);
+asegurar_columnas_pedido_vd($bdd);
 try {
     foreach ($_POST['lib_p'] ?? [] as $lib_p) {
         if (trim($lib_p) === '') continue;
@@ -26,6 +28,15 @@ try {
     $bdd->prepare("UPDATE pedidos SET estado = '2', observaciones = ? WHERE id = ?")
         ->execute([$_POST['observaciones'] ?? '', $id_pedido]);
     registrar_historial_estado($bdd, 'pedidos', $id_pedido, 2, intval($_SESSION['id'] ?? 0));
+
+    // Venta directa (pedido para Andrea Díaz o canal "Venta directa - Eureka", 2026-11-13): responsable de la venta y
+    // su teléfono, si al aprobar dijeron que ya lo tiene. Pasan al formato de venta directa.
+    $responsable = mb_substr(trim(str_replace(["'", '"'], '', (string)($_POST['vd_responsable'] ?? ''))), 0, 150);
+    $tel_responsable = mb_substr(trim(preg_replace('/[^0-9+\s().-]/', '', (string)($_POST['vd_tel_responsable'] ?? ''))), 0, 40);
+    if ($responsable !== '') {
+        $bdd->prepare("UPDATE pedidos SET vd_responsable = ?, vd_tel_responsable = ? WHERE id = ?")
+            ->execute([$responsable, $tel_responsable !== '' ? $tel_responsable : null, $id_pedido]);
+    }
 
 } catch (Exception $e) {
     $error = "Error al aprobar el pedido: " . $e->getMessage();

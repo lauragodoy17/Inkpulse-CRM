@@ -22,6 +22,18 @@ if (isset($_GET['id_pedido'])) {
     if ($rec_cli && !empty($rec_cli['cliente'])) $cliente_predet = $rec_cli['cliente'];
   }
 }
+if (isset($_GET['id_pedido_vd'])) {
+  // Venta directa (includes/venta_directa_datos.php): el cliente es el elegido en la solicitud. La OP que se
+  // genera lleva numeración propia (OPVD-n), ver vd_asignar_consecutivo_op().
+  $req_pedido = $bdd->prepare("SELECT pe.fecha, pe.observaciones, pe.fecha_r, pe.id_colegio, pe.id_periodo, pe.cliente, z.zona, c.colegio, u.nombres, u.apellidos
+                               FROM pedidos_vd pe JOIN colegios c ON pe.id_colegio = c.id
+                               LEFT JOIN zonas z ON z.codigo = c.cod_zona
+                               LEFT JOIN usuarios u ON u.id = pe.id_usuario
+                               WHERE pe.id = ?");
+  $req_pedido->execute([intval($_GET['id_pedido_vd'])]);
+  $pedido = $req_pedido->fetch();
+  $cliente_predet = !empty($pedido['cliente']) ? $pedido['cliente'] : '';
+}
 if (isset($_GET['id_pedido_dist'])) {
   $sql_pedido = "SELECT pe.fecha,pe.observaciones,pe.fecha_r, pe.colegio, u.nombres, u.apellidos
                  FROM pedidos2 pe JOIN usuarios u ON u.id=pe.id_usuario
@@ -160,7 +172,7 @@ if (isset($_GET['id_muestreo']) || isset($_GET['id_devol_c'])) {
 }
 
 
-$show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
+$show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist']) && !isset($_GET['id_pedido_vd'])
              && !isset($_GET['id_devol_c'])  && !isset($_GET['id_devol_p'])
              && !isset($_GET['id_devol_v'])  && !isset($_GET['id_muestreo'])
              && !isset($_POST['pedidos_agp']);
@@ -391,6 +403,35 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
         </div>
         <?php endif; ?>
 
+        <?php if (isset($_GET['id_pedido_vd'])): ?>
+        <div class="mc-cards">
+          <div class="mc-card">
+            <div class="mc-card-icon blue"><i class="bi bi-hash"></i></div>
+            <div class="mc-card-text"><p class="mc-card-label"># Venta directa (genera OP de venta directa)</p><p class="mc-card-val">VD-<?= intval($_GET['id_pedido_vd']) ?></p></div>
+          </div>
+          <div class="mc-card">
+            <div class="mc-card-icon green"><i class="bi bi-building"></i></div>
+            <div class="mc-card-text"><p class="mc-card-label">Colegio</p><p class="mc-card-val"><?= htmlspecialchars($pedido['colegio'] ?? '—') ?></p></div>
+          </div>
+          <div class="mc-card">
+            <div class="mc-card-icon orange"><i class="bi bi-calendar3"></i></div>
+            <div class="mc-card-text"><p class="mc-card-label">Fecha</p><p class="mc-card-val"><?= htmlspecialchars($pedido['fecha'] ?? '—') ?></p></div>
+          </div>
+          <div class="mc-card">
+            <div class="mc-card-icon purple"><i class="bi bi-geo-alt"></i></div>
+            <div class="mc-card-text"><p class="mc-card-label">Zona</p><p class="mc-card-val"><?= htmlspecialchars($pedido['zona'] ?? '—') ?></p></div>
+          </div>
+          <div class="mc-card">
+            <div class="mc-card-icon teal"><i class="bi bi-person"></i></div>
+            <div class="mc-card-text"><p class="mc-card-label">Solicitado por</p><p class="mc-card-val"><?= htmlspecialchars(trim(($pedido['nombres'] ?? '').' '.($pedido['apellidos'] ?? ''))) ?></p></div>
+          </div>
+          <div class="mc-card">
+            <div class="mc-card-icon amber"><i class="bi bi-calendar-check"></i></div>
+            <div class="mc-card-text"><p class="mc-card-label">Fecha de recogida</p><p class="mc-card-val"><?= htmlspecialchars($pedido['fecha_r'] ?? '—') ?></p></div>
+          </div>
+        </div>
+        <?php endif; ?>
+
         <?php if (isset($_GET['id_pedido_dist'])): ?>
         <div class="mc-cards">
           <div class="mc-card">
@@ -612,6 +653,10 @@ $show_archivo = !isset($_GET['id_pedido']) && !isset($_GET['id_pedido_dist'])
 
           <?php if (isset($_GET['id_pedido_dist'])): ?>
           <input type="hidden" name="id_pedido_dist" value="<?= htmlspecialchars($_GET['id_pedido_dist']) ?>">
+          <?php endif; ?>
+
+          <?php if (isset($_GET['id_pedido_vd'])): ?>
+          <input type="hidden" name="id_pedido_vd" value="<?= intval($_GET['id_pedido_vd']) ?>">
           <?php endif; ?>
 
           <?php if (isset($_GET['id_muestreo'])): ?>
