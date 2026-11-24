@@ -9,6 +9,7 @@ require_once("../php/aut.php");
 require_once("../conexion/bdd.php");
 require_once("../includes/devoluciones_ventas_datos.php");
 require_once("../includes/formatos_vd_datos.php"); // formato de venta directa automático (fvd_desde_devolucion)
+require_once("../includes/solicitudes_vd_datos.php"); // venta (consecutivo reservado) elegida para la devolución
 
 dm_validar_acceso(false, '../');
 dvv_asegurar_columnas($bdd); // antes de la transacción (DDL = commit implícito)
@@ -29,7 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$claves) {
     $docs_sel = $es_vd ? array_map('strval', (array)($_POST['docs'] ?? [])) : null;
     $post_vd = $es_vd ? ['paquete' => (array)($_POST['paquete'] ?? []), 'suelto' => (array)($_POST['suelto'] ?? []), 'suelto_paq' => (array)($_POST['suelto_paq'] ?? []),
                 'abierto' => (array)($_POST['abierto'] ?? []), 'sp_desc' => (array)($_POST['sp_desc'] ?? []), 'sp_precio' => (array)($_POST['sp_precio'] ?? [])] : null;
-    $res = dvv_guardar_devolucion($bdd, $claves, $cantidades, $observaciones, (string)($_POST['token'] ?? ''),
+    // Venta directa (2026-11-24): a qué venta (formato con consecutivo reservado) va la devolución; se valida ANTES de guardar.
+    $id_formato = $es_vd ? (int)($_POST['id_formato'] ?? 0) : 0;
+    $ped0 = $es_vd ? dvv_obtener_pedido($bdd, $claves[0]) : null;
+    $error_venta = $ped0 ? svd_validar_venta($bdd, $id_formato, (int)$ped0['id_colegio'], (int)$ped0['id_periodo'], $claves) : null;
+    $res = $error_venta ? ['ok' => false, 'error' => $error_venta]
+         : dvv_guardar_devolucion($bdd, $claves, $cantidades, $observaciones, (string)($_POST['token'] ?? ''),
                                   dvv_tipo_devolucion((string)($_POST['tipo_devolucion'] ?? '')), $docs_sel, $post_vd);
     if ($res['ok']) {
         $redirect = '../devolucion_colegio.php?id_pedido=' . $res['id_devolucion'];
@@ -38,9 +44,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$claves) {
         $formato = null;
         $aviso_formato = null;
         if ($es_vd && empty($res['repetida'])) {
-            $formato = fvd_desde_devolucion($bdd, $res['id_devolucion']);
+            $formato = fvd_desde_devolucion($bdd, $res['id_devolucion'], $id_formato);
             if ($formato['ok']) {
-                $txt = $formato['accion'] === 'creado' ? 'Se creó el formato de venta directa' : 'Se vinculó al formato de venta directa';
+                // 2026-11-24: la 2a devolución de venta directa se suma al formato de la 1a y descuenta sus unidades.
+                if ($formato['accion'] === 'agregado') {
+                    $txt = 'La devolución #' . (int)$res['id_devolucion'] . ' se sumó al formato de venta directa: se descontaron sus unidades de lo vendido y se recalculó el total'
+                         . (!empty($formato['reabierto']) ? '. El formato estaba cerrado: vuelve al cierre de dinero para confirmarlo con el total nuevo' : '');
+                } else {
+                    $txt = $formato['accion'] === 'creado' ? 'Se creó el formato de venta directa'
+                         : ($formato['accion'] === 'reservado' ? 'Los pedidos y la devolución quedaron en el formato de la venta elegida' : 'Se vinculó al formato de venta directa');
+                }
                 $txt .= ($formato['etapa'] ?? 0) >= FVD_ETAPA_RECIBIDO ? ' con el total vendido calculado. Llena los auxiliares de la venta y el cierre de dinero.'
                       : (($formato['etapa'] ?? 0) === FVD_ETAPA_DEV_CONFIRMADA ? ', pero falta configurar precios de venta para calcular el total vendido.' : '.');
                 $redirect = '../formato_venta_directa.php?id=' . (int)$formato['id'] . '&ink_status=success&ink_msg=' . urlencode($txt);

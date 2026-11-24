@@ -20,10 +20,16 @@ $error = null;
 $token = '';
 $armado = null; // pantalla Armar paquetes (fvd_armado_datos)
 $f = null;
+$dos_dev = false; // formato con 2 devoluciones de venta directa (2026-11-24): vendidas a dos precios
 $hist = [];
 $etapa = 0; // 0 = formato nuevo (paso 1 sin guardar)
 if ($id_formato) {
   $f = fvd_obtener($bdd, $id_formato);
+  // Consecutivo reservado sin pedidos (2026-11-24): no hay nada que diligenciar hasta que llegue su devolución.
+  if ($f && $f['reservado']) {
+    header('Location: ver_formato_venta_directa.php?id=' . (int)$f['id']);
+    exit;
+  }
   if (!$f) $error = 'El formato no existe o no está en tu alcance.';
   else {
     // Pedido, remisiones y precio de la remisión de cada fila (2026-11-23): se consultan una vez y quedan guardados.
@@ -52,9 +58,10 @@ if ($id_formato) {
     if ($etapa >= FVD_ETAPA_DEV_CONFIRMADA) [$conc, $tot] = fvd_conciliar($f, $etapa === FVD_ETAPA_DEV_CONFIRMADA ? fvd_precios_actuales($bdd, $f) : null);
     // Paquetes abiertos de la devolución (2026-11-13): descuento puesto a cada libro, para mostrarlo en el cierre.
     $abiertos_dev = [];
+    $dos_dev = count($f['legalizacion']['ids'] ?? []) > 1;
     if ($etapa >= FVD_ETAPA_DEV_CONFIRMADA && !empty($f['legalizacion']['id'])) {
       require_once("includes/devoluciones_ventas_datos.php");
-      $abiertos_dev = dvv_paquetes_abiertos($bdd, (int)$f['legalizacion']['id']);
+      foreach ($f['legalizacion']['ids'] as $id_dev_ab) $abiertos_dev += dvv_paquetes_abiertos($bdd, (int)$id_dev_ab); // 2 devoluciones de venta directa (2026-11-24)
     }
     // Token de la devolución: el mismo envío no genera dos devoluciones.
     if ($etapa === FVD_ETAPA_ENTREGADO) $token = bin2hex(random_bytes(16));
@@ -231,6 +238,20 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     .fv-det { font-size:.74rem; color:#94a3b8; margin-top:2px; max-width:520px; }
     .fv-tag { display:inline-block; font-size:.66rem; font-weight:700; padding:2px 8px; border-radius:999px; background:#f1f5f9; color:#64748b; margin-left:6px; }
     .fv-tag.fv-tag-sp { background:#fef3c7; color:#92400e; }
+    /* Ventas del cierre de dinero (2026-11-24) */
+    .fv-v-ayuda { display:flex; gap:10px; align-items:flex-start; background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; border-radius:10px; padding:10px 14px; font-size:.8rem; margin-bottom:10px; }
+    .fv-v-ayuda .bi { font-size:1rem; margin-top:1px; }
+    .fv-v-calc { font-size:.74rem; color:#64748b; margin-top:3px; }
+    .fv-v-calc b { color:#334155; }
+    .fv-v-pill { display:inline-block; font-size:.62rem; font-weight:800; padding:2px 8px; border-radius:999px; background:#dbeafe; color:#1d4ed8; margin-right:6px; vertical-align:middle; text-transform:uppercase; letter-spacing:.03em; }
+    .fv-v-pill.p2 { background:#ede9fe; color:#6d28d9; }
+    .fv-p1-pill { display:none; }
+    .fv-ventas tr.fv-split .fv-p1-pill { display:inline-block; }
+    .fv-ventas tr.fv-split td { border-bottom:none; }
+    .fv-ventas tr.fv-fila-p2 td { background:#faf5ff; border-bottom:1px solid #ede9fe; }
+    .fv-v-sub { font-size:.8rem; color:#4c1d95; padding-left:12px; border-left:3px solid #c4b5fd; }
+    .fv-p2-abrir { display:inline-flex; gap:4px; align-items:center; margin-top:5px; font-size:.75rem; }
+    .fv-p2-quitar { margin-left:8px; font-size:.72rem; color:#94a3b8; }
     .fv-num { width:84px; text-align:center; border:1px solid #cbd5e1; border-radius:8px; padding:6px; font-weight:700; }
     .fv-num.is-invalid { border-color:#dc2626; background:#fef2f2; }
     .fv-prop { font-size:.7rem; color:#b45309; margin-top:3px; }
@@ -306,7 +327,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
         <div class="fv-hero-acc">
           <a href="formatos_venta_directa.php"><i class="bi bi-list-ul"></i> Formatos</a>
           <?php if (!$solo_cierre): ?><a href="ver_formato_venta_directa.php?id=<?= (int)$f['id'] ?>" target="_blank"><i class="bi bi-printer"></i> Imprimir formato completo</a><?php endif; ?>
-          <?php if ($f['legalizacion']): ?><a href="devolucion_colegio.php?id_pedido=<?= (int)$f['legalizacion']['id'] ?>"><i class="bi bi-arrow-return-left"></i> Devolución #<?= (int)$f['legalizacion']['id'] ?></a><?php endif; ?>
+          <?php if ($f['legalizacion']): foreach ($f['legalizacion']['ids'] as $id_dev_l): ?><a href="devolucion_colegio.php?id_pedido=<?= (int)$id_dev_l ?>"><i class="bi bi-arrow-return-left"></i> Devolución #<?= (int)$id_dev_l ?></a><?php endforeach; endif; ?>
           <?php if ($f['anulable']): ?><button type="button" id="fv-anular"><i class="bi bi-x-octagon"></i> Anular formato</button><?php endif; ?>
         </div>
         <?php endif; ?>
@@ -315,7 +336,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
       <?php if (!$activo) echo html_motivo_anulacion(obtener_historial_estado($bdd, FVD_MODULO_HISTORIAL, $f['id'], ESTADO_ANULADO), 'Formato anulado'); ?>
 
       <?php if ($solo_cierre): ?>
-      <div class="fv-aviso ok"><i class="bi bi-info-circle"></i> Formato generado con la devolución<?= $f['legalizacion'] ? ' #' . (int)$f['legalizacion']['id'] : '' ?>: primero <a href="#fv-armar">arma los paquetes</a> con lo vendido (lo demás queda suelto a precio venta padre); <?= $etapa < FVD_ETAPA_RECIBIDO ? 'falta un precio de venta para calcular el total (abajo). Después se habilita el cierre de dinero.' : 'llena los auxiliares y el cierre de dinero.' ?> Al confirmar el cierre se genera el formato completo para imprimir.</div>
+      <div class="fv-aviso ok"><i class="bi bi-info-circle"></i> Formato generado con <?= $f['legalizacion'] ? htmlspecialchars(fvd_texto_devoluciones($f['legalizacion'])) : 'la devolución' ?>: primero <a href="#fv-armar">arma los paquetes</a> con lo vendido (lo demás queda suelto a precio venta padre); <?= $etapa < FVD_ETAPA_RECIBIDO ? 'falta un precio de venta para calcular el total (abajo). Después se habilita el cierre de dinero.' : 'llena los auxiliares y el cierre de dinero.' ?> Al confirmar el cierre se genera el formato completo para imprimir.</div>
       <?php else: ?>
       <div class="fv-steps">
         <?php foreach ($pasos as $n => $p): $e = $estado_paso($n); ?>
@@ -434,7 +455,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
         <?php else: ?>
         <div class="fv-sec-body">
           <?php if ($f['automatico']): ?>
-            <div class="fv-aviso"><i class="bi bi-magic"></i> Formato creado automáticamente con la devolución<?= $f['legalizacion'] ? ' #' . (int)$f['legalizacion']['id'] : '' ?>: el inventario entregado es lo despachado (World Office o, sin documento, lo solicitado) y no lleva firmas de entrega.</div>
+            <div class="fv-aviso"><i class="bi bi-magic"></i> Formato creado automáticamente con <?= $f['legalizacion'] ? htmlspecialchars(fvd_texto_devoluciones($f['legalizacion'])) : 'la devolución' ?><?= count($f['legalizacion']['ids'] ?? []) > 1 ? ' (las unidades de todas se suman en las devueltas)' : '' ?>: el inventario entregado es lo despachado (World Office o, sin documento, lo solicitado) y no lleva firmas de entrega.</div>
           <?php endif; ?>
           <div class="fv-grid">
             <div class="fv-dato"><span>Fecha / hora de venta</span><strong><?= $h(date('d/m/Y', strtotime($f['fecha_venta']))) ?> <?= $f['hora_inicio'] ? $h(date('g:i A', strtotime($f['hora_inicio']))) . ($f['hora_fin'] ? ' – ' . $h(date('g:i A', strtotime($f['hora_fin']))) : '') : '' ?></strong></div>
@@ -615,9 +636,9 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
         <?php else: ?>
         <div class="fv-sec-body">
           <?php if ($etapa === FVD_ETAPA_DEV_CONFIRMADA && $tot['sin_precio']): ?>
-            <div class="fv-aviso err"><i class="bi bi-exclamation-octagon"></i> Las unidades se calcularon con la devolución #<?= (int)$f['legalizacion']['id'] ?>, pero <?= (int)$tot['sin_precio'] ?> fila(s) no tienen precio de venta configurado. Configúralo en Adopciones del colegio (precio del paquete o precio venta padre del título) y vuelve a calcular: el cierre se completa solo. No se calcula el total mientras falte un precio.</div>
+            <div class="fv-aviso err"><i class="bi bi-exclamation-octagon"></i> Las unidades se calcularon con <?= htmlspecialchars(fvd_texto_devoluciones($f['legalizacion'])) ?>, pero <?= (int)$tot['sin_precio'] ?> fila(s) no tienen precio de venta configurado. Configúralo en Adopciones del colegio (precio del paquete o precio venta padre del título) y vuelve a calcular: el cierre se completa solo. No se calcula el total mientras falte un precio.</div>
           <?php elseif ($etapa >= FVD_ETAPA_CONCILIADO): ?>
-            <div class="fv-aviso ok"><i class="bi bi-calculator"></i> Calculado automáticamente con la devolución #<?= (int)($f['legalizacion']['id'] ?? 0) ?>; los precios aplicados quedaron guardados en el formato aunque luego cambien las listas de precios.</div>
+            <div class="fv-aviso ok"><i class="bi bi-calculator"></i> Calculado automáticamente con <?= htmlspecialchars(fvd_texto_devoluciones($f['legalizacion']) ?: 'la devolución') ?>; los precios aplicados quedaron guardados en el formato aunque luego cambien las listas de precios.</div>
           <?php endif; ?>
           <div class="table-responsive">
             <table class="fv-tabla">
@@ -626,10 +647,11 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
                 <?php foreach ($conc as $x): ?>
                 <tr>
                   <td><div class="fv-paq"><?= $h($x['descripcion']) ?><?= $tag_item($x) ?></div></td>
-                  <td class="c"><?= (int)$x['solicitud'] ?></td><td class="c"><?= $x['entregado'] ?></td><td class="c"><?= $x['dev'] ?></td>
-                  <td class="c"><?= $x['fin'] ?></td><td class="c"><strong><?= $x['vend'] ?></strong></td>
-                  <td class="r"><?php if ($x['precio_v']): $dsc = $x['tipo'] === FVD_TIPO_ABIERTO ? ($abiertos_dev[(int)$x['id_paquete']]['libros'][(int)$x['id_libro']]['descuento'] ?? null) : null; ?><?= $pesos($x['precio_v']) ?><div class="fv-det"><?= $h($x['origen_v']) ?><?= $dsc ? ' · desc. ' . $h(rtrim(rtrim(number_format($dsc, 2, ',', ''), '0'), ',')) . ' %' : '' ?></div><?php elseif ($x['sin_precio']): ?><span class="fv-sinprecio"><i class="bi bi-exclamation-triangle"></i> Sin precio</span><?php else: ?>—<?php endif; ?></td>
-                  <td class="r"><?= $x['total_v'] !== null ? '<strong>' . $pesos($x['total_v']) . '</strong>' : '—' ?></td>
+                  <td class="c"><?= (int)$x['solicitud'] ?></td><td class="c"><?= $x['entregado'] ?></td><td class="c"><?= $x['dev'] ?><?php if ($dos_dev && $x['dev']): ?><div class="fv-det">1ª: <?= $x['dev'] - $x['dev2'] ?> · 2ª: <?= $x['dev2'] ?></div><?php endif; ?></td>
+                  <td class="c"><?= $x['fin'] ?></td><td class="c"><strong><?= $x['vend'] ?></strong><?php if ($x['n2']): ?><div class="fv-det"><?= $x['vend1'] ?> a precio 1 · <?= $x['n2'] ?> a precio 2</div><?php endif; ?></td>
+                  <td class="r"><?php if ($x['precio_v']): $dsc = $x['tipo'] === FVD_TIPO_ABIERTO ? ($abiertos_dev[(int)$x['id_paquete']]['libros'][(int)$x['id_libro']]['descuento'] ?? null) : null; ?><?= $pesos($x['precio_v']) ?><div class="fv-det"><?= $h($x['origen_v']) ?><?= $dsc ? ' · desc. ' . $h(rtrim(rtrim(number_format($dsc, 2, ',', ''), '0'), ',')) . ' %' : '' ?></div><?php elseif ($x['sin_precio']): ?><span class="fv-sinprecio"><i class="bi bi-exclamation-triangle"></i> Sin precio</span><?php else: ?>—<?php endif; ?>
+                    <?php if ($x['n2']): ?><div class="fv-det" style="margin-top:4px;">Precio 2: <?= $x['precio2_v'] ? $pesos($x['precio2_v']) : 'sin precio' ?></div><?php endif; ?></td>
+                  <td class="r"><?= $x['total_v'] !== null ? '<strong>' . $pesos($x['total_v']) . '</strong>' : '—' ?><?php if ($x['n2'] && $x['total_v'] !== null): ?><div class="fv-det"><?= $pesos($x['vend1'] * $x['precio_v']) ?> + <?= $pesos($x['n2'] * $x['precio2_v']) ?></div><?php endif; ?></td>
                 </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -638,6 +660,9 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
             </table>
           </div>
           <div class="fv-det" style="max-width:none;margin-top:8px;">Unidades vendidas = inventario entregado − unidades devueltas. Recibido final = lo devuelto a bodega. Las diferencias se explican en las observaciones de la recepción o del cierre.</div>
+          <?php if ($dos_dev): $ids_l = $f['legalizacion']['ids']; ?>
+          <div class="fv-det" style="max-width:none;margin-top:4px;"><strong>Dos devoluciones (#<?= (int)$ids_l[0] ?> y #<?= (int)end($ids_l) ?>):</strong> vendidas = entregado − 1ª devolución − 2ª devolución. En el cierre de dinero puedes repartir las vendidas de cada título en dos precios: escribes cuántas van a precio 2 y el resto queda a precio 1.</div>
+          <?php endif; ?>
           <?php if (array_filter($conc, fn($x) => $x['tipo'] === FVD_TIPO_ABIERTO)): ?>
           <div class="fv-det" style="max-width:none;margin-top:4px;"><span class="fv-tag fv-tag-sp">Paquete abierto</span> Si de un paquete volvió un libro suelto, ese paquete no se cobra a su precio: se descuenta de la fila del paquete (vendidas = entregado − devueltos completos − abiertos) y cada uno de sus libros se cobra en su propia fila al precio puesto en la devolución. El libro que volvió suelto queda en el recibido final y no se cobra.</div>
           <?php endif; ?>
@@ -695,7 +720,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
         </div>
         <?php elseif ($f['automatico']): ?>
         <div class="fv-sec-body">
-          <div class="fv-aviso"><i class="bi bi-magic"></i> Formato automático: no se diligencia la recepción en bodega; se toma como recibido lo devuelto (<?= array_sum(array_map(fn($it) => (int)$it['devueltas'], $items)) ?> paquete(s)/título(s)). La recepción física de la devolución se marca en la devolución<?= $f['legalizacion'] ? ' <a href="devolucion_colegio.php?id_pedido=' . (int)$f['legalizacion']['id'] . '">#' . (int)$f['legalizacion']['id'] . '</a>' : '' ?>.</div>
+          <div class="fv-aviso"><i class="bi bi-magic"></i> Formato automático: no se diligencia la recepción en bodega; se toma como recibido lo devuelto (<?= array_sum(array_map(fn($it) => (int)$it['devueltas'], $items)) ?> paquete(s)/título(s)). La recepción física de la devolución se marca en <?= $f['legalizacion'] && count($f['legalizacion']['ids']) > 1 ? 'cada devolución' : 'la devolución' ?><?= $f['legalizacion'] ? ' ' . fvd_links_devoluciones($f['legalizacion']) : '' ?>.</div>
         </div>
         <?php else: ?>
         <div class="fv-sec-body">
@@ -724,20 +749,63 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
           <form method="POST" action="php/formato_vd_guardar.php" id="fv-form-6" autocomplete="off" data-total="<?= (float)$f['total_venta'] ?>">
             <input type="hidden" name="id" value="<?= (int)$f['id'] ?>">
             <div class="fv-sub">Ventas</div>
+            <?php
+            // 2026-11-24 (la usuaria): solo las filas con unidades vendidas (sin paquetes no armados ni títulos en 0). Con 2
+            // devoluciones cada título muestra su cálculo y se puede agregar un 2º precio para parte de sus vendidas.
+            $precio_ed = !$cerrado && $activo;
+            $vendibles = array_values(array_filter($items, fn($it) => (int)$it['vendidas'] !== 0));
+            $ocultos = count($items) - count($vendibles);
+            $ids_l = $f['legalizacion']['ids'] ?? [];
+            ?>
+            <?php if ($dos_dev): ?>
+            <div class="fv-v-ayuda"><i class="bi bi-info-circle"></i><div>Este formato tiene <strong>2 devoluciones</strong> (#<?= (int)$ids_l[0] ?> y #<?= (int)end($ids_l) ?>). Las vendidas de cada título son lo entregado menos lo que volvió en las dos.
+              <?php if ($precio_ed): ?>En los títulos que tuvieron unidades en la 2ª devolución, si parte se vendió a otro precio usa <strong>Agregar 2º precio</strong> y escribe cuántas unidades van a ese precio; las demás quedan al precio 1. Los títulos sin 2ª devolución llevan un solo precio.<?php endif; ?></div></div>
+            <?php endif; ?>
+            <?php if (!$vendibles): ?>
+            <div class="fv-aviso"><i class="bi bi-info-circle"></i> No hay unidades vendidas: todo lo entregado volvió en la devolución.</div>
+            <?php else: ?>
             <div class="table-responsive">
-              <table class="fv-tabla">
-                <thead><tr><th>Título</th><th class="c">Vendidas</th><th class="r">Precio aplicado</th><th class="r">Total venta</th></tr></thead>
+              <table class="fv-tabla fv-ventas">
+                <thead><tr><th>Paquete / título</th><th class="c">Vendidas</th><th class="r">Precio</th><th class="r">Total</th></tr></thead>
                 <tbody>
-                  <?php $precio_ed = !$cerrado && $activo; foreach ($items as $it): ?>
-                  <tr class="fv-fila-venta" data-vend="<?= (int)$it['vendidas'] ?>" data-fin="<?= (int)$it['inv_final'] ?>"><td><div class="fv-paq"><?= $h($it['descripcion']) ?></div></td><td class="c"><?= (int)$it['vendidas'] ?></td>
-                    <td class="r"><?php if ($precio_ed): ?><div class="fv-pesos-in" style="justify-content:flex-end;"><span>$</span><input type="number" class="fv-precio-ap" name="precio[<?= (int)$it['id'] ?>]" min="0" step="1" value="<?= (int)round((float)$it['precio']) ?>" data-orig="<?= (int)round((float)$it['precio']) ?>" style="width:110px;text-align:right;"></div>
+                  <?php foreach ($vendibles as $it):
+                    $vend_t = (int)$it['vendidas'];
+                    $dev2 = min((int)$it['devueltas'], (int)($it['devueltas_2'] ?? 0));
+                    // Precio 2 solo si la fila tuvo unidades en la 2a devolución (2026-11-24, la usuaria).
+                    $puede_p2 = $dos_dev && $vend_t > 0 && $dev2 > 0;  // se puede repartir en dos precios
+                    $n2 = $puede_p2 ? min(max(0, (int)($it['vendidas_2'] ?? 0)), $vend_t) : 0;
+                    $p2 = (float)($it['precio_2'] ?? 0) ?: (float)$it['precio'];
+                    $ver_p2 = $puede_p2 && $n2 > 0;                 // ya está repartido
+                    $fila_p2 = $puede_p2 && ($precio_ed || $n2 > 0); // se pinta el renglón del 2º precio (oculto si no se usa)
+                    $dev1 = (int)$it['devueltas'] - $dev2;
+                    $id_it = (int)$it['id']; ?>
+                  <tr class="fv-fila-venta<?= $ver_p2 ? ' fv-split' : '' ?>" data-item="<?= $id_it ?>" data-vend-total="<?= $vend_t ?>" data-vend="<?= $vend_t - $n2 ?>" data-fin="<?= (int)$it['inv_final'] ?>">
+                    <td><div class="fv-paq"><?= $h($it['descripcion']) ?><?= $tag_item($it) ?></div>
+                      <?php if ($dos_dev && $vend_t > 0): ?>
+                      <div class="fv-v-calc">Entregado <b><?= (int)$it['inv_inicial'] ?></b> − 1ª dev. <b><?= $dev1 ?></b> − 2ª dev. <b><?= $dev2 ?></b> = <b><?= $vend_t ?> vendida<?= $vend_t === 1 ? '' : 's' ?></b></div>
+                      <?php endif; ?>
+                      <?php if ($fila_p2 && $precio_ed): ?><button type="button" class="fv-link fv-p2-abrir<?= $ver_p2 ? ' d-none' : '' ?>" data-item="<?= $id_it ?>"><i class="bi bi-plus-circle"></i> Agregar 2º precio</button><?php endif; ?></td>
+                    <td class="c"><span class="fv-v-pill fv-p1-pill">Precio 1</span><strong class="fv-vend-txt"><?= $vend_t - $n2 ?></strong></td>
+                    <td class="r"><?php if ($precio_ed): ?><div class="fv-pesos-in" style="justify-content:flex-end;"><span>$</span><input type="number" class="fv-precio-ap" name="precio[<?= $id_it ?>]" min="0" step="1" value="<?= (int)round((float)$it['precio']) ?>" data-orig="<?= (int)round((float)$it['precio']) ?>" style="width:110px;text-align:right;"></div>
                       <?php else: ?><?= $pesos($it['precio']) ?><?php endif; ?><div class="fv-det fv-precio-origen" data-orig="<?= $h($it['precio_origen']) ?>"><?= $h($it['precio_origen']) ?></div></td>
-                    <td class="r fv-total-fila"><?= $pesos($it['total']) ?></td></tr>
-                  <?php endforeach; ?>
+                    <td class="r fv-total-fila"><?= $pesos($puede_p2 ? ($vend_t - $n2) * (float)$it['precio'] : $it['total']) ?></td>
+                  </tr>
+                  <?php if ($fila_p2): ?>
+                  <tr class="fv-fila-venta fv-fila-p2<?= $ver_p2 ? '' : ' d-none' ?>" data-item="<?= $id_it ?>" data-vend="<?= $n2 ?>" data-fin="0">
+                    <td><div class="fv-v-sub"><span class="fv-v-pill p2">Precio 2</span> Unidades de las <?= $vend_t ?> vendidas que se cobran a otro precio
+                      <?php if ($precio_ed): ?><button type="button" class="fv-link fv-p2-quitar" data-item="<?= $id_it ?>" title="Quitar el 2º precio"><i class="bi bi-x-circle"></i> Quitar</button><?php endif; ?></div></td>
+                    <td class="c"><?php if ($precio_ed): ?><input type="number" class="fv-num fv-cant2" name="cant2[<?= $id_it ?>]" min="0" max="<?= $vend_t ?>" step="1" value="<?= $n2 ?>" style="width:70px;text-align:center;"><div class="fv-det">de <?= $vend_t ?></div><?php else: ?><strong><?= $n2 ?></strong><?php endif; ?></td>
+                    <td class="r"><?php if ($precio_ed): ?><div class="fv-pesos-in" style="justify-content:flex-end;"><span>$</span><input type="number" class="fv-precio-ap" name="precio2[<?= $id_it ?>]" min="0" step="1" value="<?= (int)round($p2) ?>" data-orig="<?= (int)round($p2) ?>" style="width:110px;text-align:right;"></div>
+                      <?php else: ?><?= $pesos($p2) ?><?php endif; ?><div class="fv-det fv-precio-origen" data-orig="<?= $h($it['precio_2_origen'] ?? 'Mismo precio de la fila') ?>"><?= $h($it['precio_2_origen'] ?? 'Mismo precio de la fila') ?></div></td>
+                    <td class="r fv-total-fila"><?= $pesos($n2 * $p2) ?></td>
+                  </tr>
+                  <?php endif; endforeach; ?>
                 </tbody>
                 <tfoot><tr><td>Totales</td><td class="c"><?= array_sum(array_column($items, 'vendidas')) ?></td><td></td><td class="r" id="fv-total-venta-tabla"><?= $pesos($f['total_venta']) ?></td></tr></tfoot>
               </table>
             </div>
+            <?php endif; ?>
+            <?php if ($ocultos): ?><div class="fv-det" style="max-width:none;margin-top:6px;"><i class="bi bi-eye-slash"></i> No se muestran <?= $ocultos ?> fila(s) sin unidades vendidas (paquetes no armados y títulos que volvieron completos).</div><?php endif; ?>
             <fieldset <?= $cerrado ? 'disabled' : '' ?>>
             <?php if ($f['automatico'] || trim((string)$f['responsable']) === ''): /* 2026-11-23: obligatorio para cerrar (fvd_guardar_dinero); se propone el del pedido. */ ?>
             <div class="fv-sub">Responsable de la venta</div>
@@ -970,7 +1038,18 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     // Precio aplicado editable (2026-11-19): total de cada fila, total venta y valor del inventario (mismo cálculo que fvd_conciliar).
     var $filasV = $form.find('.fv-fila-venta');
     if ($filasV.find('.fv-precio-ap').length) {
-      var tv = 0, vi = 0;
+      var tv = 0, vi = 0, c2 = {};
+      // 2 devoluciones (2026-11-24): vendidas a precio 2 (0 a las vendidas); el renglón de precio 1 queda con el resto.
+      $form.find('.fv-cant2').each(function () {
+        var $tr = $(this).closest('tr'), id = $tr.data('item'), tot = Number($form.find('.fv-fila-venta[data-item="' + id + '"]').first().data('vend-total')) || 0;
+        var n = num(this), ok = n >= 0 && n <= tot && String($(this).val()).indexOf('.') < 0;
+        $(this).toggleClass('is-invalid', !ok);
+        n = Math.max(0, Math.min(n, tot)); c2[id] = n; $tr.data('vend', n);
+      });
+      $filasV.each(function () {
+        var $tr = $(this), id = $tr.data('item');
+        if ($tr.data('vend-total') !== undefined && c2[id] !== undefined) { $tr.data('vend', Number($tr.data('vend-total')) - c2[id]); $tr.find('.fv-vend-txt').text(Number($tr.data('vend-total')) - c2[id]); }
+      });
       $filasV.each(function () {
         var $tr = $(this), $p = $tr.find('.fv-precio-ap'), p = num($p), vend = Number($tr.data('vend')), fin = Number($tr.data('fin'));
         var $o = $tr.find('.fv-precio-origen'), cambio = String(p) !== String($p.data('orig'));
@@ -992,7 +1071,19 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     $('#fv-dif-txt').text(cuadra ? 'La caja cuadra' : (dif < 0 ? 'Falta ' + pesos(-dif) + ' por recaudar' : 'Sobran ' + pesos(dif)));
     $('#fv-cierre-req').toggleClass('d-none', cuadra);
   }
-  $(document).on('input change', '.fv-pesos, .fv-precio-ap', recalcDinero);
+  $(document).on('input change', '.fv-pesos, .fv-precio-ap, .fv-cant2', recalcDinero);
+  // 2º precio (2026-11-24): se muestra el renglón al pedirlo; al quitarlo vuelve a 0 y todo queda al precio 1.
+  $(document).on('click', '.fv-p2-abrir', function () {
+    var id = $(this).data('item');
+    $(this).addClass('d-none').closest('tr').addClass('fv-split');
+    $('.fv-fila-p2[data-item="' + id + '"]').removeClass('d-none').find('.fv-cant2').trigger('focus').trigger('select');
+  });
+  $(document).on('click', '.fv-p2-quitar', function () {
+    var id = $(this).data('item'), $p2 = $('.fv-fila-p2[data-item="' + id + '"]');
+    $p2.addClass('d-none').find('.fv-cant2').val(0);
+    $('.fv-fila-venta[data-item="' + id + '"]').first().removeClass('fv-split').find('.fv-p2-abrir').removeClass('d-none');
+    recalcDinero();
+  });
   recalcDinero();
 
   // ── Envío: validación en pantalla (el servidor valida lo mismo) y confirmación ──

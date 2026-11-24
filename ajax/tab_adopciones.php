@@ -1940,10 +1940,12 @@ JS;
                           // cada título lleva su propio valor en la columna "Sobrecosto por libro" de la tabla.
                           $con_sobrecosto = (bool)array_intersect($canales_adop, $canales_sobrecosto);
                           echo '<script>
+
                             var canalesSobrecosto = '.json_encode($canales_sobrecosto).';
                             function canalLlevaSobrecosto() {
                               return ($("#canal").val() || []).some(function (id) { return canalesSobrecosto.indexOf(parseInt(id, 10)) !== -1; });
                             }
+
                             $(function () {
                               $("#canal").select2({
                                 placeholder: "Seleccionar canal (máximo 2)...",
@@ -1952,13 +1954,18 @@ JS;
                                 maximumSelectionLength: 2,
                                 language: { maximumSelected: function () { return "Solo puedes seleccionar 2 canales"; } }
                               });
+
+                              $("#canal").on("change", function () {
+                              
+                                var con = canalLlevaSobrecosto();
+                                // Fechas y horario de venta + contacto del colegio (2026-11-10).
+                                $("#vd_panel").toggle(con).find(":input").prop("disabled", !con);
+                                if (window.vdAplicarTieneFechas) window.vdAplicarTieneFechas();
+                              });
+
                             });
-                            $("#canal").on("change", function () {
-                              var con = canalLlevaSobrecosto();
-                              // Fechas y horario de venta + contacto del colegio (2026-11-10).
-                              $("#vd_panel").toggle(con).find(":input").prop("disabled", !con);
-                              if (window.vdAplicarTieneFechas) window.vdAplicarTieneFechas();
-                            });
+
+
                             // Ventana con los estilos de src/ink-alerts.js: lista los títulos sin precio y al cerrar lleva al primero.
                             // faltanPp / faltanSc: títulos sin precio venta padre / sin sobrecosto por libro.
                             function alertaPrecioPadre(faltanPp, faltanSc) {
@@ -2096,12 +2103,7 @@ JS;
                             } else {
                               echo '<div class="col-sm-4"></div>';
                             }
-                          }
 
-                          // 2026-11-23: el panel de venta directa (¿ya tiene fechas de venta?) se muestra a todos los usuarios.
-                          // Antes estaba dentro del bloque de los tipos 1, 2, 3 y 10, y los demás no lo veían, pero
-                          // php/guardar_definicion.php sí lo exige con el canal "Venta directa - Eureka", así que no podían guardar.
-                          {
                             // 2026-11-10: se quitó el panel "Sobrecosto" (unidades vendidas × precio × %): el sobrecosto ya no es un
                             // % de la adopción sino un valor por libro (columna "Sobrecosto por libro" de la tabla).
 
@@ -2325,9 +2327,7 @@ JS;
                                       return false;
                                     });
                                   </script>';
-                          }
 
-                          if (in_array($_SESSION['tipo'], [1, 2, 3, 10])) {
                             echo '
                             </div>
                             <br><div class="row">';
@@ -2761,6 +2761,12 @@ JS;
                           var idPaquete = input.data('id-paquete');
                           var valor = leerPrecioPaquete(input.val());
                           var valorPrevio = String(input.attr('data-valor-previo') || '');
+                          // Con "Paquetes" o "Ambos" el precio redondeado es obligatorio: no se puede dejar vacío (2026-11-24).
+                          if (valor === '' && (tipoAdopGuardado === 2 || tipoAdopGuardado === 3)) {
+                            avisoPaquete('Con Tipo de adopción "Paquetes" o "Ambos" el precio redondeado del paquete es obligatorio.');
+                            input.val(valorPrevio);
+                            return;
+                          }
                           if (valor !== '' && !(Number(valor) >= 0)) {
                             avisoPaquete('Escribe un precio válido para el paquete.');
                             input.val(valorPrevio);
@@ -2844,6 +2850,60 @@ JS;
                               alert('No se pudo previsualizar los paquetes.');
                             }
                           });
+                        });
+
+                        // Precio redondeado OBLIGATORIO con Tipo de adopción "Paquetes" o "Ambos" (2026-11-24, la usuaria): antes de
+                        // guardar se arman los paquetes con la selección actual y cada uno debe tener precio (el ya guardado, el escrito
+                        // en la tabla o el pendiente de un paquete nuevo). Si falta, se muestra la tabla con los vacíos en rojo.
+                        // El servidor (php/guardar_definicion.php) también lo revisa.
+                        var precioPaqValidado = false;
+                        $('#form_definicion').on('submit', function (e) {
+                          var tipoSel = $('#tipo_adop').val();
+                          if (precioPaqValidado || adopCerrada || (tipoSel != '2' && tipoSel != '3')) return;
+                          e.preventDefault();
+                          var form = $(this);
+                          var definidos = [], enPaquete = [], enPaquete2 = [];
+                          $('.definir:checked').each(function(){ var idp = $(this).data('id-presupuesto'); if (idp) definidos.push(idp); });
+                          $('#panel-seleccion-paquete .amb-chk[data-col="paq"]:checked').each(function(){ enPaquete.push($(this).val()); });
+                          $('#panel-seleccion-paquete .amb-chk[data-col="paq2"]:checked').each(function(){ enPaquete2.push($(this).val()); });
+                          var botones = form.find('[type="submit"]').add('button[form="form_definicion"]').prop('disabled', true);
+                          $.ajax({
+                            url: 'ajax/previsualizar_paquetes.php', type: 'POST', dataType: 'json',
+                            data: { id_colegio: <?= (int)$_GET['colegio'] ?>, periodo: <?= (int)$gp_periodo['id'] ?>, tipo_adop: tipoSel,
+                                    definidos: definidos, en_paquete: enPaquete, en_paquete2: enPaquete2 }
+                          }).done(function (resp) {
+                            botones.prop('disabled', false);
+                            if (!resp || !resp.ok) { avisoPaquete('No se pudieron revisar los precios de los paquetes. Intenta de nuevo.'); return; }
+                            var faltan = [];
+                            (resp.paquetes || []).forEach(function (p) {
+                              var tiene;
+                              if (p.id_paquete) {
+                                var $inp = $('.precio-paquete-inp[data-id-paquete="' + p.id_paquete + '"]');
+                                tiene = $inp.length ? $.trim($inp.val()) !== '' : (p.precio_redondeado !== null && p.precio_redondeado !== undefined);
+                              } else {
+                                var pend = preciosPendientes[p.id_grado + '-' + p.numero];
+                                tiene = pend !== undefined && pend !== '';
+                              }
+                              if (!tiene) faltan.push(p.paquete);
+                            });
+                            if (!faltan.length) {
+                              precioPaqValidado = true;
+                              form.trigger('submit');
+                              return;
+                            }
+                            renderPreviewPaquetes(resp.paquetes);
+                            $('#panel-previsualizar-paquete').show();
+                            $('#resultado-preview-paquete .precio-paquete-inp, #resultado-preview-paquete .precio-paquete-pend').each(function () {
+                              if ($.trim($(this).val()) === '') $(this).css('border-color', '#dc2626').attr('placeholder', 'Obligatorio');
+                            });
+                            avisoPaquete('Falta el precio redondeado en: ' + faltan.join(', ') + '. Con Tipo de adopción "Paquetes" o "Ambos" es obligatorio.');
+                            var $primero = $('#resultado-preview-paquete input[placeholder="Obligatorio"]').first();
+                            if ($primero.length) { $primero[0].scrollIntoView({ block: 'center' }); $primero.trigger('focus'); }
+                          }).fail(function () {
+                            botones.prop('disabled', false);
+                            avisoPaquete('No se pudieron revisar los precios de los paquetes. Intenta de nuevo.');
+                          });
+                          return false;
                         });
                       </script>
                       <?php

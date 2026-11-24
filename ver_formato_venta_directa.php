@@ -24,11 +24,8 @@ if (!$f) {
   header('Location: formatos_venta_directa.php?ink_status=error&ink_msg=' . urlencode('El formato no existe o no está en tu alcance.'));
   exit;
 }
-// Formato automático (creado con la devolución): el documento se genera solo cuando el cierre de dinero está confirmado.
-if ($f['automatico'] && $f['activo'] && $f['etapa'] < FVD_ETAPA_CERRADO) {
-  header('Location: formato_venta_directa.php?id=' . (int)$f['id'] . '&ink_status=info&ink_msg=' . urlencode('El formato se genera al confirmar el cierre de dinero.'));
-  exit;
-}
+// 2026-11-24 (la usuaria): el formato se consulta en cualquier momento (antes solo al confirmar el cierre de dinero de un
+// formato automático) y se actualiza en vivo: solicitado, remisionado, devuelto y vendido (ajax/formatos_vd_avance.php).
 // Datos de la venta que falten (jornada, contacto y dirección del colegio, responsable del pedido).
 if ($f['automatico'] && fvd_completar_datos_venta($bdd, $f['id'])) $f = fvd_obtener($bdd, $f['id']);
 // Pedido y remisiones de cada fila (2026-11-23): se consultan una vez y quedan guardados.
@@ -82,6 +79,18 @@ $st = $bdd->prepare("SELECT CONCAT(TRIM(nombres), ' ', TRIM(apellidos)) FROM usu
 $st->execute([(int)$_SESSION['id']]);
 $impreso_por = (string)$st->fetchColumn();
 $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Acta de recepción de devolución', 'completo' => ''][$acta];
+// Valores en vivo (2026-11-24): con el cierre del inventario hecho, los precios guardados; antes, los vigentes (provisional).
+$en_vivo = $f['activo'] && $f['etapa'] < FVD_ETAPA_CERRADO;
+$con_devolucion = $devuelto || (bool)$f['legalizacion'];
+[$conc_v, $tot_v] = fvd_conciliar($f, $conciliado ? null : fvd_precios_actuales($bdd, $f));
+$conc_por_id = array_column($conc_v, null, 'id');
+$huella = fvd_huella($bdd, $f['id']);
+// Momento de la operación (2026-11-24, la usuaria): se ve en la etiqueta del título y en las columnas pendientes de la tabla.
+$n_devs = count($f['legalizacion']['ids'] ?? []);
+$momento = $f['reservado'] ? 'Consecutivo reservado · falta la devolución' : ($f['etapa'] >= FVD_ETAPA_CERRADO ? 'Operación cerrada'
+  : ($con_devolucion ? ($n_devs > 1 ? '2ª devolución registrada · falta el cierre de dinero' : 'Devolución registrada · falta el cierre de dinero')
+  : ($entregado ? 'Remisionado · falta la devolución' : 'Solicitado · falta la entrega')));
+$pend = fn($ok) => $ok ? '' : '<div class="fx-th-pend fx-noprint">Pendiente</div>';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -146,6 +155,7 @@ $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Ac
     .fx-btn { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:8px; font-size:13px; font-weight:600; border:1.5px solid #1d4ed8; color:#1d4ed8; background:#fff; text-decoration:none; cursor:pointer; }
     .fx-btn:hover { background:#1d4ed8; color:#fff; text-decoration:none; }
     .fx-btn.prim, .fx-btn.on { background:#1d4ed8; color:#fff; } .fx-btn.prim:hover { opacity:.9; }
+    .fx-th-pend { font-size:.64rem; font-weight:700; color:#b45309; text-transform:none; margin-top:2px; }
     @media (max-width:768px) { .fx-datos, .fx-caja, .fx-resumen { grid-template-columns:1fr; } }
     @media print {
       .left-side-bar, .header, .footer-wrap, .fx-acciones, .mobile-menu-overlay, .fx-noprint { display:none !important; }
@@ -169,10 +179,10 @@ $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Ac
           <a href="ver_formato_venta_directa.php?id=<?= (int)$f['id'] ?>" class="fx-btn <?= $acta === 'completo' ? 'on' : '' ?>"><i class="bi bi-file-earmark-text"></i> Formato completo</a>
           <?php endif; ?>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <a href="php/formato_vd_excel.php?id=<?= (int)$f['id'] ?>" class="fx-btn"><i class="bi bi-file-earmark-excel"></i> Descargar Excel</a>
           <button type="button" class="fx-btn" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
-          <a href="formato_venta_directa.php?id=<?= (int)$f['id'] ?>" class="fx-btn prim"><?= $f['activo'] && $f['etapa'] < FVD_ETAPA_CERRADO ? 'Continuar el formato' : 'Ver etapas' ?> <i class="bi bi-arrow-right"></i></a>
+          <?php if ($en_vivo && !$f['reservado']): ?><a href="formato_venta_directa.php?id=<?= (int)$f['id'] ?>" class="fx-btn prim" title="Precios, auxiliares y cierre de dinero"><i class="bi bi-pencil-square"></i> Diligenciar</a><?php endif; ?>
         </div>
       </div>
 
@@ -180,7 +190,7 @@ $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Ac
 
       <div class="fx-doc">
         <p class="fx-tit"><?= $titulo_acta ? $h(mb_strtoupper($titulo_acta)) . '<small>' . $h(fvd_numero($f['consecutivo'])) . '</small>' : $h(mb_strtoupper(fvd_numero($f['consecutivo']))) ?>
-          <?= $anulado ? '<span class="fx-anulado">Anulado</span>' : ($f['etapa'] >= FVD_ETAPA_CERRADO ? '<span class="fx-leg fx-noprint">Operación cerrada</span>' : '<span class="fx-pend fx-noprint">' . $h(fvd_etapa_texto($f['etapa'])) . '</span>') ?></p>
+          <?= $anulado ? '<span class="fx-anulado">Anulado</span>' : ($f['etapa'] >= FVD_ETAPA_CERRADO ? '<span class="fx-leg fx-noprint">Operación cerrada</span>' : '<span class="fx-pend fx-noprint">' . $h($momento) . '</span>') ?></p>
         <div class="fx-col"><?= $h(mb_strtoupper($f['colegio'])) ?><?= $f['numero_adopcion'] ? ' (' . $h($f['numero_adopcion']) . ')' : '' ?></div>
         <div class="fx-datos">
           <div><b>Fecha venta:</b> <?= $h(date('d/m/Y', strtotime($f['fecha_venta']))) ?></div>
@@ -192,7 +202,8 @@ $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Ac
           <div><b>Dirección:</b> <?= $h($f['direccion']) ?></div>
           <div><b>Auxiliares:</b> <?= $h(fvd_auxiliares_texto($f)) ?><?= $f['auxiliares_total'] ? ' · Total ' . $pesos($f['auxiliares_total']) : '' ?></div>
           <div><b>Pedidos:</b>
-            <?php foreach (explode(',', $f['ids_pedidos']) as $i => $c): $idp = (int)substr($c, 1); ?><?= $i ? ', ' : '' ?><a href="pedido_colegio.php?id_pedido=<?= $idp ?>" target="_blank">#<?= $idp ?></a><?php endforeach; ?>
+            <?php if ($f['reservado']): ?>Aún sin pedidos<?php endif; ?>
+            <?php foreach (array_values(array_filter(explode(',', (string)$f['ids_pedidos']))) as $i => $c): $idp = (int)substr($c, 1); ?><?= $i ? ', ' : '' ?><a href="pedido_colegio.php?id_pedido=<?= $idp ?>" target="_blank">#<?= $idp ?></a><?php endforeach; ?>
             · Período <?= $h($f['periodo']) ?></div>
           <div><b>Solicitó:</b> <?= $h($f['usuario'] ?: '—') ?> · <?= $h(date('d/m/Y g:i A', strtotime($f['created_at']))) ?></div>
         </div>
@@ -234,7 +245,7 @@ $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Ac
           <div><b>Responsable de la venta:</b> <?= $h($f['responsable']) ?></div>
           <div><b>Total de cajas:</b> <?= (int)$f['total_cajas'] ?></div>
         </div>
-        <p class="fx-sec">2. Devolución documentada en InkPulse · Devolución #<?= (int)($f['legalizacion']['id'] ?? 0) ?><?= $f['legalizacion'] ? ' del ' . $h(date('d/m/Y g:i A', strtotime($f['legalizacion']['fecha']))) : '' ?><?php $sal = $f['legalizacion'] ? dvd_saldo_de_devolucion($bdd, (int)$f['legalizacion']['id']) : null; ?><?= $sal ? ' · Saldo ' . $h($sal['numero']) : '' ?></p>
+        <p class="fx-sec">2. Devolución documentada en InkPulse <?php foreach ($f['legalizacion']['todas'] ?? [] as $dv_x): $sal = dvd_saldo_de_devolucion($bdd, (int)$dv_x['id']); ?> · Devolución #<?= (int)$dv_x['id'] ?> del <?= $h(date('d/m/Y g:i A', strtotime($dv_x['fecha']))) ?><?= $sal ? ' · Saldo ' . $h($sal['numero']) : '' ?><?php endforeach; ?><?= $f['legalizacion'] ? '' : ' · Devolución #0' ?></p>
         <div class="table-responsive">
           <table class="fx-tabla">
             <thead><tr><th style="text-align:left;">Paquete / título</th><th>Solicitud</th><th>Inventario entregado</th><th>Unidades devueltas (documento)</th><th>Unidades vendidas</th><th>Cantidad recibida en bodega</th><th>Diferencia</th></tr></thead>
@@ -285,26 +296,32 @@ $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Ac
             <?php $n_cols = 8 + ($recibido && !$sin_bodega ? 1 : 0); ?>
             <thead><tr><th style="text-align:left;">Título</th><?php $enc_sol = fvd_encabezado_solicitud($f); $enc_rem = fvd_encabezado_remisiones($f); /* pedidos y remisiones solo en el encabezado (2026-11-23) */ ?>
               <th>Solicitud<?php if ($enc_sol !== ''): ?><div class="fx-th-ref"><?= $h($enc_sol) ?></div><?php endif; ?></th>
-              <th>Inventario entregado<?php if ($enc_rem !== ''): ?><div class="fx-th-ref"><?= $h($enc_rem) ?></div><?php endif; ?></th><th>Unidades devueltas</th><th>Recibido final</th><th>Unidades vendidas</th><th>Precio venta</th><th>Total venta</th><?php if ($recibido && !$sin_bodega): ?><th>Recibidas bodega</th><?php endif; ?></tr></thead>
+              <th>Inventario entregado<?php if ($enc_rem !== ''): ?><div class="fx-th-ref"><?= $h($enc_rem) ?></div><?php endif; ?><?= $pend($entregado) ?></th><th>Unidades devueltas<?php /* devoluciones registradas del formato (2026-11-24), como las remisiones en el entregado */ foreach ($f['legalizacion']['todas'] ?? [] as $i_dv => $dv_h): ?><div class="fx-th-ref"><?= $n_devs > 1 ? ($i_dv + 1) . 'ª: ' : '' ?><a href="devolucion_colegio.php?id_pedido=<?= (int)$dv_h['id'] ?>" target="_blank">Devolución #<?= (int)$dv_h['id'] ?></a></div><?php endforeach; ?><?= $pend($con_devolucion) ?></th><th>Recibido final<?= $pend($con_devolucion) ?></th><th>Unidades vendidas<?= $pend($con_devolucion) ?></th><th>Precio venta<?= $pend($con_devolucion) ?></th><th>Total venta<?= $pend($con_devolucion) ?></th><?php if ($recibido && !$sin_bodega): ?><th>Recibidas bodega</th><?php endif; ?></tr></thead>
             <tbody>
+              <?php if ($f['reservado']): /* consecutivo reservado el día de la venta, sin pedidos (2026-11-24) */ ?>
+              <tr><td colspan="<?= $n_cols ?>" class="c" style="padding:18px;color:#475569;">Consecutivo reservado para la venta del <?= $h(date('d/m/Y', strtotime($f['fecha_venta']))) ?>. Los pedidos y sus títulos aparecen al registrar la devolución eligiendo esta venta (Devoluciones → Devolución de venta directa).</td></tr>
+              <?php endif; ?>
               <?php foreach (fvd_filas_por_curso($bdd, $f) as $fila): if (isset($fila['curso'])): /* libros sueltos y plan lector por curso de la adopción (2026-11-23) */ ?>
               <tr class="fx-curso<?= strpos($fila['curso'], 'Plan lector') === 0 ? ' fx-plan' : '' ?>"><td colspan="<?= $n_cols ?>"><?= $h($fila['curso']) ?></td></tr>
-              <?php continue; endif; $it = $fila['item']; ?>
+              <?php continue; endif; $it = $fila['item']; $cv = $conc_por_id[(int)$it['id']] ?? null; ?>
               <tr>
                 <td><?= $h($it['descripcion']) ?><?php if ($it['detalle'] !== '' && $it['detalle'] !== null): ?><div class="fx-det"><?= $h($it['detalle']) ?></div><?php endif; ?></td>
                 <td class="c"><?= (int)$it['solicitud'] ?></td>
                 <td class="c"><?= $entregado ? (int)$it['inv_inicial'] : '' ?></td>
-                <td class="c"><?= $devuelto ? (int)$it['devueltas'] : '' ?></td>
-                <td class="c"><?= $conciliado ? (int)$it['inv_final'] : '' ?></td>
-                <td class="c"><?= $conciliado ? (int)$it['vendidas'] : '' ?></td>
-                <td class="r"><?= $conciliado ? $pesos($it['precio']) : '' ?></td>
-                <td class="r"><?= $conciliado ? $pesos($it['total']) : '' ?></td>
+                <?php /* En vivo (2026-11-24): devueltas, vendidas y total de fvd_conciliar (con 2 precios: vend1 + n2). */
+                      $vc = $con_devolucion && $cv; $n2_p = $vc ? (int)$cv['n2'] : 0; ?>
+                <?php $dev2_f = min((int)$it['devueltas'], (int)($it['devueltas_2'] ?? 0)); ?>
+                <td class="c"><?= $con_devolucion ? (int)$it['devueltas'] : '' ?><?php if ($con_devolucion && $n_devs > 1 && (int)$it['devueltas'] > 0): /* cuánto volvió en cada devolución */ ?><div class="fx-det">1ª: <?= (int)$it['devueltas'] - $dev2_f ?> · 2ª: <?= $dev2_f ?></div><?php endif; ?></td>
+                <td class="c"><?= $vc ? (int)$cv['fin'] : '' ?></td>
+                <td class="c"><?= $vc ? (int)$cv['vend'] : '' ?><?php if ($n2_p): ?><div class="fx-det"><?= (int)$cv['vend1'] ?> + <?= $n2_p ?></div><?php endif; ?></td>
+                <td class="r"><?= $vc ? ($cv['precio_v'] ? $pesos($cv['precio_v']) : ($cv['sin_precio'] ? 'Sin precio' : '')) : '' ?><?php if ($n2_p): ?><div class="fx-det">Precio 2: <?= $pesos($cv['precio2_v']) ?></div><?php endif; ?></td>
+                <td class="r"><?= $vc && $cv['total_v'] !== null ? $pesos($cv['total_v']) : '' ?></td>
                 <?php if ($recibido && !$sin_bodega): ?><td class="c"<?= (int)$it['recibidas'] !== (int)$it['devueltas'] ? ' style="color:#dc2626;font-weight:700;"' : '' ?>><?= (int)$it['recibidas'] ?></td><?php endif; ?>
               </tr>
               <?php endforeach; ?>
             </tbody>
-            <tfoot><tr><td class="c">TOTALES</td><td class="c"><?= $t['sol'] ?></td><td class="c"><?= $entregado ? $t['ini'] : '' ?></td><td class="c"><?= $devuelto ? $t['dev'] : '' ?></td>
-              <td class="c"><?= $conciliado ? $t['fin'] : '' ?></td><td class="c"><?= $conciliado ? $t['vend'] : '' ?></td><td></td><td class="r"><?= $conciliado ? $pesos($f['total_venta']) : '' ?></td><?php if ($recibido && !$sin_bodega): ?><td class="c"><?= $t['rec'] ?></td><?php endif; ?></tr></tfoot>
+            <tfoot><tr><td class="c">TOTALES</td><td class="c"><?= $t['sol'] ?></td><td class="c"><?= $entregado ? $t['ini'] : '' ?></td><td class="c"><?= $con_devolucion ? $t['dev'] : '' ?></td>
+              <td class="c"><?= $con_devolucion ? (int)$tot_v['inv_final'] : '' ?></td><td class="c"><?= $con_devolucion ? (int)$tot_v['vendidas'] : '' ?></td><td></td><td class="r"><?= $con_devolucion && !$tot_v['sin_precio'] ? $pesos($tot_v['total_venta']) : '' ?></td><?php if ($recibido && !$sin_bodega): ?><td class="c"><?= $t['rec'] ?></td><?php endif; ?></tr></tfoot>
           </table>
         </div>
 
@@ -314,7 +331,7 @@ $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Ac
             <p class="fx-sec" style="margin-top:0;">Datos de la operación</p>
             <table>
               <tr><td>Total de cajas:</td><td class="r"><?= $f['total_cajas'] !== null ? (int)$f['total_cajas'] : '' ?></td></tr>
-              <tr><td>Devolución InkPulse:</td><td class="r"><?= $f['legalizacion'] ? '#' . (int)$f['legalizacion']['id'] : '' ?></td></tr>
+              <tr><td>Devolución InkPulse:</td><td class="r"><?= $f['legalizacion'] ? $h($f['legalizacion']['texto']) : '' ?></td></tr>
               <tr><td>Auxiliares:</td><td class="r" style="white-space:normal;"><?= $h(fvd_auxiliares_texto($f)) ?></td></tr>
               <tr><td>Valor total inventario devuelto</td><td class="r"><?= $pesos($f['valor_inventario']) ?></td></tr>
             </table>
@@ -340,7 +357,7 @@ $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Ac
           <table>
             <tr><td>Aux. bodega que entrega mercancía:</td><td class="r"><?= $h($f['aux_entrega']) ?></td></tr>
             <tr><td>Total de cajas:</td><td class="r"><?= $f['total_cajas'] !== null ? (int)$f['total_cajas'] : '' ?></td></tr>
-            <tr><td>Devolución InkPulse:</td><td class="r"><?= $f['legalizacion'] ? '#' . (int)$f['legalizacion']['id'] : '' ?></td></tr>
+            <tr><td>Devolución InkPulse:</td><td class="r"><?= $f['legalizacion'] ? $h($f['legalizacion']['texto']) : '' ?></td></tr>
             <tr><td>Base entregada:</td><td class="r"><?= $pesos($f['base_entregada']) ?></td></tr>
             <tr><td>Gastos:</td><td class="r"><?= $pesos($f['gastos']) ?></td></tr>
             <tr><td>Valor auxiliares:</td><td class="r"><?= $pesos($f['auxiliares_total']) ?></td></tr>
@@ -376,5 +393,26 @@ $titulo_acta = ['entrega' => 'Acta de entrega de inventario', 'recepcion' => 'Ac
 <script src="vendors/scripts/process.js"></script>
 <script src="vendors/scripts/layout-settings.js"></script>
 <script src="src/ink-alerts.js"></script>
+<script>
+// Hoja en vivo (2026-11-24): cada 15 s se consulta la huella del formato; si cambió (devolución nueva, precios, cierre...),
+// se vuelve a pintar la hoja sin recargar la página. Con la pestaña oculta no consulta.
+(function () {
+  var huella = <?= json_encode($huella) ?>, url = 'ajax/formatos_vd_avance.php?id=<?= (int)$f['id'] ?>';
+  function revisar() {
+    if (document.hidden) return;
+    $.getJSON(url, { _: Date.now() }).done(function (r) {
+      if (!r || !r.ok || r.huella === huella) return;
+      $.get(location.href, { _: Date.now() }).done(function (html) {
+        var $nuevo = $('<div>').append($.parseHTML(html)).find('.fx-doc');
+        if (!$nuevo.length) return;
+        $('.fx-doc').replaceWith($nuevo);
+        huella = r.huella;
+      });
+    });
+  }
+  setInterval(revisar, 15000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) revisar(); });
+})();
+</script>
 </body>
 </html>

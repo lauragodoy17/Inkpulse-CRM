@@ -438,6 +438,13 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
   #pc-table tbody tr.pc-fila-suelto td:first-child { box-shadow:inset 4px 0 0 #fcd34d; }
   #pc-table tbody td.pc-paq-precio { background:#f5f7ff; color:#3730a3; font-weight:700; text-align:center; border-left:1px solid #e0e7ff; white-space:nowrap; }
   #pc-table tbody td.pc-paq-precio small { display:block; font-weight:500; font-size:.7rem; color:#6366f1; margin-top:2px; white-space:normal; }
+  /* Paquetes (2026-11-24): precio individual de cada libro + precio del paquete en la celda unida */
+  #pc-table tbody td.pc-pp-ind { white-space:nowrap; }
+  #pc-table tbody td.pc-paq-precio { vertical-align:middle; }
+  #pc-table tbody td.pc-paq-precio .pc-paq-box { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  #pc-table tbody td.pc-paq-precio .pc-paq-lbl { font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:#6366f1; white-space:normal; }
+  #pc-table tbody td.pc-paq-precio .pc-paq-tot { font-size:1.05rem; color:#312e81; }
+  #pc-table tbody td.pc-paq-precio .pc-paq-unit { font-size:.72rem; font-weight:600; color:#6366f1; background:#e0e7ff; border-radius:999px; padding:2px 10px; }
   .pc-suelto-tag { display:inline-flex; align-items:center; gap:4px; margin-top:3px; font-size:.7rem; font-weight:600; color:#92400e; background:#fef3c7; border-radius:6px; padding:1px 7px; }
   @media print {
     .pc-grupo-in, .pc-grupo-ico, .pc-paq-tag, .pc-suelto-tag, #pc-table tbody tr.pc-fila-paq td:first-child, #pc-table tbody tr.pc-fila-suelto td:first-child { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -726,14 +733,18 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
                 <td style="text-align:center"><?= intval($lb['cantidad']) ?></td>
                 <td>$ <?= number_format($lb['v_venta'], 0, ',', '.') ?></td>
                 <?php if ($es_vd && !empty($lb['id_paquete'])): $idq = (int)$lb['id_paquete'];
-                  if (!isset($paq_pintado[$idq])): $paq_pintado[$idq] = true; ?>
-                <td rowspan="<?= $paq_filas[$idq] ?>" class="pc-paq-precio">
-                  <?= $paq_precio[$idq] > 0 ? '$ ' . number_format($paq_precio[$idq], 0, ',', '.') : '<span style="color:#b45309">Sin precio</span>' ?>
-                  <small>por paquete<br><?= htmlspecialchars($lb['nombre_paquete'] ?: 'Paquete') ?></small>
-                </td>
+                  // 2026-11-24 (la usuaria): cada libro del paquete muestra su precio venta padre individual (informativo: el
+                  // paquete se vende a su precio); el precio del paquete y su venta potencial van en la celda unida.
+                  $pp_ind = floatval($lb['precio_venta_final']); ?>
+                <td class="pc-pp-ind"><?= $pp_ind > 0 ? '$ ' . number_format($pp_ind, 0, ',', '.') : '<span style="color:#b45309">Sin precio</span>' ?></td>
+                <?php if (!isset($paq_pintado[$idq])): $paq_pintado[$idq] = true; ?>
                 <td rowspan="<?= $paq_filas[$idq] ?>" class="pc-paq-precio pp-valor-fijo" data-valor="<?= $paq_precio[$idq] * $paq_cant[$idq] ?>">
-                  $ <?= number_format($paq_precio[$idq] * $paq_cant[$idq], 0, ',', '.') ?>
-                  <small><?= $paq_cant[$idq] ?> paquete<?= $paq_cant[$idq] == 1 ? '' : 's' ?></small>
+                  <div class="pc-paq-box">
+                    <span class="pc-paq-lbl"><i class="bi bi-box-seam"></i> <?= htmlspecialchars($lb['nombre_paquete'] ?: 'Paquete') ?></span>
+                    <?php /* 2026-11-24 (la usuaria): el dato grande es el precio del paquete; el cálculo va en el recuadro. */ ?>
+                    <span class="pc-paq-tot"><?= $paq_precio[$idq] > 0 ? '$ ' . number_format($paq_precio[$idq], 0, ',', '.') : '<span style="color:#b45309">Sin precio</span>' ?></span>
+                    <span class="pc-paq-unit"><?= $paq_cant[$idq] ?> paquete<?= $paq_cant[$idq] == 1 ? '' : 's' ?> × $ <?= number_format($paq_precio[$idq], 0, ',', '.') ?> = <strong>$ <?= number_format($paq_precio[$idq] * $paq_cant[$idq], 0, ',', '.') ?></strong></span>
+                  </div>
                 </td>
                 <?php endif; ?>
                 <?php elseif ($es_vd): ?>

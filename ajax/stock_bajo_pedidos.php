@@ -18,7 +18,7 @@ if (($_SESSION['tipo'] ?? null) != 1 && ($_SESSION['id'] ?? null) != 25) {
     exit;
 }
 
-$origen = ($_POST['origen'] ?? '') === 'pedidos2' ? 'pedidos2' : 'pedidos';
+$origen = in_array($_POST['origen'] ?? '', ['pedidos2', 'venta_directa'], true) ? $_POST['origen'] : 'pedidos';
 $ids = $_POST['ids'] ?? [];
 if (!is_array($ids)) $ids = [];
 

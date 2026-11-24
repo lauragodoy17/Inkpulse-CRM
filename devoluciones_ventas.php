@@ -202,6 +202,12 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
     .dm-doc-op { display:flex; align-items:center; gap:10px; border:1.5px solid var(--dm-borde); border-radius:10px; padding:10px 12px; cursor:pointer; margin:0; background:#fff; transition:border-color .12s, background .12s; }
     .dm-doc-op:hover { border-color:#93c5fd; }
     .dm-doc-op.on { border-color:var(--dm-azul2); background:#eff6ff; }
+    /* Venta (consecutivo) de la devolución de venta directa (2026-11-24) */
+    .dm-ventas { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+    .dm-venta { display:inline-flex; align-items:center; gap:10px; border:1.5px solid var(--dm-borde); border-radius:10px; padding:10px 14px; cursor:pointer; margin:0; background:#fff; font-size:.86rem; }
+    .dm-venta:hover { border-color:#93c5fd; }
+    .dm-venta.on { border-color:var(--dm-azul2); background:#eff6ff; }
+    .dm-venta small { color:#64748b; }
     .dm-doc-op-txt { font-size:.78rem; color:var(--dm-gris); }
     .vd-add { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
     .vd-add-sel { flex:1 1 320px; max-width:560px; min-width:0; }
@@ -403,7 +409,7 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
         + (CORTE ? ': no tiene nada remisionado para el corte.' : ': se cargó lo solicitado en el CRM.') + '</div>';
     }
     if (p.cierre) h += p.cierre.tipo === 'vd'
-      ? '<div class="dm-sub" style="margin-top:8px;">Cerrado con la <a href="devolucion_colegio.php?id_pedido=' + p.cierre.id + '" target="_blank">devolución de venta directa #' + p.cierre.id + '</a>: en venta directa se registra una sola devolución por pedido (si se anula, el pedido se vuelve a abrir).</div>'
+      ? '<div class="dm-sub" style="margin-top:8px;">Cerrado con sus ' + MAX_DEVOL_VD + ' devoluciones de venta directa (' + lnksDevol(p.cierre.ids) + '): en venta directa se registran máximo ' + MAX_DEVOL_VD + ' devoluciones por pedido (si se anula una, el pedido se vuelve a abrir).</div>'
       : '<div class="dm-sub" style="margin-top:8px;">Cerrado con la <a href="devolucion_colegio.php?id_pedido=' + p.cierre.id + '" target="_blank">legalización completa #' + p.cierre.id + '</a>: no suma disponible.</div>';
     return h + '</div>';
   }
@@ -411,6 +417,26 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
   // ── Venta directa (colegio con canal Venta directa - Eureka, 2026-11-10): primero se eligen las remisiones /
   // facturas a devolver; con ellas se devuelven paquetes completos y libros sueltos (dvv_vd_estructura). ──
   var SEL_DOCS = null; // documentos elegidos (ids de WO o 'crm:v210') de la última consulta
+  // Venta directa: máximo de devoluciones por pedido (DVV_MAX_DEVOL_VD); la segunda solo con lo que quedó sin devolver.
+  var MAX_DEVOL_VD = <?= (int)DVV_MAX_DEVOL_VD ?>, VD_N_PREVIAS = 0;
+  function lnksDevol(ids) {
+    return (ids || []).map(function (id) { return '<a href="devolucion_colegio.php?id_pedido=' + id + '" target="_blank">#' + id + '</a>'; }).join(', ');
+  }
+  // Aviso de las devoluciones de venta directa ya registradas de los pedidos incluidos.
+  function avisoPreviasVd(r) {
+    var ids = {}, n = 0;
+    r.pedidos.forEach(function (p) {
+      if (r.incluidos.indexOf(p.clave) < 0) return;
+      var dv = p.devoluciones_vd || [];
+      n = Math.max(n, dv.length);
+      dv.forEach(function (d) { ids[d.id] = true; });
+    });
+    VD_N_PREVIAS = n;
+    if (!n) return '';
+    return aviso('warn', 'bi-arrow-repeat', '<strong>Devolución ' + (n + 1) + ' de ' + MAX_DEVOL_VD + '.</strong> Ya se registró la devolución '
+      + lnksDevol(Object.keys(ids)) + '; las cantidades disponibles son solo las unidades que quedaron sin devolver.'
+      + (n + 1 >= MAX_DEVOL_VD ? ' Después de esta, los pedidos quedan cerrados.' : ''));
+  }
   function resumenVd(r, soloIncluidos) {
     var pedidos = soloIncluidos ? r.pedidos.filter(function (p) { return r.incluidos.indexOf(p.clave) >= 0; }) : r.pedidos;
     return '<div class="dm-resumen">'
@@ -469,6 +495,29 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
     var lim = parte === 'sue' ? VD_LIM_SUE : VD_LIM_PAQ;
     return lim[l] !== undefined ? Math.min(lim[l], VD_DISP[l] || 0) : (VD_DISP[l] || 0);
   }
+  // A qué venta (consecutivo del formato) corresponde la devolución (2026-11-24): el consecutivo se reserva el día de la
+  // venta sin pedidos y aquí se elige; los pedidos de la devolución quedan en ese formato. Si ya están en un formato, va a ese.
+  function fechaCorta(f) { var p = String(f || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
+  function selectorVenta(v) {
+    if (!v) return '';
+    if (v.error) return aviso('err', 'bi-x-octagon', esc(v.error));
+    var h = '<div class="dm-subtitulo"><i class="bi bi-clipboard-check"></i> ¿A qué venta corresponde?</div><div class="dm-ventas">';
+    if (v.fijo) {
+      return h + '<label class="dm-venta on"><input type="hidden" name="id_formato" value="' + v.fijo.id + '"><i class="bi bi-lock-fill"></i>'
+        + '<span><strong>Formato No. ' + v.fijo.consecutivo + '</strong> · venta ' + esc(fechaCorta(v.fijo.fecha_venta)) + '<br><small>Sus pedidos ya están en este formato.</small></span></label></div>';
+    }
+    if (!v.reservados.length) {
+      return h + '<div class="dm-sub" style="margin:0 0 12px;"><i class="bi bi-info-circle"></i> Este colegio no tiene ventas con consecutivo reservado: al registrar la devolución se crea un formato nuevo.</div></div>';
+    }
+    v.reservados.forEach(function (f, i) {
+      var sel = i === v.reservados.length - 1; // la venta más reciente
+      h += '<label class="dm-venta' + (sel ? ' on' : '') + '"><input type="radio" class="dm-check" name="id_formato" value="' + f.id + '"' + (sel ? ' checked' : '') + '>'
+        + '<span><strong>Formato No. ' + f.consecutivo + '</strong> · venta ' + esc(fechaCorta(f.fecha_venta)) + '</span></label>';
+    });
+    return h + '</div><div class="dm-sub" style="margin:-4px 0 14px;">Los pedidos de esta devolución quedarán en el formato elegido.</div>';
+  }
+  $(document).on('change', '.dm-venta input[type=radio]', function () { $('.dm-venta').removeClass('on'); $(this).closest('.dm-venta').addClass('on'); });
+
   function pintarVD(r) {
     VD_DISP = {}; VD_NOMBRE = {}; VD_PAQ = {}; VD_GRADO = {};
     r.titulos.forEach(function (t) { if (t.id_libro) { VD_DISP[t.id_libro] = t.disponible; VD_NOMBRE[t.id_libro] = t.descripcion; VD_GRADO[t.id_libro] = t.grado || ''; } });
@@ -482,6 +531,7 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
     });
     var h = resumenVd(r, true) + '<div class="dm-seleccion" style="margin:0 0 16px;"><div class="dm-seleccion-txt"><i class="bi bi-receipt"></i> Remisiones: <strong style="font-size:.9rem;">' + esc(elegidos.join(', ')) + '</strong></div>'
       + '<button type="button" class="dm-btn dm-btn-light" id="dm-cambiar-docs"><i class="bi bi-pencil"></i> Cambiar remisiones</button></div>';
+    h += avisoPreviasVd(r);
     var hayAlgo = vd.paquetes.some(function (p) { return p.max > 0; }) || vd.sueltos.length || vd.libros_paquete.length;
     if (!hayAlgo) { $('#dm-detalle').html(h + aviso('ok', 'bi-check-circle', '<strong>Nada por devolver</strong> en las remisiones elegidas.')); return; }
 
@@ -489,6 +539,7 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
       + '<input type="hidden" name="modo_vd" value="1"><input type="hidden" name="tipo_devolucion" value="normal">' + (MODO_VD ? '<input type="hidden" name="vd" value="1">' : '');
     r.incluidos.forEach(function (c) { h += '<input type="hidden" name="claves[]" value="' + esc(c) + '">'; });
     (SEL_DOCS || []).forEach(function (d) { h += '<input type="hidden" name="docs[]" value="' + esc(d) + '">'; });
+    h += selectorVenta(r.ventas);
     var stepper = function (name, max, attrs) {
       return '<div class="dm-stepper"><button type="button" class="dm-menos" tabindex="-1">−</button>'
         + '<input type="number" class="dm-input vd-n" name="' + name + '" min="0" max="' + max + '" step="1" value="0" data-max="' + max + '" ' + attrs + '>'
@@ -684,12 +735,15 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
     var form = this, total = parseInt($('#vd-total').text(), 10) || 0;
     if (!total) { inkToast('Ingresa al menos un paquete o libro a devolver.', 'warn'); return; }
     if ($('.vd-exceso').length) { inkToast('Hay libros que pasan lo disponible en las remisiones elegidas.', 'error'); return; }
+    if ($(form).find('.dm-venta input[type=radio]').length && !$(form).find('.dm-venta input[type=radio]:checked').length) { inkToast('Elige a qué venta (formato) corresponde la devolución.', 'warn'); return; }
     recalcAbiertos();
     var $mal = $('.vd-ab .vd-sp-mal');
     if ($mal.length) { inkToast('Revisa los paquetes abiertos: cada libro vendido necesita su precio y el descuento va de 0 a 100 (máx. 2 decimales).', 'error'); $mal.first().focus(); return; }
     var abiertos = 0; $('.vd-ab-n').each(function () { abiertos += parseInt($(this).val(), 10) || 0; });
     var paqs = 0; $('#dm-form-vd .vd-n[data-paq]').each(function () { paqs += parseInt($(this).val(), 10) || 0; });
-    inkConfirm({ type: 'info', title: '¿Registrar la devolución?', text: 'Se registrará una devolución de ' + total + ' libro(s)' + (paqs ? ' (' + paqs + ' paquete(s) completo(s) incluidos)' : '') + (abiertos ? ', con ' + abiertos + ' paquete(s) abierto(s) cuyos demás libros se venden sueltos a los precios puestos,' : '') + ' de las remisiones elegidas. En venta directa es la ÚNICA devolución: los pedidos quedan cerrados y no se podrán registrar más devoluciones.', btnOk: 'Registrar' }, function () {
+    inkConfirm({ type: 'info', title: '¿Registrar la devolución?', text: 'Se registrará una devolución de ' + total + ' libro(s)' + (paqs ? ' (' + paqs + ' paquete(s) completo(s) incluidos)' : '') + (abiertos ? ', con ' + abiertos + ' paquete(s) abierto(s) cuyos demás libros se venden sueltos a los precios puestos,' : '') + ' de las remisiones elegidas. ' + (VD_N_PREVIAS + 1 >= MAX_DEVOL_VD
+      ? 'En venta directa es la ÚLTIMA devolución (' + MAX_DEVOL_VD + ' de ' + MAX_DEVOL_VD + '): sus unidades se descuentan en el formato de venta directa de la primera (bajan las vendidas y el total) y los pedidos quedan cerrados.'
+      : 'En venta directa es la devolución ' + (VD_N_PREVIAS + 1) + ' de ' + MAX_DEVOL_VD + ': se genera el formato de venta directa y después podrás registrar otra solo con las unidades que queden sin devolver (se descontará en ese mismo formato).'), btnOk: 'Registrar' }, function () {
       $('#vd-enviar').prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> Guardando...');
       form.submit();
     });

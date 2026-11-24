@@ -179,6 +179,21 @@ function fvd_asegurar_tablas(PDO $bdd) {
     if (!$bdd->query("SHOW COLUMNS FROM formatos_vd_items LIKE 'precio_manual'")->fetch()) {
         try { $bdd->exec("ALTER TABLE formatos_vd_items ADD COLUMN precio_manual DECIMAL(14,2) NULL AFTER precio_origen"); } catch (Exception $e) { /* ya existe */ }
     }
+    // Formato con 2 devoluciones de venta directa (2026-11-24, la usuaria): devueltas_2 = unidades de la fila que volvieron en
+    // la 2a devolución (ya incluidas en devueltas; solo informativo). Las VENDIDAS (entregado − todas las devoluciones, nunca
+    // negativo) se pueden cobrar a dos precios: vendidas_2 = cuántas van a precio_2 (las escribe la usuaria en el cierre de
+    // dinero, de 0 a vendidas); el resto va al precio de la fila. Total = (vendidas − vendidas_2) × precio + vendidas_2 × precio_2.
+    if (!$bdd->query("SHOW COLUMNS FROM formatos_vd_items LIKE 'devueltas_2'")->fetch()) {
+        foreach (["ALTER TABLE formatos_vd_items ADD COLUMN devueltas_2 INT NOT NULL DEFAULT 0",
+                  "ALTER TABLE formatos_vd_items ADD COLUMN precio_2 DECIMAL(14,2) NULL",
+                  "ALTER TABLE formatos_vd_items ADD COLUMN precio_2_origen VARCHAR(30) NULL",
+                  "ALTER TABLE formatos_vd_items ADD COLUMN precio_2_manual DECIMAL(14,2) NULL"] as $sql) {
+            try { $bdd->exec($sql); } catch (Exception $e) { /* ya existe */ }
+        }
+    }
+    if (!$bdd->query("SHOW COLUMNS FROM formatos_vd_items LIKE 'vendidas_2'")->fetch()) {
+        try { $bdd->exec("ALTER TABLE formatos_vd_items ADD COLUMN vendidas_2 INT NOT NULL DEFAULT 0"); } catch (Exception $e) { /* ya existe */ }
+    }
     // Referencias de la fila (2026-11-23, fvd_referencias): pedidos (ids), remisiones/facturas de WO y precio con que
     // salió en la remisión. NULL = aún no se consultó (fvd_asegurar_referencias); '' = sin datos.
     if (!$bdd->query("SHOW COLUMNS FROM formatos_vd_items LIKE 'remisiones'")->fetch()) {
@@ -248,17 +263,46 @@ function fvd_clave_item(array $it) {
 function fvd_pendientes_por_pedido(PDO $bdd) {
     $res = [];
     foreach ($bdd->query("SELECT id, consecutivo, ids_pedidos FROM formatos_vd WHERE estado = " . FVD_ESTADO_ACTIVO) as $f) {
-        foreach (explode(',', $f['ids_pedidos']) as $c) $res[$c] = ['id' => (int)$f['id'], 'consecutivo' => (int)$f['consecutivo']];
+        foreach (array_filter(explode(',', (string)$f['ids_pedidos'])) as $c) $res[$c] = ['id' => (int)$f['id'], 'consecutivo' => (int)$f['consecutivo']];
     }
     return $res;
 }
 
-/** Legalización (devolución) activa del formato: ['id','codigo','ids_pedidos','estado','fecha'] o null. */
-function fvd_legalizacion(PDO $bdd, $idFormato) {
+/** Devoluciones activas vinculadas al formato, de la más antigua a la más reciente: [['id','codigo','ids_pedidos','estado','fecha']]. */
+function fvd_devoluciones_formato(PDO $bdd, $idFormato) {
     $st = $bdd->prepare("SELECT id, codigo, COALESCE(ids_pedidos, ids_pedidos_venta) AS ids_pedidos, estado, created_at AS fecha FROM devoluciones_v
-                         WHERE id_formato_vd = ? AND estado <> " . DVD_ESTADO_DEVOL_ANULADA . " ORDER BY id DESC LIMIT 1");
+                         WHERE id_formato_vd = ? AND estado <> " . DVD_ESTADO_DEVOL_ANULADA . " ORDER BY id");
     $st->execute([(int)$idFormato]);
-    return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Legalización (devolución) activa del formato: la más reciente ['id','codigo','ids_pedidos','estado','fecha'] o null.
+ * 2026-11-24 (la usuaria): en venta directa un pedido admite 2 devoluciones y ambas quedan en el mismo formato; además
+ * trae 'ids' / 'codigos' / 'todas' (todas las activas) y 'texto' ("#120, #134") para mostrarlas.
+ */
+function fvd_legalizacion(PDO $bdd, $idFormato) {
+    $devs = fvd_devoluciones_formato($bdd, $idFormato);
+    if (!$devs) return null;
+    $d = end($devs);
+    $d['ids'] = array_map(fn($x) => (int)$x['id'], $devs);
+    $d['codigos'] = array_column($devs, 'codigo');
+    $d['todas'] = $devs;
+    $d['texto'] = '#' . implode(', #', $d['ids']);
+    return $d;
+}
+
+/** "la devolución #120" / "las devoluciones #120, #134" de la legalización del formato (fvd_legalizacion); '' sin ella. */
+function fvd_texto_devoluciones($leg, $conArticulo = true) {
+    if (!$leg) return '';
+    $varias = count($leg['ids'] ?? []) > 1;
+    return ($conArticulo ? ($varias ? 'las ' : 'la ') : '') . ($varias ? 'devoluciones ' : 'devolución ') . ($leg['texto'] ?? '#' . (int)$leg['id']);
+}
+
+/** Enlaces a las devoluciones del formato ("#120, #134"), HTML. */
+function fvd_links_devoluciones($leg) {
+    if (!$leg) return '';
+    return implode(', ', array_map(fn($id) => '<a href="devolucion_colegio.php?id_pedido=' . (int)$id . '">#' . (int)$id . '</a>', $leg['ids'] ?? [(int)$leg['id']]));
 }
 
 /** Paquetes del colegio en el período con sus libros: [['id','paquete','codigo','precio','libros' => [id_libro,...], 'titulos' => [...]]]. */
@@ -501,6 +545,7 @@ function fvd_referencias(PDO $bdd, array $detalle, array $items) {
 function fvd_asegurar_referencias(PDO $bdd, array $f) {
     // Se vuelve a consultar si ninguna fila tiene remisión (2026-11-23, formato No. 2: la remisión no traía la OP en WO);
     // así aparecen apenas se asocie en WO o en OP pendiente.
+    if (!$f['items'] || trim((string)$f['ids_pedidos']) === '') return false; // consecutivo reservado sin pedidos (2026-11-24)
     $sinConsultar = array_filter($f['items'], fn($it) => $it['remisiones'] === null);
     $sinRemision = !array_filter($f['items'], fn($it) => (string)$it['remisiones'] !== '');
     if (!$sinConsultar && !$sinRemision) return false;
@@ -533,8 +578,8 @@ function fvd_recalcular_cierre(PDO $bdd, $id) {
         return ['ok' => false, 'error' => 'falta el precio de venta de ' . implode(', ', array_column(array_filter($filas, fn($x) => $x['sin_precio']), 'descripcion')) . '. Configúralo en Adopciones y vuelve a guardar.'];
     }
     return fvd_en_transaccion($bdd, $g['id'], $g['etapa'], function () use ($bdd, $g, $filas, $t) {
-        $up = $bdd->prepare("UPDATE formatos_vd_items SET vendidas = ?, inv_final = ?, precio = ?, precio_origen = ?, total = ? WHERE id = ? AND id_formato = ?");
-        foreach ($filas as $x) $up->execute([$x['vend'], $x['fin'], (float)$x['precio_v'], $x['origen_v'], (float)$x['total_v'], (int)$x['id'], (int)$g['id']]);
+        $up = $bdd->prepare("UPDATE formatos_vd_items SET vendidas = ?, vendidas_2 = ?, inv_final = ?, precio = ?, precio_origen = ?, precio_2 = ?, precio_2_origen = ?, total = ? WHERE id = ? AND id_formato = ?");
+        foreach ($filas as $x) $up->execute([$x['vend'], $x['n2'], $x['fin'], (float)$x['precio_v'], $x['origen_v'], $x['precio2_v'], $x['origen2_v'], (float)$x['total_v'], (int)$x['id'], (int)$g['id']]);
         $bdd->prepare("UPDATE formatos_vd SET total_venta = ?, valor_inventario = ?, diferencia = ROUND(suma_total - ?, 2) WHERE id = ?")
             ->execute([$t['total_venta'], $t['valor_inventario'], $t['total_venta'], (int)$g['id']]);
         return null;
@@ -676,7 +721,35 @@ function fvd_obtener(PDO $bdd, $id) {
     $f['numero_adopcion'] = fvd_numero_adopcion($bdd, $f['id_colegio'], $f['id_periodo']);
     // Se anula solo antes de generar la devolución.
     $f['anulable'] = $f['activo'] && $f['etapa'] <= FVD_ETAPA_ENTREGADO && !$f['legalizacion'];
+    // Consecutivo reservado el día de la venta, aún sin pedidos (2026-11-24, includes/solicitudes_vd_datos.php): se llena al
+    // registrar su primera devolución eligiendo esta venta.
+    $f['reservado'] = trim((string)$f['ids_pedidos']) === '';
     return $f;
+}
+
+/**
+ * Huella del estado del formato (2026-11-24, la usuaria: la hoja ver_formato_venta_directa.php se actualiza en vivo): cambia
+ * cuando cambia algo que se muestra (etapa, datos, cierre de dinero, filas, devoluciones vinculadas). La hoja la consulta
+ * cada pocos segundos (ajax/formatos_vd_avance.php) y, si cambió, se vuelve a pintar. null si el formato no existe.
+ */
+function fvd_huella(PDO $bdd, $idFormato) {
+    $st = $bdd->prepare("SELECT * FROM formatos_vd WHERE id = ?");
+    $st->execute([(int)$idFormato]);
+    $f = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$f) return null;
+    $st = $bdd->prepare("SELECT * FROM formatos_vd_items WHERE id_formato = ? ORDER BY id");
+    $st->execute([(int)$idFormato]);
+    $items = $st->fetchAll(PDO::FETCH_ASSOC);
+    $st = $bdd->prepare("SELECT id, estado FROM devoluciones_v WHERE id_formato_vd = ? ORDER BY id");
+    $st->execute([(int)$idFormato]);
+    $devs = $st->fetchAll(PDO::FETCH_ASSOC);
+    $st = $bdd->prepare("SELECT tipo, nombre, created_at FROM formatos_vd_firmas WHERE id_formato = ? ORDER BY id");
+    $st->execute([(int)$idFormato]);
+    $firmas = $st->fetchAll(PDO::FETCH_ASSOC);
+    $st = $bdd->prepare("SELECT nombre, valor FROM formatos_vd_auxiliares WHERE id_formato = ? ORDER BY id");
+    $st->execute([(int)$idFormato]);
+    $aux = $st->fetchAll(PDO::FETCH_ASSOC);
+    return md5(json_encode([$f, $items, $devs, $firmas, $aux]));
 }
 
 /** Formatos dentro del alcance del usuario, los más recientes primero. */
@@ -685,7 +758,8 @@ function fvd_listar(PDO $bdd) {
     $st = $bdd->prepare("SELECT f.id, f.consecutivo, f.etapa, f.fecha_venta, f.ids_pedidos, f.responsable, f.total_venta, f.suma_total, f.diferencia, f.estado,
                                 f.created_at, c.colegio, pe.periodo, CONCAT(TRIM(u.nombres), ' ', TRIM(u.apellidos)) AS usuario,
                                 (SELECT SUM(i.vendidas) FROM formatos_vd_items i WHERE i.id_formato = f.id) AS vendidas,
-                                (SELECT d.id FROM devoluciones_v d WHERE d.id_formato_vd = f.id AND d.estado <> " . DVD_ESTADO_DEVOL_ANULADA . " ORDER BY d.id DESC LIMIT 1) AS id_devolucion
+                                (SELECT d.id FROM devoluciones_v d WHERE d.id_formato_vd = f.id AND d.estado <> " . DVD_ESTADO_DEVOL_ANULADA . " ORDER BY d.id DESC LIMIT 1) AS id_devolucion,
+                                (SELECT GROUP_CONCAT(d.id ORDER BY d.id) FROM devoluciones_v d WHERE d.id_formato_vd = f.id AND d.estado <> " . DVD_ESTADO_DEVOL_ANULADA . ") AS ids_devolucion
                          FROM formatos_vd f JOIN colegios c ON c.id = f.id_colegio
                          LEFT JOIN periodos pe ON pe.id = f.id_periodo
                          LEFT JOIN usuarios u ON u.id = f.id_usuario
@@ -885,14 +959,7 @@ function fvd_guardar_nuevo(PDO $bdd, array $prop, array $post, $token) {
                        VALUES (?, ?, ?, ?, " . FVD_ETAPA_SOLICITUD . ", " . implode(', ', array_fill(0, count($cols), '?')) . ", " . FVD_ESTADO_ACTIVO . ", ?, ?, NOW())")
             ->execute(array_merge([$consecutivo, $prop['id_colegio'], $prop['id_periodo'], implode(',', $prop['claves'])], array_values($d), [(int)$_SESSION['id'], $token]));
         $id = (int)$bdd->lastInsertId();
-        $stI = $bdd->prepare("INSERT INTO formatos_vd_items (id_formato, orden, tipo, id_paquete, id_libro, descripcion, detalle, solicitud, inv_propuesto, inv_inicial, libros,
-                                                             pedidos_ref, remisiones, precio_remision)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        foreach (array_values($prop['items']) as $i => $it) {
-            $stI->execute([$id, $i, $it['tipo'], $it['id_paquete'], $it['id_libro'], mb_substr($it['descripcion'], 0, 255), $it['detalle'],
-                           (int)$it['solicitud'], (int)$it['inv_propuesto'], (int)$it['inv_propuesto'], implode(',', array_map('intval', $it['libros'])),
-                           $it['pedidos_ref'] ?? null, isset($it['remisiones']) ? mb_substr($it['remisiones'], 0, 500) : null, $it['precio_remision'] ?? null]);
-        }
+        fvd_insertar_items($bdd, $id, $prop['items']);
         registrar_historial_estado($bdd, FVD_MODULO_ETAPAS, $id, FVD_ETAPA_SOLICITUD, (int)$_SESSION['id']);
         $bdd->commit();
         return ['ok' => true, 'error' => null, 'id' => $id, 'repetido' => false];
@@ -905,6 +972,18 @@ function fvd_guardar_nuevo(PDO $bdd, array $prop, array $post, $token) {
         }
         error_log('Formato venta directa: ' . $e->getMessage());
         return ['ok' => false, 'error' => 'No se pudo guardar el formato. Intenta de nuevo.'];
+    }
+}
+
+/** Filas del formato desde la propuesta (fvd_propuesta). Dentro de la transacción. */
+function fvd_insertar_items(PDO $bdd, $idFormato, array $items) {
+    $stI = $bdd->prepare("INSERT INTO formatos_vd_items (id_formato, orden, tipo, id_paquete, id_libro, descripcion, detalle, solicitud, inv_propuesto, inv_inicial, libros,
+                                                         pedidos_ref, remisiones, precio_remision)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    foreach (array_values($items) as $i => $it) {
+        $stI->execute([(int)$idFormato, $i, $it['tipo'], $it['id_paquete'], $it['id_libro'], mb_substr($it['descripcion'], 0, 255), $it['detalle'],
+                       (int)$it['solicitud'], (int)$it['inv_propuesto'], (int)$it['inv_propuesto'], implode(',', array_map('intval', $it['libros'])),
+                       $it['pedidos_ref'] ?? null, isset($it['remisiones']) ? mb_substr($it['remisiones'], 0, 500) : null, $it['precio_remision'] ?? null]);
     }
 }
 
@@ -1028,6 +1107,8 @@ function fvd_devoluciones_para_vincular(PDO $bdd, array $f) {
  */
 function fvd_devueltas_de_devolucion(PDO $bdd, array $f, array $dev) {
     require_once __DIR__ . '/devoluciones_ventas_datos.php'; // dvv_desglose_vd
+    // Una devolución o la lista de todas las del formato (2026-11-24: 2 devoluciones de venta directa se suman).
+    $devs = isset($dev['id']) ? [$dev] : array_values($dev);
     $porPaq = [];
     $porLibro = [];
     foreach ($f['items'] as $it) {
@@ -1039,16 +1120,20 @@ function fvd_devueltas_de_devolucion(PDO $bdd, array $f, array $dev) {
     $extra = [];
     $abiertos = [];    // id_item del paquete => paquetes abiertos
     $abiertosLib = []; // id_paquete => ['n' => abiertos, 'vuelven' => [id_libro => n]]
-    $desglose = dvv_desglose_vd($bdd, $dev['id']);
-    if (!$desglose) {
-        // Registrada por libro: paquetes completos primero, el resto como sueltos.
-        $st = $bdd->prepare("SELECT id_libro, SUM(cantidad) FROM libros_devol_v WHERE cod_pedido = ? GROUP BY id_libro");
-        $st->execute([$dev['codigo']]);
-        $libros = array_map('intval', $st->fetchAll(PDO::FETCH_KEY_PAIR));
-        $paqs = array_map(fn($it) => ['id' => (int)$it['id_paquete'], 'libros' => array_map('intval', array_filter(explode(',', (string)$it['libros'])))], array_values($porPaq));
-        [$cuantos, $sobra] = fvd_repartir_en_paquetes($libros, $paqs);
-        foreach ($cuantos as $idPaq => $n) if ($n) $desglose[] = ['tipo' => 'paquete', 'id_paquete' => $idPaq, 'id_libro' => null, 'cantidad' => $n];
-        foreach ($sobra as $l => $n) $desglose[] = ['tipo' => 'suelto', 'id_paquete' => null, 'id_libro' => $l, 'cantidad' => $n];
+    $desglose = [];
+    foreach ($devs as $dv) {
+        $propio = dvv_desglose_vd($bdd, $dv['id']);
+        if (!$propio) {
+            // Registrada por libro: paquetes completos primero, el resto como sueltos.
+            $st = $bdd->prepare("SELECT id_libro, SUM(cantidad) FROM libros_devol_v WHERE cod_pedido = ? GROUP BY id_libro");
+            $st->execute([$dv['codigo']]);
+            $libros = array_map('intval', $st->fetchAll(PDO::FETCH_KEY_PAIR));
+            $paqs = array_map(fn($it) => ['id' => (int)$it['id_paquete'], 'libros' => array_map('intval', array_filter(explode(',', (string)$it['libros'])))], array_values($porPaq));
+            [$cuantos, $sobra] = fvd_repartir_en_paquetes($libros, $paqs);
+            foreach ($cuantos as $idPaq => $n) if ($n) $propio[] = ['tipo' => 'paquete', 'id_paquete' => $idPaq, 'id_libro' => null, 'cantidad' => $n];
+            foreach ($sobra as $l => $n) $propio[] = ['tipo' => 'suelto', 'id_paquete' => null, 'id_libro' => $l, 'cantidad' => $n];
+        }
+        $desglose = array_merge($desglose, $propio);
     }
     $librosPaq = fvd_libros_de_paquetes($bdd, $f);
     foreach ($desglose as $x) {
@@ -1094,46 +1179,122 @@ function fvd_devueltas_de_devolucion(PDO $bdd, array $f, array $dev) {
     return ['items' => $items, 'extra' => $extra, 'abiertos' => $abiertos, 'filas_abiertas' => $filasAbiertas];
 }
 
-/** Vincula al formato una devolución registrada en Devoluciones de ventas (paso 3) y sigue el flujo automático. */
+/**
+ * Vincula al formato una devolución registrada en Devoluciones de ventas (paso 3) y sigue el flujo automático.
+ * 2026-11-24 (la usuaria): en venta directa un pedido admite 2 devoluciones (DVV_MAX_DEVOL_VD). La primera genera el
+ * formato; la segunda se SUMA al mismo formato: las devueltas de cada fila pasan a ser lo de todas sus devoluciones
+ * activas, así que bajan las vendidas y el total de venta. Si el formato ya iba más adelante (cierre del inventario,
+ * recepción, dinero o incluso cerrado) vuelve a la devolución y se recalcula solo (fvd_avanzar_automatico); el cierre
+ * de dinero se debe confirmar de nuevo con el total nuevo.
+ */
 function fvd_vincular_devolucion(PDO $bdd, array $f, $idDevolucion) {
     $dev = null;
     foreach (fvd_devoluciones_para_vincular($bdd, $f) as $d) if ((int)$d['id'] === (int)$idDevolucion) $dev = $d;
     if (!$dev) return ['ok' => false, 'error' => 'Esa devolución no se puede vincular: no existe, está anulada, ya tiene formato o tiene pedidos de otro formato.'];
-    $res = fvd_devueltas_de_devolucion($bdd, $f, $dev);
-    if (isset($res['error'])) return ['ok' => false, 'error' => $res['error']];
+    $previas = $f['legalizacion']['todas'] ?? [];
+    if (!$previas && $f['etapa'] !== FVD_ETAPA_ENTREGADO) {
+        return ['ok' => false, 'error' => 'El ' . fvd_numero($f['consecutivo']) . ' está en "' . fvd_etapa_texto($f['etapa']) . '"; la devolución se vincula después de la entrega de bodega.'];
+    }
+    if ($previas) {
+        $motivo = 'Se sumó la devolución #' . (int)$dev['id'] . ' (con ' . $f['legalizacion']['texto'] . '): se descuentan sus unidades de lo vendido'
+                . ($f['etapa'] > FVD_ETAPA_DEV_GENERADA ? '; se recalcula desde "' . fvd_etapa_texto($f['etapa']) . '"' : '');
+    } else {
+        $motivo = 'Devolución #' . (int)$dev['id'] . ' de Devoluciones de ventas';
+    }
+    $r = fvd_aplicar_devoluciones($bdd, $f, array_merge($previas, [$dev]), (int)$dev['id'], $motivo);
+    if (!$r['ok']) return $r;
+    return ['ok' => true, 'error' => null, 'id' => (int)$f['id'], 'id_devolucion' => (int)$dev['id'], 'etapa' => $r['etapa'], 'agregada' => (bool)$previas];
+}
+
+/**
+ * Pasa a las filas del formato lo de TODAS las devoluciones $devs (las ya vinculadas + $idNueva, que se vincula aquí),
+ * deja el formato en "Devolución generada" y sigue el cálculo automático. Si con lo devuelto un libro ya no alcanza para
+ * los paquetes armados (fvd_armar_paquetes), se deshace el armado (hay que volver a armarlos con lo vendido nuevo).
+ * Devuelve ['ok','error','etapa','armado_deshecho'].
+ */
+function fvd_aplicar_devoluciones(PDO $bdd, array $f, array $devs, $idNueva, $motivo) {
+    $deshacerArmado = false;
+    $res = $devs ? fvd_devueltas_de_devolucion($bdd, $f, $devs) : ['items' => [], 'extra' => [], 'abiertos' => [], 'filas_abiertas' => []];
+    if (isset($res['error'])) {
+        // ¿Choca con el armado de paquetes? Se prueba con el formato sin armar.
+        $hayArmado = array_filter($f['items'], fn($it) => (int)($it['en_paquetes'] ?? 0) > 0 || (int)($it['armados'] ?? 0) > 0);
+        if (!$hayArmado) return ['ok' => false, 'error' => $res['error']];
+        $fSin = $f;
+        $fSin['items'] = [];
+        foreach ($f['items'] as $it) {
+            if ($it['tipo'] === 'titulo') $it['inv_inicial'] = (int)$it['inv_inicial'] + (int)($it['en_paquetes'] ?? 0);
+            if ($it['tipo'] === 'paquete') {
+                $it['inv_inicial'] = (int)$it['inv_inicial'] - (int)($it['armados'] ?? 0);
+                if ($it['inv_inicial'] <= 0 && (int)$it['solicitud'] === 0) continue; // fila creada solo por el armado
+            }
+            $fSin['items'][] = $it;
+        }
+        $res = fvd_devueltas_de_devolucion($bdd, $fSin, $devs);
+        if (isset($res['error'])) return ['ok' => false, 'error' => $res['error']];
+        $deshacerArmado = true;
+    }
+    // Tramo de la 2a devolución (2026-11-24): lo de todas − lo de la primera, por fila.
+    $d2 = ['items' => [], 'extra' => [], 'abiertas' => []];
+    if (count($devs) > 1) {
+        $res1 = fvd_devueltas_de_devolucion($bdd, $deshacerArmado ? $fSin : $f, [reset($devs)]);
+        if (!isset($res1['error'])) {
+            foreach ($res['items'] as $k => $n) $d2['items'][$k] = max(0, (int)$n - (int)($res1['items'][$k] ?? 0));
+            foreach ($res['extra'] as $k => $n) $d2['extra'][$k] = max(0, (int)$n - (int)($res1['extra'][$k] ?? 0));
+            $ab1 = [];
+            foreach ($res1['filas_abiertas'] as $x) $ab1[$x['id_paquete'] . '_' . $x['id_libro']] = (int)$x['devueltas'];
+            foreach ($res['filas_abiertas'] as $x) $d2['abiertas'][$x['id_paquete'] . '_' . $x['id_libro']] = max(0, (int)$x['devueltas'] - ($ab1[$x['id_paquete'] . '_' . $x['id_libro']] ?? 0));
+        }
+    }
     $librosPaq = fvd_libros_de_paquetes($bdd, $f);
-    $r = fvd_en_transaccion($bdd, $f['id'], FVD_ETAPA_ENTREGADO, function () use ($bdd, $f, $dev, $res, $librosPaq) {
-        $st = $bdd->prepare("SELECT id_formato_vd, estado FROM devoluciones_v WHERE id = ? FOR UPDATE");
-        $st->execute([(int)$dev['id']]);
-        $d = $st->fetch(PDO::FETCH_ASSOC);
-        if (!$d || $d['id_formato_vd'] !== null || (int)$d['estado'] === DVD_ESTADO_DEVOL_ANULADA) return 'La devolución cambió mientras la vinculabas. Recarga la página.';
-        $up = $bdd->prepare("UPDATE formatos_vd_items SET devueltas = ?, abiertos = ? WHERE id = ? AND id_formato = ?");
-        foreach ($res['items'] as $idItem => $n) $up->execute([$n, (int)($res['abiertos'][$idItem] ?? 0), $idItem, (int)$f['id']]);
-        $bdd->prepare("DELETE FROM formatos_vd_items WHERE id_formato = ? AND tipo IN (?, ?)")->execute([(int)$f['id'], FVD_TIPO_SUELTO_PAQ, FVD_TIPO_ABIERTO]);
-        $ins = $bdd->prepare("INSERT INTO formatos_vd_items (id_formato, orden, tipo, id_paquete, id_libro, descripcion, detalle, solicitud, inv_propuesto, inv_inicial, devueltas, libros)
-                              VALUES (?, ?, ?, NULL, ?, ?, ?, 0, 0, 0, ?, ?)");
+    $r = fvd_en_transaccion($bdd, $f['id'], $f['etapa'], function () use ($bdd, $f, $idNueva, $res, $librosPaq, $deshacerArmado, $motivo, $d2) {
+        $id = (int)$f['id'];
+        if ($idNueva) {
+            $st = $bdd->prepare("SELECT id_formato_vd, estado FROM devoluciones_v WHERE id = ? FOR UPDATE");
+            $st->execute([(int)$idNueva]);
+            $d = $st->fetch(PDO::FETCH_ASSOC);
+            if (!$d || $d['id_formato_vd'] !== null || (int)$d['estado'] === DVD_ESTADO_DEVOL_ANULADA) return 'La devolución cambió mientras la vinculabas. Recarga la página.';
+        }
+        if ($deshacerArmado) {
+            // Igual que el paso 1 de fvd_armar_paquetes.
+            $bdd->prepare("UPDATE formatos_vd_items SET inv_inicial = inv_inicial + en_paquetes, inv_propuesto = inv_propuesto + en_paquetes, en_paquetes = 0
+                           WHERE id_formato = ? AND tipo = 'titulo' AND en_paquetes > 0")->execute([$id]);
+            $bdd->prepare("UPDATE formatos_vd_items SET inv_inicial = inv_inicial - armados, inv_propuesto = GREATEST(0, inv_propuesto - armados), armados = 0
+                           WHERE id_formato = ? AND tipo = 'paquete' AND armados > 0")->execute([$id]);
+            $bdd->prepare("DELETE FROM formatos_vd_items WHERE id_formato = ? AND tipo = 'paquete' AND inv_inicial = 0 AND solicitud = 0")->execute([$id]);
+        }
+        $up = $bdd->prepare("UPDATE formatos_vd_items SET devueltas = ?, devueltas_2 = ?, abiertos = ? WHERE id = ? AND id_formato = ?");
+        foreach ($res['items'] as $idItem => $n) $up->execute([$n, (int)($d2['items'][$idItem] ?? 0), (int)($res['abiertos'][$idItem] ?? 0), $idItem, $id]);
+        $bdd->prepare("DELETE FROM formatos_vd_items WHERE id_formato = ? AND tipo IN (?, ?)")->execute([$id, FVD_TIPO_SUELTO_PAQ, FVD_TIPO_ABIERTO]);
+        $ins = $bdd->prepare("INSERT INTO formatos_vd_items (id_formato, orden, tipo, id_paquete, id_libro, descripcion, detalle, solicitud, inv_propuesto, inv_inicial, devueltas, devueltas_2, libros)
+                              VALUES (?, ?, ?, NULL, ?, ?, ?, 0, 0, 0, ?, ?, ?)");
         $orden = 1000;
         foreach ($res['extra'] as $l => $n) {
             $p = $librosPaq[$l];
-            $ins->execute([(int)$f['id'], $orden++, FVD_TIPO_SUELTO_PAQ, $l, mb_substr($p['libro'], 0, 255), 'Libro suelto de: ' . implode(', ', array_unique($p['paquetes'])), $n, (string)$l]);
+            $ins->execute([$id, $orden++, FVD_TIPO_SUELTO_PAQ, $l, mb_substr($p['libro'], 0, 255), 'Libro suelto de: ' . implode(', ', array_unique($p['paquetes'])), $n, (int)($d2['extra'][$l] ?? 0), (string)$l]);
         }
         if ($res['filas_abiertas']) {
             $ids = array_unique(array_column($res['filas_abiertas'], 'id_libro'));
             $nombres = $bdd->query("SELECT id, libro FROM libros WHERE id IN (" . implode(',', array_map('intval', $ids)) . ")")->fetchAll(PDO::FETCH_KEY_PAIR);
-            $insA = $bdd->prepare("INSERT INTO formatos_vd_items (id_formato, orden, tipo, id_paquete, id_libro, descripcion, detalle, solicitud, inv_propuesto, inv_inicial, devueltas, libros)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)");
+            $insA = $bdd->prepare("INSERT INTO formatos_vd_items (id_formato, orden, tipo, id_paquete, id_libro, descripcion, detalle, solicitud, inv_propuesto, inv_inicial, devueltas, devueltas_2, libros)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)");
             $orden = 500;
             foreach ($res['filas_abiertas'] as $x) {
-                $insA->execute([(int)$f['id'], $orden++, FVD_TIPO_ABIERTO, $x['id_paquete'], $x['id_libro'], mb_substr((string)($nombres[$x['id_libro']] ?? 'Libro #' . $x['id_libro']), 0, 255),
-                                'Del ' . $x['paquete'] . ' abierto', $x['entregado'], $x['devueltas'], (string)$x['id_libro']]);
+                $insA->execute([$id, $orden++, FVD_TIPO_ABIERTO, $x['id_paquete'], $x['id_libro'], mb_substr((string)($nombres[$x['id_libro']] ?? 'Libro #' . $x['id_libro']), 0, 255),
+                                'Del ' . $x['paquete'] . ' abierto', $x['entregado'], $x['devueltas'], (int)($d2['abiertas'][$x['id_paquete'] . '_' . $x['id_libro']] ?? 0), (string)$x['id_libro']]);
             }
         }
-        $bdd->prepare("UPDATE devoluciones_v SET id_formato_vd = ? WHERE id = ?")->execute([(int)$f['id'], (int)$dev['id']]);
-        fvd_pasar_etapa($bdd, $f['id'], FVD_ETAPA_DEV_GENERADA, 'Devolución #' . (int)$dev['id'] . ' de Devoluciones de ventas');
+        if ($idNueva) $bdd->prepare("UPDATE devoluciones_v SET id_formato_vd = ? WHERE id = ?")->execute([$id, (int)$idNueva]);
+        $bdd->prepare("UPDATE formatos_vd SET updated_at = NOW() WHERE id = ?")->execute([$id]);
+        fvd_pasar_etapa($bdd, $id, FVD_ETAPA_DEV_GENERADA, mb_substr($motivo . ($deshacerArmado ? '; se deshizo el armado de paquetes (vuelve a armarlos con lo vendido)' : ''), 0, 250));
         return null;
     }, 'vincular devolución');
     if (!$r['ok']) return $r;
-    return ['ok' => true, 'error' => null, 'id' => (int)$f['id'], 'id_devolucion' => (int)$dev['id'], 'etapa' => fvd_avanzar_automatico($bdd, $f['id'])];
+    $etapa = fvd_avanzar_automatico($bdd, $f['id']);
+    // Con el total de venta nuevo, la diferencia del cierre de dinero ya guardado se recalcula.
+    if ($etapa >= FVD_ETAPA_CONCILIADO) {
+        $bdd->prepare("UPDATE formatos_vd SET diferencia = ROUND(COALESCE(suma_total, 0) - COALESCE(total_venta, 0), 2) WHERE id = ? AND suma_total IS NOT NULL")->execute([(int)$f['id']]);
+    }
+    return ['ok' => true, 'error' => null, 'etapa' => $etapa, 'armado_deshecho' => $deshacerArmado];
 }
 
 /**
@@ -1426,19 +1587,24 @@ function fvd_generar_devolucion(PDO $bdd, array $f, array $post) {
 function fvd_verificar_devolucion(PDO $bdd, array $f) {
     $checks = [];
     $d = $f['legalizacion'];
-    $checks[] = ['ok' => (bool)$d, 'texto' => $d ? 'Devolución #' . (int)$d['id'] . ' registrada en InkPulse y activa.' : 'El formato no tiene una devolución activa (no se ha generado o se anuló).'];
+    $varias = $d && count($d['ids'] ?? []) > 1;
+    $checks[] = ['ok' => (bool)$d, 'texto' => $d ? ($varias ? 'Devoluciones ' . $d['texto'] . ' registradas en InkPulse y activas (se suman).' : 'Devolución #' . (int)$d['id'] . ' registrada en InkPulse y activa.') : 'El formato no tiene una devolución activa (no se ha generado o se anuló).'];
     if (!$d) return ['ok' => false, 'checks' => $checks, 'devolucion' => null, 'saldo' => null];
 
-    $a = explode(',', $d['ids_pedidos']); sort($a);
+    // 2026-11-24: con 2 devoluciones de venta directa se comparan los pedidos y las unidades de todas.
+    $a = [];
+    foreach ($d['todas'] ?? [$d] as $x) $a = array_merge($a, explode(',', str_replace(' ', '', $x['ids_pedidos'])));
+    $a = array_values(array_unique($a)); sort($a);
     $b = explode(',', $f['ids_pedidos']); sort($b);
     // Desde 2026-11-10 la devolución se registra en Devoluciones de ventas con las remisiones elegidas: basta con que
     // sus pedidos sean del formato (puede no incluirlos todos).
     $dentro = !array_diff($a, $b);
     $checks[] = ['ok' => $dentro, 'texto' => $dentro ? ($a === $b ? 'Incluye exactamente los pedidos del formato.' : 'Sus pedidos (' . implode(', ', array_map('dvd_etiqueta', $a)) . ') son del formato.') : 'La devolución tiene pedidos que no son del formato.'];
 
+    $codigos = $d['codigos'] ?? [$d['codigo']];
     $st = $bdd->prepare("SELECT lv.id_libro, SUM(lv.cantidad) AS n, l.libro FROM libros_devol_v lv LEFT JOIN libros l ON l.id = lv.id_libro
-                         WHERE lv.cod_pedido = ? GROUP BY lv.id_libro");
-    $st->execute([$d['codigo']]);
+                         WHERE lv.cod_pedido IN (" . implode(',', array_fill(0, count($codigos), '?')) . ") GROUP BY lv.id_libro");
+    $st->execute($codigos);
     $enDoc = [];
     $nombres = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) { $enDoc[(int)$r['id_libro']] = (int)$r['n']; $nombres[(int)$r['id_libro']] = $r['libro']; }
@@ -1447,7 +1613,7 @@ function fvd_verificar_devolucion(PDO $bdd, array $f) {
     foreach ($esperado + $enDoc as $l => $_) {
         if (($esperado[$l] ?? 0) !== ($enDoc[$l] ?? 0)) $difs[] = ($nombres[$l] ?? 'Libro #' . $l) . ': formato ' . ($esperado[$l] ?? 0) . ', documento ' . ($enDoc[$l] ?? 0);
     }
-    $checks[] = ['ok' => !$difs, 'texto' => !$difs ? 'Las unidades por título del documento (' . array_sum($enDoc) . ') coinciden con las devueltas del formato.'
+    $checks[] = ['ok' => !$difs, 'texto' => !$difs ? 'Las unidades por título ' . ($varias ? 'de los documentos' : 'del documento') . ' (' . array_sum($enDoc) . ') coinciden con las devueltas del formato.'
                                                  : 'Las unidades no coinciden: ' . implode('; ', $difs) . '.'];
     $ok = !in_array(false, array_column($checks, 'ok'), true);
     return ['ok' => $ok, 'checks' => $checks, 'devolucion' => $d, 'saldo' => dvd_saldo_de_devolucion($bdd, (int)$d['id'])];
@@ -1473,15 +1639,17 @@ function fvd_detalle_documento(PDO $bdd, array $f) {
     }
     $d = $f['legalizacion'];
     if ($d) {
-        $st = $bdd->prepare("SELECT id_libro, SUM(cantidad) FROM libros_devol_v WHERE cod_pedido = ? GROUP BY id_libro");
-        $st->execute([$d['codigo']]);
+        $codigos = $d['codigos'] ?? [$d['codigo']];
+        $idsDev = $d['ids'] ?? [(int)$d['id']];
+        $st = $bdd->prepare("SELECT id_libro, SUM(cantidad) FROM libros_devol_v WHERE cod_pedido IN (" . implode(',', array_fill(0, count($codigos), '?')) . ") GROUP BY id_libro");
+        $st->execute($codigos);
         foreach ($st->fetchAll(PDO::FETCH_KEY_PAIR) as $l => $n) {
             $res[(int)$l] = $res[(int)$l] ?? ['id_libro' => (int)$l, 'origen' => [], 'esperado' => 0, 'en_documento' => 0, 'en_saldo' => 0];
             $res[(int)$l]['en_documento'] = (int)$n;
         }
         $st = $bdd->prepare("SELECT sl.id_libro, SUM(sl.cantidad) FROM saldos_devolucion_libros sl JOIN saldos_devolucion s ON s.id = sl.id_saldo
-                             WHERE s.id_devolucion = ? GROUP BY sl.id_libro");
-        $st->execute([(int)$d['id']]);
+                             WHERE s.id_devolucion IN (" . implode(',', array_map('intval', $idsDev)) . ") GROUP BY sl.id_libro");
+        $st->execute();
         foreach ($st->fetchAll(PDO::FETCH_KEY_PAIR) as $l => $n) {
             $res[(int)$l] = $res[(int)$l] ?? ['id_libro' => (int)$l, 'origen' => [], 'esperado' => 0, 'en_documento' => 0, 'en_saldo' => 0];
             $res[(int)$l]['en_saldo'] = (int)$n;
@@ -1543,10 +1711,24 @@ function fvd_precios_actuales(PDO $bdd, array $f) {
     $pDev = [];
     if (!empty($f['legalizacion']['id'])) {
         require_once __DIR__ . '/devoluciones_ventas_datos.php'; // dvv_paquetes_abiertos
-        foreach (dvv_paquetes_abiertos($bdd, (int)$f['legalizacion']['id']) as $idPaq => $pa) {
-            foreach ($pa['libros'] as $l => $x) if ($x['precio'] > 0) $pDev[$idPaq . '_' . $l] = (float)$x['precio'];
+        foreach ($f['legalizacion']['ids'] ?? [(int)$f['legalizacion']['id']] as $idDevol) {
+            foreach (dvv_paquetes_abiertos($bdd, (int)$idDevol) as $idPaq => $pa) {
+                foreach ($pa['libros'] as $l => $x) if ($x['precio'] > 0) $pDev[$idPaq . '_' . $l] = (float)$x['precio'];
+            }
         }
     }
+    $res = fvd_precios_base($bdd, $f, $pp, $pl, $pDev);
+    // Tramo de la 2a devolución (2026-11-24): su precio editado o, si no, el mismo de la fila.
+    foreach ($f['items'] as $it) {
+        $m = isset($it['precio_2_manual']) && (float)$it['precio_2_manual'] > 0 ? (float)$it['precio_2_manual'] : null;
+        $res[$it['clave']]['precio_2'] = $m ?? $res[$it['clave']]['precio'];
+        $res[$it['clave']]['origen_2'] = $m !== null ? 'Precio editado' : 'Mismo precio de la fila';
+    }
+    return $res;
+}
+
+/** Precio de cada fila (fvd_precios_actuales, sin el tramo de la 2a devolución). */
+function fvd_precios_base(PDO $bdd, array $f, array $pp, array $pl, array $pDev) {
     $res = [];
     foreach ($f['items'] as $it) {
         // Precio editado en el cierre de dinero (2026-11-19): se conserva aunque se vuelva a calcular (p. ej. al armar paquetes).
@@ -1586,13 +1768,24 @@ function fvd_conciliar(array $f, $precios = null) {
         $vend = fvd_vendidas_item($it);
         $precio = $precios === null ? (float)$it['precio'] : $precios[$it['clave']]['precio'];
         $origen = $precios === null ? $it['precio_origen'] : $precios[$it['clave']]['origen'];
-        $sinPrecio = ($sueltoPaq ? $dev > 0 : ($abierto ? $vend > 0 : $ent > 0)) && !$precio;
+        // 2 devoluciones (2026-11-24): dev2 = lo que volvió en la 2a (informativo). De las vendidas, n2 van a $precio2 y el
+        // resto (vend1) a $precio; n2 entre 0 y las vendidas (si una devolución nueva baja las vendidas, n2 se ajusta).
+        $dev2 = min($dev, (int)($it['devueltas_2'] ?? 0));
+        $n2 = $precios !== null && isset($precios[$it['clave']]['cant_2']) ? (int)$precios[$it['clave']]['cant_2'] : (int)($it['vendidas_2'] ?? 0);
+        $n2 = $dev2 > 0 ? min(max(0, $n2), max(0, $vend)) : 0; // sin unidades en la 2a devolución no hay precio 2
+        $vend1 = $vend - $n2;
+        $precio2 = $precios === null ? ((float)($it['precio_2'] ?? 0) ?: $precio) : ($precios[$it['clave']]['precio_2'] ?? $precio);
+        $origen2 = $precios === null ? ($it['precio_2_origen'] ?? 'Mismo precio de la fila') : ($precios[$it['clave']]['origen_2'] ?? 'Mismo precio de la fila');
+        $sinPrecio = (($sueltoPaq ? $dev > 0 : ($abierto ? $vend1 > 0 : $ent > 0)) && !$precio) || ($n2 > 0 && !$precio2);
+        $total = $sinPrecio ? null : round($vend1 * (float)$precio + $n2 * (float)$precio2, 2);
         $filas[] = $it + ['entregado' => $ent, 'dev' => $dev, 'vend' => $vend, 'fin' => $dev, 'precio_v' => $precio, 'origen_v' => $origen,
-                          'total_v' => $precio ? round($vend * $precio, 2) : null, 'sin_precio' => $sinPrecio];
+                          'dev2' => $dev2, 'n2' => $n2, 'vend1' => $vend1, 'precio2_v' => $n2 ? $precio2 : null, 'origen2_v' => $n2 ? $origen2 : null,
+                          'total_v' => $total, 'sin_precio' => $sinPrecio];
         // Los libros de un paquete abierto ya cuentan como entregados en la fila del paquete.
         if (!$abierto) { $t['solicitud'] += (int)$it['solicitud']; $t['entregado'] += $ent; }
         $t['devueltas'] += $dev; $t['inv_final'] += $dev; $t['vendidas'] += $vend;
-        if ($precio) { $t['total_venta'] += $vend * $precio; $t['valor_inventario'] += $dev * $precio; }
+        if ($total !== null) $t['total_venta'] += $total;
+        if ($precio) $t['valor_inventario'] += $dev * $precio;
         if ($sinPrecio) $t['sin_precio']++;
     }
     $t['total_venta'] = round($t['total_venta'], 2);
@@ -1610,8 +1803,8 @@ function fvd_confirmar_inventario(PDO $bdd, array $f, $motivo = null) {
         return ['ok' => false, 'error' => 'Falta el precio de venta de: ' . implode(', ', $sin) . '. Configúralo en Adopciones del colegio (precio del paquete o precio venta padre) y vuelve a intentarlo.'];
     }
     return fvd_en_transaccion($bdd, $f['id'], FVD_ETAPA_DEV_CONFIRMADA, function () use ($bdd, $f, $filas, $t, $motivo) {
-        $st = $bdd->prepare("UPDATE formatos_vd_items SET vendidas = ?, inv_final = ?, precio = ?, precio_origen = ?, total = ? WHERE id = ? AND id_formato = ?");
-        foreach ($filas as $x) $st->execute([$x['vend'], $x['fin'], (float)$x['precio_v'], $x['origen_v'], (float)$x['total_v'], (int)$x['id'], (int)$f['id']]);
+        $st = $bdd->prepare("UPDATE formatos_vd_items SET vendidas = ?, vendidas_2 = ?, inv_final = ?, precio = ?, precio_origen = ?, precio_2 = ?, precio_2_origen = ?, total = ? WHERE id = ? AND id_formato = ?");
+        foreach ($filas as $x) $st->execute([$x['vend'], $x['n2'], $x['fin'], (float)$x['precio_v'], $x['origen_v'], $x['precio2_v'], $x['origen2_v'], (float)$x['total_v'], (int)$x['id'], (int)$f['id']]);
         $bdd->prepare("UPDATE formatos_vd SET total_venta = ?, valor_inventario = ? WHERE id = ?")->execute([$t['total_venta'], $t['valor_inventario'], (int)$f['id']]);
         fvd_pasar_etapa($bdd, $f['id'], FVD_ETAPA_CONCILIADO, $motivo);
         return null;
@@ -1664,13 +1857,25 @@ function fvd_avanzar_automatico(PDO $bdd, $id) {
  * La devolución ya quedó guardada: si algo falla aquí no se deshace, y se devuelve el error para avisarlo.
  * Devuelve ['ok','error','id' (formato),'accion' => 'creado'|'vinculado'|'ya_vinculada','etapa'].
  */
-function fvd_desde_devolucion(PDO $bdd, $idDevolucion) {
+function fvd_desde_devolucion(PDO $bdd, $idDevolucion, $idFormatoElegido = 0) {
     $st = $bdd->prepare("SELECT id, codigo, ids_pedidos_venta, id_colegio, id_periodo, id_formato_vd, estado, created_at FROM devoluciones_v WHERE id = ?");
     $st->execute([(int)$idDevolucion]);
     $dev = $st->fetch(PDO::FETCH_ASSOC);
     if (!$dev || (int)$dev['estado'] === DVD_ESTADO_DEVOL_ANULADA || !$dev['ids_pedidos_venta']) return ['ok' => false, 'error' => 'La devolución no existe o está anulada.'];
     if ($dev['id_formato_vd']) return ['ok' => true, 'error' => null, 'id' => (int)$dev['id_formato_vd'], 'accion' => 'ya_vinculada', 'etapa' => null];
     $claves = array_values(array_filter(explode(',', str_replace(' ', '', $dev['ids_pedidos_venta']))));
+
+    // 2026-11-24 (la usuaria): venta elegida al registrar la devolución = consecutivo reservado el día de la venta (sin
+    // pedidos). Sus pedidos quedan en ese formato. Si los pedidos ya están en un formato, manda ese (sigue abajo).
+    if ((int)$idFormatoElegido > 0 && !array_intersect_key(array_flip($claves), fvd_pendientes_por_pedido($bdd))) {
+        require_once __DIR__ . '/solicitudes_vd_datos.php';
+        $ll = svd_llenar_reservado($bdd, (int)$idFormatoElegido, $claves);
+        if (!$ll['ok']) return $ll + ['id' => (int)$idFormatoElegido];
+        $f = fvd_obtener($bdd, (int)$idFormatoElegido);
+        $v = fvd_vincular_devolucion($bdd, $f, (int)$dev['id']);
+        if (!$v['ok']) return ['ok' => false, 'error' => 'Los pedidos quedaron en el ' . fvd_numero($f['consecutivo']) . ', pero no se pudo vincular la devolución: ' . $v['error'], 'id' => (int)$f['id']];
+        return ['ok' => true, 'error' => null, 'id' => (int)$f['id'], 'accion' => 'reservado', 'etapa' => $v['etapa']];
+    }
 
     // ¿Sus pedidos ya están en un formato activo?
     $pendientes = fvd_pendientes_por_pedido($bdd);
@@ -1693,11 +1898,14 @@ function fvd_desde_devolucion(PDO $bdd, $idDevolucion) {
             if (!$r['ok']) return $r;
             $f = fvd_obtener($bdd, $f['id']);
         }
-        if ($f['etapa'] !== FVD_ETAPA_ENTREGADO) {
-            return ['ok' => false, 'error' => 'El ' . fvd_numero($f['consecutivo']) . ' ya tiene la devolución #' . (int)($f['legalizacion']['id'] ?? 0) . ' vinculada; esta no se vinculó.'];
+        // 2026-11-24: si el formato ya tiene devolución (1a de venta directa), esta 2a se suma y descuenta sus unidades.
+        if ($f['etapa'] !== FVD_ETAPA_ENTREGADO && !$f['legalizacion']) {
+            return ['ok' => false, 'error' => 'El ' . fvd_numero($f['consecutivo']) . ' está en "' . fvd_etapa_texto($f['etapa']) . '"; esta devolución no se vinculó.'];
         }
         $r = fvd_vincular_devolucion($bdd, $f, (int)$dev['id']);
-        return $r['ok'] ? ['ok' => true, 'error' => null, 'id' => (int)$f['id'], 'accion' => 'vinculado', 'etapa' => $r['etapa']] : $r;
+        if (!$r['ok']) return $r + ['id' => (int)$f['id']];
+        return ['ok' => true, 'error' => null, 'id' => (int)$f['id'], 'accion' => !empty($r['agregada']) ? 'agregado' : 'vinculado', 'etapa' => $r['etapa'],
+                'reabierto' => $f['etapa'] >= FVD_ETAPA_CERRADO];
     }
 
     // Formato nuevo automático con la propuesta de siempre (filas por paquete/título, despachado WO o solicitado CRM).
@@ -1819,6 +2027,7 @@ function fvd_guardar_dinero(PDO $bdd, array $f, array $post, $cerrar) {
     // como precio editado (precio_manual, también manda al volver a calcular) y se recalculan los totales de venta.
     $precios = [];
     $manual = [];
+    $manual2 = [];
     foreach ($f['items'] as $it) {
         $p = (float)$it['precio'];
         $origen = $it['precio_origen'];
@@ -1832,7 +2041,31 @@ function fvd_guardar_dinero(PDO $bdd, array $f, array $post, $cerrar) {
                 $manual[(int)$it['id']] = $v > 0 ? (float)$v : null;
             }
         }
-        $precios[$it['clave']] = ['precio' => $p > 0 ? $p : null, 'origen' => $origen];
+        // 2 devoluciones (2026-11-24): cant2[id] = vendidas a precio 2 (0 a las vendidas) y precio2[id]; si el precio 2
+        // cambia queda como precio_2_manual.
+        $vendFila = fvd_vendidas_item($it);
+        $n2 = (int)($it['vendidas_2'] ?? 0);
+        if (isset($post['cant2'][$it['id']])) {
+            $txt = trim((string)$post['cant2'][$it['id']]);
+            if ($txt !== '' && !preg_match('/^\d+$/', $txt)) return ['ok' => false, 'error' => 'Vendidas a precio 2 de "' . $it['descripcion'] . '": escribe un número entero.'];
+            $n2 = (int)$txt;
+            if ($n2 > max(0, $vendFila)) return ['ok' => false, 'error' => 'De "' . $it['descripcion'] . '" se vendieron ' . max(0, $vendFila) . ' unidad(es): a precio 2 no pueden ir ' . $n2 . '.'];
+            // Solo las filas con unidades en la 2a devolución admiten precio 2 (2026-11-24, la usuaria).
+            if ($n2 > 0 && (int)($it['devueltas_2'] ?? 0) <= 0) return ['ok' => false, 'error' => '"' . $it['descripcion'] . '" no tuvo unidades en la 2a devolución: no admite precio 2.'];
+        }
+        $p2 = (float)($it['precio_2'] ?? 0) ?: $p;
+        $origen2 = $it['precio_2_origen'] ?? 'Mismo precio de la fila';
+        $manual2[(int)$it['id']] = isset($it['precio_2_manual']) && $it['precio_2_manual'] !== null ? (float)$it['precio_2_manual'] : null;
+        if (isset($post['precio2'][$it['id']])) {
+            $v = fvd_leer_pesos($post['precio2'][$it['id']]);
+            if ($v === null) return ['ok' => false, 'error' => 'Precio de la 2a devolución de "' . $it['descripcion'] . '": escribe un valor en pesos, sin decimales.'];
+            if ($v != round($p2)) {
+                $p2 = (float)$v;
+                $origen2 = 'Precio editado';
+                $manual2[(int)$it['id']] = $v > 0 ? (float)$v : null;
+            }
+        }
+        $precios[$it['clave']] = ['precio' => $p > 0 ? $p : null, 'origen' => $origen, 'precio_2' => $p2 > 0 ? $p2 : null, 'origen_2' => $origen2, 'cant_2' => $n2];
     }
     [$filas, $t] = fvd_conciliar($f, $precios);
     if ($t['sin_precio']) {
@@ -1874,11 +2107,11 @@ function fvd_guardar_dinero(PDO $bdd, array $f, array $post, $cerrar) {
         if ($cerrar && $cajas === null) return ['ok' => false, 'error' => 'Escribe el total de cajas para cerrar la operación.'];
         $d['total_cajas'] = $cajas;
     }
-    return fvd_en_transaccion($bdd, $f['id'], FVD_ETAPA_RECIBIDO, function () use ($bdd, $f, $d, $cerrar, $aux, $filas, $manual) {
+    return fvd_en_transaccion($bdd, $f['id'], FVD_ETAPA_RECIBIDO, function () use ($bdd, $f, $d, $cerrar, $aux, $filas, $manual, $manual2) {
         $bdd->prepare("UPDATE formatos_vd SET " . implode(', ', array_map(fn($c) => "$c = ?", array_keys($d))) . ", updated_at = NOW() WHERE id = ?")
             ->execute(array_merge(array_values($d), [(int)$f['id']]));
-        $up = $bdd->prepare("UPDATE formatos_vd_items SET precio = ?, precio_origen = ?, precio_manual = ?, total = ? WHERE id = ? AND id_formato = ?");
-        foreach ($filas as $x) $up->execute([(float)$x['precio_v'], $x['origen_v'], $manual[(int)$x['id']], (float)$x['total_v'], (int)$x['id'], (int)$f['id']]);
+        $up = $bdd->prepare("UPDATE formatos_vd_items SET vendidas_2 = ?, precio = ?, precio_origen = ?, precio_manual = ?, precio_2 = ?, precio_2_origen = ?, precio_2_manual = ?, total = ? WHERE id = ? AND id_formato = ?");
+        foreach ($filas as $x) $up->execute([$x['n2'], (float)$x['precio_v'], $x['origen_v'], $manual[(int)$x['id']], $x['precio2_v'], $x['origen2_v'], $manual2[(int)$x['id']] ?? null, (float)$x['total_v'], (int)$x['id'], (int)$f['id']]);
         if ($aux !== null) {
             $bdd->prepare("DELETE FROM formatos_vd_auxiliares WHERE id_formato = ?")->execute([(int)$f['id']]);
             $st = $bdd->prepare("INSERT INTO formatos_vd_auxiliares (id_formato, orden, nombre, valor) VALUES (?, ?, ?, ?)");
@@ -1933,6 +2166,15 @@ function fvd_bloqueo_anular_devolucion(PDO $bdd, $idDevolucion) {
  */
 function fvd_tras_anular_devolucion(PDO $bdd, $idDevolucion) {
     $f = fvd_formato_de_devolucion($bdd, $idDevolucion);
+    // 2026-11-24: el formato tiene otra devolución activa (venta directa admite 2): se recalcula solo con las que quedan.
+    if ($f && (int)$f['etapa'] < FVD_ETAPA_CERRADO && ($restantes = fvd_devoluciones_formato($bdd, $f['id']))) {
+        $fc = fvd_obtener($bdd, $f['id']);
+        if ($fc && $fc['activo']) {
+            $r = fvd_aplicar_devoluciones($bdd, $fc, $restantes, null, 'Se anuló la devolución #' . (int)$idDevolucion . '; el formato queda con ' . $fc['legalizacion']['texto']);
+            if (!$r['ok']) error_log('Formato venta directa ' . (int)$f['id'] . ': no se recalculó tras anular la devolución #' . (int)$idDevolucion . ': ' . $r['error']);
+        }
+        return;
+    }
     if ($f && !empty($f['automatico']) && (int)$f['etapa'] < FVD_ETAPA_CERRADO) {
         $bdd->prepare("UPDATE formatos_vd SET estado = " . FVD_ESTADO_ANULADO . ", updated_at = NOW() WHERE id = ?")->execute([(int)$f['id']]);
         registrar_historial_estado($bdd, FVD_MODULO_HISTORIAL, $f['id'], ESTADO_ANULADO, (int)$_SESSION['id'], 'Se anuló la devolución #' . (int)$idDevolucion . ' con la que se creó el formato automático');

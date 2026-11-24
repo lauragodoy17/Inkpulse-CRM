@@ -180,9 +180,13 @@ function dvv_listar_pedidos(PDO $bdd, $idPeriodo = null) {
     foreach ($bdd->query("SELECT ids_pedidos FROM devoluciones_v WHERE ids_pedidos IS NOT NULL AND cierre = 'completa' AND estado <> " . DVD_ESTADO_DEVOL_ANULADA) as $d) {
         foreach (explode(',', $d['ids_pedidos']) as $c) $cerrados[$c] = true;
     }
-    // Venta directa: con su primera devolución el pedido queda cerrado (dvv_cierre_vd).
+    // Venta directa: con DVV_MAX_DEVOL_VD devoluciones el pedido queda cerrado (dvv_cierre_vd).
+    $nVd = [];
     foreach ($bdd->query("SELECT ids_pedidos_venta FROM devoluciones_v WHERE ids_pedidos_venta IS NOT NULL AND venta_directa = 1 AND estado <> " . DVD_ESTADO_DEVOL_ANULADA) as $d) {
-        foreach (explode(',', str_replace(' ', '', $d['ids_pedidos_venta'])) as $c) $cerrados[$c] = true;
+        foreach (explode(',', str_replace(' ', '', $d['ids_pedidos_venta'])) as $c) {
+            $nVd[$c] = ($nVd[$c] ?? 0) + 1;
+            if ($nVd[$c] >= DVV_MAX_DEVOL_VD) $cerrados[$c] = true;
+        }
     }
     $devuelto = [];
     $nDevoluciones = [];
@@ -201,18 +205,30 @@ function dvv_listar_pedidos(PDO $bdd, $idPeriodo = null) {
 }
 
 /**
- * Venta directa: UNA sola devolución por pedido (2026-11-11, la usuaria). Un pedido con una devolución de venta directa
- * activa (devoluciones_v.venta_directa = 1, no anulada) queda cerrado: no suma disponible ni deja registrar otra. Si
- * esa devolución se anula, el pedido se vuelve a abrir. Devuelve ['id','fecha','usuario','tipo' => 'vd'] o null.
+ * Venta directa: devoluciones permitidas por pedido. 2026-11-11 era UNA; 2026-11-24 (la usuaria) pasan a DOS: la
+ * segunda solo con lo que quedó sin devolver tras la primera (despachado − devuelto, que ya calcula el detalle).
  */
-function dvv_cierre_vd(PDO $bdd, $clave) {
+const DVV_MAX_DEVOL_VD = 2;
+
+/** Devoluciones de venta directa activas (venta_directa = 1, no anuladas) del pedido, en orden: [['id','fecha','usuario']]. */
+function dvv_devoluciones_vd(PDO $bdd, $clave) {
     $st = $bdd->prepare("SELECT d.id, d.created_at AS fecha, CONCAT(TRIM(u.nombres), ' ', TRIM(u.apellidos)) AS usuario
                          FROM devoluciones_v d LEFT JOIN usuarios u ON u.id = d.id_usuario
                          WHERE FIND_IN_SET(?, REPLACE(d.ids_pedidos_venta, ' ', '')) AND d.venta_directa = 1 AND d.estado <> " . DVD_ESTADO_DEVOL_ANULADA . "
-                         ORDER BY d.id LIMIT 1");
+                         ORDER BY d.id");
     $st->execute([(string)$clave]);
-    $r = $st->fetch(PDO::FETCH_ASSOC);
-    return $r ? $r + ['tipo' => 'vd'] : null;
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Un pedido de venta directa con DVV_MAX_DEVOL_VD devoluciones activas queda cerrado: no suma disponible ni deja
+ * registrar otra. Si una se anula, el pedido se vuelve a abrir. Devuelve la última ['id','fecha','usuario','tipo' => 'vd',
+ * 'ids' => [ids de sus devoluciones]] o null.
+ */
+function dvv_cierre_vd(PDO $bdd, $clave) {
+    $devs = dvv_devoluciones_vd($bdd, $clave);
+    if (count($devs) < DVV_MAX_DEVOL_VD) return null;
+    return end($devs) + ['tipo' => 'vd', 'ids' => array_map(fn($d) => (int)$d['id'], $devs)];
 }
 
 /** Cierre del pedido: legalización completa (dvd_cierre_completo) o su devolución de venta directa (dvv_cierre_vd). */
@@ -295,7 +311,7 @@ function dvv_detalle_varios(PDO $bdd, array $claves, $tipoDevolucion = 'normal',
         if ($idColegio !== null && (int)$p['id_colegio'] !== $idColegio) return ['ok' => false, 'error' => 'Todos los pedidos de una devolución deben ser del mismo colegio.'];
         $idColegio = (int)$p['id_colegio'];
         $ops = dvd_ops_pedido($bdd, $clave);
-        $pedidos[$clave] = ['pedido' => $p, 'ops' => $ops, 'cierre' => dvv_cierre($bdd, $clave)];
+        $pedidos[$clave] = ['pedido' => $p, 'ops' => $ops, 'cierre' => dvv_cierre($bdd, $clave), 'devoluciones_vd' => dvv_devoluciones_vd($bdd, $clave)];
         foreach ($ops as $op) $opsAuto[(int)$op['id']] = $op;
     }
 
@@ -328,7 +344,8 @@ function dvv_detalle_varios(PDO $bdd, array $claves, $tipoDevolucion = 'normal',
                  'fecha' => $p['fecha'] ? date('d/m/Y', strtotime($p['fecha'])) : '', 'solicitante' => $p['solicitante'],
                  'cliente' => $p['cliente'] ?? '',
                  'ops' => implode(', ', array_map(fn($o) => $o['anio'] . '-' . $o['id'], $x['ops'])), 'fuente' => 'auto',
-                 'cierre' => $x['cierre'], 'documentos' => [], 'compartidos' => [], 'error' => null, 'sin_documentos' => false,
+                 'cierre' => $x['cierre'], 'devoluciones_vd' => array_map(fn($d) => ['id' => (int)$d['id'], 'fecha' => $d['fecha'] ? date('d/m/Y', strtotime($d['fecha'])) : ''], $x['devoluciones_vd']),
+                 'documentos' => [], 'compartidos' => [], 'error' => null, 'sin_documentos' => false,
                  'unidades' => 0, 'disponible' => 0];
         $docs = [];
         foreach ($x['ops'] as $op) {
@@ -977,10 +994,10 @@ function dvv_guardar_devolucion(PDO $bdd, array $claves, array $cantidades, $obs
 
     $detalle = dvv_detalle_varios($bdd, $claves, $tipoDevolucion, false, $docsSel);
     if (!$detalle['ok']) return ['ok' => false, 'error' => $detalle['error']];
-    // Venta directa: una sola devolución por pedido (dvv_cierre_vd).
+    // Venta directa: máximo DVV_MAX_DEVOL_VD devoluciones por pedido (dvv_cierre_vd).
     foreach ($detalle['pedidos'] as $p) {
         if (($p['cierre']['tipo'] ?? '') === 'vd') {
-            return ['ok' => false, 'error' => 'El ' . $p['etiqueta'] . ' ya tiene su devolución de venta directa (#' . (int)$p['cierre']['id'] . '): en venta directa se registra una sola devolución por pedido. Si hay que corregirla, anula esa devolución y regístrala de nuevo.'];
+            return ['ok' => false, 'error' => 'El ' . $p['etiqueta'] . ' ya tiene sus ' . DVV_MAX_DEVOL_VD . ' devoluciones de venta directa (#' . implode(', #', $p['cierre']['ids']) . '): en venta directa se registran máximo ' . DVV_MAX_DEVOL_VD . ' devoluciones por pedido. Si hay que corregir una, anúlala y regístrala de nuevo.'];
         }
     }
     $desgloseVd = [];
@@ -1036,7 +1053,7 @@ function dvv_guardar_devolucion(PDO $bdd, array $claves, array $cantidades, $obs
         foreach ($incluidos as $clave) {
             if ($c = dvv_cierre($bdd, $clave)) {
                 $bdd->rollBack();
-                return ['ok' => false, 'error' => 'El ' . dvd_etiqueta($clave) . ' ya está completo: se cerró con ' . (($c['tipo'] ?? '') === 'vd' ? 'la devolución de venta directa #' : 'la legalización #') . (int)$c['id'] . '.'];
+                return ['ok' => false, 'error' => 'El ' . dvd_etiqueta($clave) . ' ya está completo: se cerró con ' . (($c['tipo'] ?? '') === 'vd' ? 'sus ' . DVV_MAX_DEVOL_VD . ' devoluciones de venta directa (#' . implode(', #', $c['ids']) . ').' : 'la legalización #' . (int)$c['id'] . '.')];
             }
             $devuelto[$clave] = dvd_devuelto_agrupado($bdd, $clave, $fuentePorPedido[$clave] === 'crm');
         }

@@ -43,10 +43,17 @@
 		exit;
 	}
 
-	// Con Tipo de adopción "Paquetes", el precio redondeado puede bajar como máximo
+	// Con Tipo de adopción "Paquetes" o "Ambos" el precio redondeado es obligatorio: no se puede dejar vacío (2026-11-24).
+	if ($precio_redondeado === null && tipo_adop_precio_obligatorio(tipo_adop_guardado($bdd, $paq['id_colegio'], $paq['id_periodo']))) {
+		http_response_code(400);
+		echo json_encode(["ok" => false, "error" => "Con Tipo de adopción \"Paquetes\" o \"Ambos\" el precio redondeado del paquete es obligatorio."]);
+		exit;
+	}
+
+	// Con Tipo de adopción "Paquetes" o "Ambos", el precio redondeado puede bajar como máximo
 	// $1.000 respecto al precio original (ver precio_minimo_paquete()). Esta es la
 	// validación que manda; la del frontend (tab_adopciones.php) es solo de ayuda.
-	if ($precio_redondeado !== null && es_tipo_adop_paquetes(tipo_adop_guardado($bdd, $paq['id_colegio'], $paq['id_periodo']))) {
+	if ($precio_redondeado !== null && tipo_adop_con_precio_minimo(tipo_adop_guardado($bdd, $paq['id_colegio'], $paq['id_periodo']))) {
 		$precio_minimo = precio_minimo_paquete($precio_neto_sumado);
 		if ($precio_redondeado < $precio_minimo) {
 			http_response_code(400);

@@ -135,7 +135,11 @@ foreach (fvd_filas_por_curso($bdd, $f) as $x) {
     }
     $it = $x['item'];
     $texto("A$fila", $it['descripcion']);
-    $texto("B$fila", (string)$it['detalle']);
+    // 2 precios (2026-11-24): en el detalle, cuántas vendidas fueron a cada precio.
+    $n2_x = $conciliado ? min(max(0, (int)($it['vendidas_2'] ?? 0)), max(0, (int)$it['vendidas'])) : 0;
+    $p2_x = (float)($it['precio_2'] ?? 0) ?: (float)$it['precio'];
+    $texto("B$fila", trim((string)$it['detalle'] . ($n2_x ? ' · Vendidas: ' . ((int)$it['vendidas'] - $n2_x) . ' × $' . number_format((float)$it['precio'], 0, ',', '.')
+                                                          . ' + ' . $n2_x . ' × $' . number_format($p2_x, 0, ',', '.') : ''), ' ·'));
     $hoja->setCellValue("C$fila", (int)$it['solicitud']);
     if ($entregado) $hoja->setCellValue("D$fila", (int)$it['inv_inicial']);
     if ($devuelto) $hoja->setCellValue("E$fila", (int)$it['devueltas']);
@@ -171,7 +175,7 @@ $fila += 2;
 $operacion = [];
 if (!$sin_bodega) $operacion[] = ['Aux. bodega que entrega mercancía:', (string)$f['aux_entrega'], false];
 $operacion[] = ['Total de cajas:', $f['total_cajas'] !== null ? (string)(int)$f['total_cajas'] : '', false];
-$operacion[] = ['Devolución InkPulse:', $f['legalizacion'] ? '#' . (int)$f['legalizacion']['id'] : '', false];
+$operacion[] = ['Devolución InkPulse:', $f['legalizacion'] ? $f['legalizacion']['texto'] : '', false];
 $operacion[] = ['Auxiliares:', fvd_auxiliares_texto($f), false];
 $operacion[] = ['Valor total inventario devuelto', (float)$f['valor_inventario'], true];
 if (!$sin_bodega) {

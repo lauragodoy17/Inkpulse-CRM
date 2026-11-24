@@ -749,7 +749,7 @@
 			$req_paq_pend->execute([(int)$_POST["id_colegio"], (int)$_POST["periodo"], (int)$m_pend[1], (int)$m_pend[2]]);
 			$paq_pend = $req_paq_pend->fetch(PDO::FETCH_ASSOC);
 			if (!$paq_pend) continue;
-			if (es_tipo_adop_paquetes($tipo_guardado) && (float)$valor_pend < precio_minimo_paquete($paq_pend['precio_neto_sumado'])) continue;
+			if (tipo_adop_con_precio_minimo($tipo_guardado) && (float)$valor_pend < precio_minimo_paquete($paq_pend['precio_neto_sumado'])) continue;
 			$upd_paq_pend->execute([(float)$valor_pend, (float)$valor_pend, (int)$paq_pend['id']]);
 		}
 	}
@@ -824,6 +824,11 @@
 		$faltas = [];
 		if ($sin_pp) $faltas[] = 'falta el precio venta padre en: '.implode(', ', $sin_pp);
 		if ($sin_sc) $faltas[] = 'falta el sobrecosto por libro en: '.implode(', ', $sin_sc);
+		// Con Tipo de adopción "Paquetes" o "Ambos" el precio redondeado de cada paquete es obligatorio (2026-11-24).
+		if (puede_usar_tipo_adopcion() && tipo_adop_precio_obligatorio(tipo_adop_guardado($bdd, $_POST["id_colegio"], $_POST["periodo"]))) {
+			$sin_red = paquetes_sin_precio_redondeado($bdd, $_POST["id_colegio"], $_POST["periodo"]);
+			if ($sin_red) $faltas[] = 'falta el precio redondeado en: '.implode(', ', $sin_red);
+		}
 		if ($faltas) {
 			header('Location: '.$url_adop.'&ink_status=error&ink_msg='.urlencode('Se guardó, pero son obligatorios: '.implode('; ', $faltas).'.'));
 			exit;

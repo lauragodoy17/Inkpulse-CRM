@@ -17,5 +17,10 @@ session_write_close(); // la consulta a WO puede tardar: no bloquear las demás 
 $docs_sel = !empty($_GET['sel']) ? array_map('strval', (array)($_GET['docs'] ?? [])) : null;
 $detalle = dvv_detalle_varios($bdd, (array)($_GET['claves'] ?? []), dvv_tipo_devolucion((string)($_GET['tipo'] ?? '')), false, $docs_sel);
 foreach ($detalle['titulos'] ?? [] as $i => $t) unset($detalle['titulos'][$i]['partes']);
+// Venta directa (2026-11-24): a qué venta (consecutivo reservado o el formato donde ya están los pedidos) va la devolución.
+if (!empty($detalle['ok']) && !empty($detalle['es_vd'])) {
+    require_once("../includes/solicitudes_vd_datos.php");
+    $detalle['ventas'] = svd_ventas_para_devolucion($bdd, $detalle['id_colegio'], $detalle['id_periodo'], $detalle['incluidos']);
+}
 header('Content-Type: application/json; charset=utf-8');
 echo json_encode($detalle, JSON_UNESCAPED_UNICODE);

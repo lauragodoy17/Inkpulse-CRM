@@ -91,6 +91,28 @@ function es_tipo_adop_paquetes($tipo_adop) {
 }
 
 /**
+ * true si el precio redondeado del paquete tiene piso (ver precio_minimo_paquete()): "Paquetes" (2)
+ * y, desde 2026-11-18 (pedido de la usuaria), también "Ambos" (3).
+ */
+function tipo_adop_con_precio_minimo($tipo_adop) {
+	return in_array((int)$tipo_adop, [2, 3], true);
+}
+
+/**
+ * true si el precio redondeado de cada paquete es OBLIGATORIO: "Paquetes" (2) y "Ambos" (3) (2026-11-24, la usuaria).
+ */
+function tipo_adop_precio_obligatorio($tipo_adop) {
+	return in_array((int)$tipo_adop, [2, 3], true);
+}
+
+/** Nombres de los paquetes del colegio+periodo sin precio redondeado. */
+function paquetes_sin_precio_redondeado(PDO $bdd, $id_colegio, $id_periodo) {
+	$st = $bdd->prepare("SELECT paquete FROM paquetes_colegio WHERE id_colegio = ? AND id_periodo = ? AND precio_redondeado IS NULL ORDER BY id_grado, numero");
+	$st->execute([(int)$id_colegio, (int)$id_periodo]);
+	return $st->fetchAll(PDO::FETCH_COLUMN);
+}
+
+/**
  * true si el Tipo de adopción genera fichas técnicas: "Paquetes" (2) y "Ambos" (3).
  * Con "Ambos" la ficha incluye solo los libros que quedaron en el paquete.
  */
@@ -441,12 +463,15 @@ function _armar_lista_paquetes(PDO $bdd, $id_colegio, $id_periodo, array $grupos
 			'precio_neto_sumado' => $suma,
 			'precio_redondeado'  => $precio_redondeado !== null ? (float)$precio_redondeado : null,
 			'precio_final'       => $precio_final,
-			// Piso del precio redondeado (solo aplica con Tipo de adopción "Paquetes",
+			// Piso del precio redondeado (aplica con Tipo de adopción "Paquetes" y "Ambos",
 			// ver precio_minimo_paquete()); se calcula sobre la sumatoria YA GUARDADA,
 			// que es contra la que valida ajax/guardar_precio_paquete.php.
 			// Sin guardar todavía: sobre la sumatoria de la previsualización (la misma que quedará
 			// guardada al dar "Guardar cambios").
-			'precio_minimo'      => precio_minimo_paquete($existente ? $existente['precio_neto_sumado'] : $suma),
+			// 2026-11-18: con un paquete ya guardado se toma la MAYOR entre la sumatoria guardada y la
+			// que se está mostrando, para que el "Mínimo" nunca quede por debajo de lo que se ve en
+			// "Precio neto (sumatoria)" cuando se agregan libros sin guardar todavía.
+			'precio_minimo'      => precio_minimo_paquete($existente ? max((float)$existente['precio_neto_sumado'], $suma) : $suma),
 		];
 	}
 	return $out;
@@ -537,8 +562,21 @@ function recalcular_paquetes_colegio(PDO $bdd, $id_colegio, $id_periodo) {
 			codigo = VALUES(codigo),
 			cantidad_titulos = VALUES(cantidad_titulos),
 			precio_neto_sumado = VALUES(precio_neto_sumado),
-			precio_final = IF(precio_redondeado IS NOT NULL, precio_redondeado, VALUES(precio_neto_sumado)),
+			precio_redondeado = VALUES(precio_redondeado),
+			precio_final = VALUES(precio_final),
 			updated_at = NOW()");
+
+	// 2026-11-18: el precio redondeado se conserva entre recálculos, pero si al cambiar los libros la
+	// sumatoria sube y ese precio queda por debajo del mínimo (máximo $1.000 menos, ver
+	// precio_minimo_paquete()), se descarta y el paquete vuelve a la sumatoria hasta que se defina otro.
+	// Caso real: paquete con sumatoria $87.750 que conservaba el precio $58.000 de cuando tenía menos libros.
+	foreach ($paquetes as $k => $p) {
+		if ($p['precio_redondeado'] !== null && tipo_adop_con_precio_minimo($tipo_adop)
+		    && $p['precio_redondeado'] < precio_minimo_paquete($p['precio_neto_sumado'])) {
+			$paquetes[$k]['precio_redondeado'] = null;
+			$paquetes[$k]['precio_final'] = $p['precio_neto_sumado'];
+		}
+	}
 
 	$req_id_paq = $bdd->prepare("SELECT id FROM paquetes_colegio WHERE id_colegio=? AND id_periodo=? AND id_grado=? AND numero=?");
 	$del_lib = $bdd->prepare("DELETE FROM paquetes_colegio_libros WHERE id_paquete=?");

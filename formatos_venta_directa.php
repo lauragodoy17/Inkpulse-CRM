@@ -11,6 +11,9 @@ require_once("includes/formatos_vd_datos.php");
 dm_validar_acceso();
 fvd_asegurar_tablas($bdd);
 
+// 2026-11-24: al abrir la lista también se asignan los formatos de las ventas que ya llegaron (includes/solicitudes_vd_datos.php).
+require_once("includes/solicitudes_vd_datos.php");
+foreach (array_slice(svd_periodos($bdd), 0, 2) as $per_svd) svd_asignar_pendientes($bdd, (int)$per_svd['id']);
 $formatos = fvd_listar($bdd);
 $pesos = fn($v) => '$ ' . number_format((float)$v, 0, ',', '.');
 ?>
@@ -67,7 +70,7 @@ $pesos = fn($v) => '$ ' . number_format((float)$v, 0, ',', '.');
         </div>
         <div class="table-responsive px-2 pb-2">
           <table class="table table-sm table-hover" id="fv-table">
-            <thead><tr><th>No.</th><th>Fecha venta</th><th>Colegio</th><th>Período</th><th>Pedidos</th><th>Responsable</th><th>Vendidas</th><th>Total venta</th><th>Diferencia caja</th><th>Etapa</th><th>Registró</th><th></th></tr></thead>
+            <thead><tr><th>No.</th><th>Fecha venta</th><th>Colegio</th><th>Período</th><th>Pedidos</th><th>Responsable</th><th>Vendidas</th><th>Total venta</th><th>Diferencia caja</th><th>Estado</th><th>Registró</th><th></th></tr></thead>
             <tbody>
               <?php foreach ($formatos as $f):
                 $anulado = (int)$f['estado'] === FVD_ESTADO_ANULADO; ?>
@@ -76,18 +79,20 @@ $pesos = fn($v) => '$ ' . number_format((float)$v, 0, ',', '.');
                 <td data-order="<?= htmlspecialchars($f['fecha_venta']) ?>"><?= date('d/m/Y', strtotime($f['fecha_venta'])) ?></td>
                 <td><?= htmlspecialchars($f['colegio']) ?></td>
                 <td><?= htmlspecialchars($f['periodo'] ?? '') ?></td>
-                <td style="white-space:nowrap"><?= htmlspecialchars(implode(', ', array_map(fn($c) => '#' . (int)substr($c, 1), explode(',', $f['ids_pedidos'])))) ?></td>
+                <?php $reservado_f = trim((string)$f['ids_pedidos']) === ''; /* consecutivo reservado el día de la venta (2026-11-24) */ ?>
+                <td style="white-space:nowrap"><?= $reservado_f ? '<span class="lm-badge" style="background:#e0e7ff;color:#3730a3;" title="Los pedidos entran al registrar la devolución eligiendo esta venta">Reservado · sin pedidos</span>' : htmlspecialchars(implode(', ', array_map(fn($c) => '#' . (int)substr($c, 1), explode(',', $f['ids_pedidos'])))) ?></td>
                 <td><?= htmlspecialchars($f['responsable']) ?></td>
                 <td style="text-align:center"><?= (int)$f['vendidas'] ?></td>
                 <td style="white-space:nowrap"><?= $pesos($f['total_venta']) ?></td>
                 <td style="white-space:nowrap;color:<?= round((float)$f['diferencia']) == 0 ? '#15803d' : '#dc2626' ?>"><?= $pesos($f['diferencia']) ?></td>
                 <td><?php if ($anulado): ?><span class="lm-badge lm-badge-red">Anulado</span>
                   <?php elseif ((int)$f['etapa'] >= FVD_ETAPA_CERRADO): ?><span class="lm-badge lm-badge-green">Operación cerrada</span>
-                  <?php else: ?><span class="lm-badge lm-badge-yellow"><?= htmlspecialchars(fvd_etapa_texto($f['etapa'])) ?></span><?php endif; ?>
-                  <?php if ($f['id_devolucion']): ?><div><a href="devolucion_colegio.php?id_pedido=<?= (int)$f['id_devolucion'] ?>" style="font-size:11px;">Devolución #<?= (int)$f['id_devolucion'] ?></a></div><?php endif; ?></td>
+                  <?php else: ?><span class="lm-badge lm-badge-yellow">En curso</span><?php endif; ?>
+                  <?php foreach (array_filter(explode(',', (string)($f['ids_devolucion'] ?? ''))) as $id_dev_f): ?><div><a href="devolucion_colegio.php?id_pedido=<?= (int)$id_dev_f ?>" style="font-size:11px;">Devolución #<?= (int)$id_dev_f ?></a></div><?php endforeach; ?></td>
                 <td><?= htmlspecialchars($f['usuario'] ?? '') ?></td>
-                <td style="white-space:nowrap"><a href="formato_venta_directa.php?id=<?= (int)$f['id'] ?>" class="lm-btn-ver"><i class="bi bi-list-check"></i> <?= !$anulado && (int)$f['etapa'] < FVD_ETAPA_CERRADO ? 'Continuar' : 'Etapas' ?></a>
-                  <a href="ver_formato_venta_directa.php?id=<?= (int)$f['id'] ?>" class="lm-btn-ver"><i class="bi bi-printer"></i></a></td>
+                <?php /* 2026-11-24 (la usuaria): se entra al formato (hoja en vivo: solicitado, remisionado, devuelto, vendido), no a las etapas. */ ?>
+                <td style="white-space:nowrap"><a href="ver_formato_venta_directa.php?id=<?= (int)$f['id'] ?>" class="lm-btn-ver"><i class="bi bi-file-earmark-text"></i> Ver formato</a>
+                  <?php if (!$anulado && !$reservado_f && (int)$f['etapa'] < FVD_ETAPA_CERRADO): ?><a href="formato_venta_directa.php?id=<?= (int)$f['id'] ?>" class="lm-btn-ver" title="Precios, auxiliares y cierre de dinero"><i class="bi bi-pencil-square"></i> Diligenciar</a><?php endif; ?></td>
               </tr>
               <?php endforeach; ?>
             </tbody>
