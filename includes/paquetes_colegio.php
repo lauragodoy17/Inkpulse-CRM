@@ -283,6 +283,7 @@ function _agrupar_filas_presupuesto_por_grado(array $filas) {
 			'id_libro'            => (int)$f['id_libro'],
 			'libro'               => $f['libro'],
 			'isbn'                => (string)$f['isbn'],
+			'precio'              => (float)$f['precio'],
 			'precio_neto'         => $precio_neto,
 			'precio_venta_padre'  => (float)$f['precio_venta_final'],
 			'en_paquete'          => (int)$f['en_paquete'] === 1,
@@ -461,6 +462,9 @@ function _armar_lista_paquetes(PDO $bdd, $id_colegio, $id_periodo, array $grupos
 			'titulos'            => $g['titulos'],
 			'cantidad_titulos'   => count($g['titulos']),
 			'precio_neto_sumado' => $suma,
+			// Sumatoria guardada del paquete (null si aún no existe): si difiere de la mostrada hay cambios sin guardar
+			// (descuentos o libros) y el precio se deja pendiente para "Guardar cambios" (2026-11-24).
+			'suma_guardada'      => $existente ? round((float)$existente['precio_neto_sumado'], 2) : null,
 			'precio_redondeado'  => $precio_redondeado !== null ? (float)$precio_redondeado : null,
 			'precio_final'       => $precio_final,
 			// Piso del precio redondeado (aplica con Tipo de adopción "Paquetes" y "Ambos",
@@ -471,7 +475,10 @@ function _armar_lista_paquetes(PDO $bdd, $id_colegio, $id_periodo, array $grupos
 			// 2026-11-18: con un paquete ya guardado se toma la MAYOR entre la sumatoria guardada y la
 			// que se está mostrando, para que el "Mínimo" nunca quede por debajo de lo que se ve en
 			// "Precio neto (sumatoria)" cuando se agregan libros sin guardar todavía.
-			'precio_minimo'      => precio_minimo_paquete($existente ? max((float)$existente['precio_neto_sumado'], $suma) : $suma),
+			// 2026-11-24: siempre sobre la sumatoria mostrada. Si es igual a la guardada da lo mismo que antes; si difiere
+			// (cambios sin guardar) el precio queda pendiente y php/guardar_definicion.php lo valida contra la sumatoria
+			// recalculada al guardar, que es esta misma.
+			'precio_minimo'      => precio_minimo_paquete($suma),
 		];
 	}
 	return $out;
@@ -484,7 +491,9 @@ function _armar_lista_paquetes(PDO $bdd, $id_colegio, $id_periodo, array $grupos
  * escribe nada en BD. Devuelve una lista indexada (para JSON), no asociativa por
  * grado.
  */
-function construir_preview_paquetes(PDO $bdd, $id_colegio, $id_periodo, array $ids_definidos, array $ids_en_paquete, $tipo_adop, array $ids_en_paquete2 = []) {
+function construir_preview_paquetes(PDO $bdd, $id_colegio, $id_periodo, array $ids_definidos, array $ids_en_paquete, $tipo_adop, array $ids_en_paquete2 = [], array $descuentos = []) {
+	// $descuentos (2026-11-24): [id_presupuesto => descuento en fracción] escrito en pantalla y aún sin guardar; el precio
+	// neto de esos títulos (y la sumatoria del paquete) se calcula con él, para ver el neto en tiempo real.
 	$id_colegio = (int)$id_colegio;
 	$id_periodo = (int)$id_periodo;
 	$tipo_adop  = (int)$tipo_adop;
@@ -499,6 +508,9 @@ function construir_preview_paquetes(PDO $bdd, $id_colegio, $id_periodo, array $i
 		foreach ($grupos_todos[$id_grado]['titulos'] as $i => $t) {
 			$grupos_todos[$id_grado]['titulos'][$i]['en_paquete'] = isset($set_en_paquete[$t['id_presupuesto']]);
 			$grupos_todos[$id_grado]['titulos'][$i]['en_paquete2'] = isset($set_en_paquete2[$t['id_presupuesto']]);
+			if (isset($descuentos[$t['id_presupuesto']])) {
+				$grupos_todos[$id_grado]['titulos'][$i]['precio_neto'] = round($t['precio'] - $t['precio'] * (float)$descuentos[$t['id_presupuesto']], 2);
+			}
 		}
 	}
 

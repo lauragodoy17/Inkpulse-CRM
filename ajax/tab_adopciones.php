@@ -2606,6 +2606,48 @@ JS;
                           $('#resultado-preview-paquete').empty();
                         });
 
+                        // ¿La sumatoria mostrada difiere de la guardada? (cambios sin guardar en descuentos o libros)
+                        function paqSumaCambio(p) {
+                          return !!p.id_paquete && p.suma_guardada !== null && p.suma_guardada !== undefined
+                            && Math.abs(Number(p.precio_neto_sumado) - Number(p.suma_guardada)) > 0.005;
+                        }
+
+                        // Lo que hay en pantalla para armar los paquetes, sin guardar: títulos marcados como Adopción, selección de
+                        // paquete 1 y 2, y el descuento escrito en cada título (2026-11-24: el neto se ve en tiempo real).
+                        function datosPreviewPaquetes() {
+                          var d = { id_colegio: <?= (int)$_GET['colegio'] ?>, periodo: <?= (int)$gp_periodo['id'] ?>, tipo_adop: $('#tipo_adop').val(),
+                                    definidos: [], en_paquete: [], en_paquete2: [], descuentos: {} };
+                          $('.definir:checked').each(function(){
+                            var idp = $(this).data('id-presupuesto');
+                            if (!idp) return;
+                            d.definidos.push(idp);
+                            var desc = String($(this).closest('tr').find('.desc-dec').val() || '').trim().replace(',', '.');
+                            if (desc !== '' && !isNaN(desc)) d.descuentos[idp] = desc;
+                          });
+                          $('#panel-seleccion-paquete .amb-chk[data-col="paq"]:checked').each(function(){ d.en_paquete.push($(this).val()); });
+                          $('#panel-seleccion-paquete .amb-chk[data-col="paq2"]:checked').each(function(){ d.en_paquete2.push($(this).val()); });
+                          return d;
+                        }
+
+                        // Refresco automático de la previsualización al cambiar descuentos, títulos adoptados o la selección de
+                        // paquetes (sin "Guardar cambios"). Solo con "Paquetes" o "Ambos" y la adopción abierta.
+                        var timerPrevPaq = null, reqPrevPaq = null;
+                        function refrescarPreviewPaquetes() {
+                          var tipoSel = $('#tipo_adop').val();
+                          if (adopCerrada || (tipoSel != '2' && tipoSel != '3')) return;
+                          clearTimeout(timerPrevPaq);
+                          timerPrevPaq = setTimeout(function () {
+                            // No se repinta mientras se escribe un precio de paquete (se perdería lo escrito): se reintenta.
+                            if ($(document.activeElement).is('#resultado-preview-paquete input')) { refrescarPreviewPaquetes(); return; }
+                            if (reqPrevPaq) reqPrevPaq.abort();
+                            reqPrevPaq = $.ajax({ url: 'ajax/previsualizar_paquetes.php', type: 'POST', dataType: 'json', data: datosPreviewPaquetes() })
+                              .done(function (resp) { if (resp && resp.ok) renderPreviewPaquetes(resp.paquetes); })
+                              .always(function () { reqPrevPaq = null; });
+                          }, 500);
+                        }
+                        $(document).on('input change', '.desc-dec', refrescarPreviewPaquetes);
+                        $(document).on('change', '.definir, #panel-seleccion-paquete .amb-chk', refrescarPreviewPaquetes);
+
                         function escHtmlPaquete(s) {
                           return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
                             return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
@@ -2638,9 +2680,13 @@ JS;
                               titulos = (p.titulos || []).map(function(t){ return escHtmlPaquete(t.libro); }).join(', ');
                             }
                             var redondeado;
+                            // Paquete guardado cuya sumatoria cambió con lo que hay en pantalla sin guardar (descuentos, libros):
+                            // su precio se deja pendiente y se guarda con "Guardar cambios", validado contra la sumatoria nueva (2026-11-24).
+                            var sumaCambio = paqSumaCambio(p);
+                            var idFinal = (p.id_paquete && !sumaCambio) ? p.id_paquete : ('g' + p.id_grado + '-' + p.numero);
                             if (p.id_paquete && adopCerrada) {
                               redondeado = (p.precio_redondeado !== null && p.precio_redondeado !== undefined) ? formatCopPaquete(p.precio_redondeado) : '<span class="text-muted">Sin definir</span>';
-                            } else if (p.id_paquete) {
+                            } else if (p.id_paquete && !sumaCambio) {
                               // Paquete ya guardado: se puede definir/editar el precio redondeado al vuelo.
                               var valorInput = (p.precio_redondeado !== null && p.precio_redondeado !== undefined) ? Number(p.precio_redondeado).toFixed(2) : '';
                               var conPiso = precioConPiso && p.precio_minimo !== null && p.precio_minimo !== undefined;
@@ -2656,14 +2702,21 @@ JS;
                               var clave = p.id_grado + '-' + p.numero;
                               var pend = preciosPendientes[clave] !== undefined ? preciosPendientes[clave] : '';
                               var conPisoPend = ($('#tipo_adop').val() == '2' || $('#tipo_adop').val() == '3') && p.precio_minimo !== null && p.precio_minimo !== undefined;
-                              if (pend !== '') p.precio_final = Number(pend);
+                              // Guardado con la sumatoria cambiada: arranca con su precio guardado, salvo que quede por debajo del mínimo nuevo.
+                              var bajoMinimo = false;
+                              if (pend === '' && sumaCambio && p.precio_redondeado !== null && p.precio_redondeado !== undefined) {
+                                bajoMinimo = conPisoPend && Number(p.precio_redondeado) < Number(p.precio_minimo);
+                                if (!bajoMinimo) pend = Number(p.precio_redondeado).toFixed(2);
+                              }
+                              if (pend !== '') p.precio_final = Number(pend); else if (sumaCambio) p.precio_final = p.precio_neto_sumado;
                               redondeado = '<span class="precio-padre-wrap"><span class="pp-signo">$</span>' +
                                 '<input type="text" class="precio-padre-inp precio-paquete-pend" data-clave="' + clave + '" ' +
                                 'data-suma="' + p.precio_neto_sumado + '" data-paquete="' + escHtmlPaquete(p.paquete) + '" ' +
                                 (conPisoPend ? 'data-precio-minimo="' + p.precio_minimo + '" ' : '') +
                                 'value="' + escHtmlPaquete(pend) + '" placeholder="Sin definir"></span>' +
                                 (conPisoPend ? '<div class="text-muted" style="font-size:.74rem;">Mínimo ' + formatCopPaquete(p.precio_minimo) + '</div>' : '') +
-                                '<div class="text-muted" style="font-size:.72rem;">Se guarda con "Guardar cambios"</div>';
+                                (bajoMinimo ? '<div style="font-size:.72rem;color:#dc2626;">El precio guardado (' + formatCopPaquete(p.precio_redondeado) + ') queda por debajo del mínimo: escribe uno nuevo</div>' : '') +
+                                '<div class="text-muted" style="font-size:.72rem;">' + (sumaCambio ? 'La sumatoria cambió (antes ' + formatCopPaquete(p.suma_guardada) + '): se guarda con "Guardar cambios"' : 'Se guarda con "Guardar cambios"') + '</div>';
                             } else {
                               redondeado = '<span class="text-muted">Sin definir</span>';
                             }
@@ -2678,7 +2731,7 @@ JS;
                               '<td>' + titulos + ' <span class="text-muted">(' + p.cantidad_titulos + ')</span></td>' +
                               '<td>' + formatCopPaquete(p.precio_neto_sumado) + '</td>' +
                               '<td>' + redondeado + '</td>' +
-                              '<td class="venta" id="precio-final-paq' + (p.id_paquete || ('g' + p.id_grado + '-' + p.numero)) + '">' + formatCopPaquete(p.precio_final) + '</td>' +
+                              '<td class="venta" id="precio-final-paq' + idFinal + '">' + formatCopPaquete(p.precio_final) + '</td>' +
                               '</tr>';
                           });
                           html += '</tbody></table></div><p class="text-muted" style="font-size:.78rem;"><i class="bi bi-info-circle"></i> Vista previa con la selección actual. Usa "Guardar cambios" para que quede guardada.</p>';
@@ -2811,34 +2864,13 @@ JS;
                         });
 
                         $('#btn-previsualizar-paquete').on('click', function(){
-                          var definidos = [];
-                          $('.definir:checked').each(function(){
-                            var idp = $(this).data('id-presupuesto');
-                            if (idp) definidos.push(idp);
-                          });
-                          var enPaquete = [];
-                          $('#panel-seleccion-paquete .amb-chk[data-col="paq"]:checked').each(function(){
-                            enPaquete.push($(this).val());
-                          });
-                          var enPaquete2 = [];
-                          $('#panel-seleccion-paquete .amb-chk[data-col="paq2"]:checked').each(function(){
-                            enPaquete2.push($(this).val());
-                          });
-
                           var btn = $(this);
                           btn.prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> Cargando...');
 
                           $.ajax({
                             url: 'ajax/previsualizar_paquetes.php',
                             type: 'POST',
-                            data: {
-                              id_colegio: <?= (int)$_GET['colegio'] ?>,
-                              periodo: <?= (int)$gp_periodo['id'] ?>,
-                              tipo_adop: $('#tipo_adop').val(),
-                              definidos: definidos,
-                              en_paquete: enPaquete,
-                              en_paquete2: enPaquete2
-                            },
+                            data: datosPreviewPaquetes(),
                             dataType: 'json',
                             success: function(resp){
                               btn.prop('disabled', false).html('<i class="bi bi-eye"></i> Previsualizar paquetes');
@@ -2862,22 +2894,22 @@ JS;
                           if (precioPaqValidado || adopCerrada || (tipoSel != '2' && tipoSel != '3')) return;
                           e.preventDefault();
                           var form = $(this);
-                          var definidos = [], enPaquete = [], enPaquete2 = [];
-                          $('.definir:checked').each(function(){ var idp = $(this).data('id-presupuesto'); if (idp) definidos.push(idp); });
-                          $('#panel-seleccion-paquete .amb-chk[data-col="paq"]:checked').each(function(){ enPaquete.push($(this).val()); });
-                          $('#panel-seleccion-paquete .amb-chk[data-col="paq2"]:checked').each(function(){ enPaquete2.push($(this).val()); });
                           var botones = form.find('[type="submit"]').add('button[form="form_definicion"]').prop('disabled', true);
                           $.ajax({
                             url: 'ajax/previsualizar_paquetes.php', type: 'POST', dataType: 'json',
-                            data: { id_colegio: <?= (int)$_GET['colegio'] ?>, periodo: <?= (int)$gp_periodo['id'] ?>, tipo_adop: tipoSel,
-                                    definidos: definidos, en_paquete: enPaquete, en_paquete2: enPaquete2 }
+                            data: datosPreviewPaquetes()
                           }).done(function (resp) {
                             botones.prop('disabled', false);
                             if (!resp || !resp.ok) { avisoPaquete('No se pudieron revisar los precios de los paquetes. Intenta de nuevo.'); return; }
                             var faltan = [];
                             (resp.paquetes || []).forEach(function (p) {
                               var tiene;
-                              if (p.id_paquete) {
+                              if (paqSumaCambio(p)) {
+                                // Sumatoria cambiada: vale el precio pendiente o el guardado si no queda por debajo del mínimo nuevo.
+                                var pendC = preciosPendientes[p.id_grado + '-' + p.numero];
+                                tiene = (pendC !== undefined && pendC !== '') || (p.precio_redondeado !== null && p.precio_redondeado !== undefined
+                                        && !(p.precio_minimo !== null && p.precio_minimo !== undefined && Number(p.precio_redondeado) < Number(p.precio_minimo)));
+                              } else if (p.id_paquete) {
                                 var $inp = $('.precio-paquete-inp[data-id-paquete="' + p.id_paquete + '"]');
                                 tiene = $inp.length ? $.trim($inp.val()) !== '' : (p.precio_redondeado !== null && p.precio_redondeado !== undefined);
                               } else {
