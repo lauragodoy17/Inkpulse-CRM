@@ -1107,14 +1107,36 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     if (error) { inkToast(error, 'error'); return; }
     var enviar = function () {
       // submit() no envía el botón pulsado: la acción va en un campo oculto.
-      if (!$form.find('input[type="hidden"][name="accion"]').length) $form.append($('<input type="hidden" name="accion">').val(accion));
+      // fv-accion-envio: el que agrega este envío (se quita al volver a la página, ver pageshow).
+      if (!$form.find('input[type="hidden"][name="accion"]').not('.fv-accion-envio').length) {
+        $form.find('.fv-accion-envio').remove();
+        $form.append($('<input type="hidden" name="accion" class="fv-accion-envio">').val(accion));
+      }
       $form.data('ok', true);
-      $form.find('[type="submit"]').prop('disabled', true);
+      $form.find('[type="submit"]').each(function () {
+        if ($(this).data('html-orig') === undefined) $(this).data({ 'html-orig': $(this).html(), 'disabled-orig': $(this).prop('disabled') });
+      }).prop('disabled', true);
       $b.html('<i class="bi bi-hourglass-split"></i> Guardando...');
       $form[0].submit();
     };
     var texto = $b.data('confirmar');
     if (texto) inkConfirm({ type: 'warning', title: '¿Confirmar?', text: texto, btnOk: 'Sí, continuar' }, enviar); else enviar();
+  });
+  // Al volver con el navegador (p. ej. "Volver al formato" tras un error del servidor, 2026-11-24) la página sale de la
+  // caché tal como quedó al enviar: formulario marcado como enviado y botones en "Guardando...". Se deja lista otra vez,
+  // conservando lo escrito.
+  window.addEventListener('pageshow', function () {
+    $('form[action="php/formato_vd_guardar.php"]').each(function () {
+      var $form = $(this);
+      $form.removeData('ok');
+      $form.find('.fv-accion-envio').remove();
+      $form.find('[type="submit"]').each(function () {
+        var orig = $(this).data('html-orig');
+        if (orig === undefined) return; // este envío no lo tocó
+        $(this).html(orig).prop('disabled', !!$(this).data('disabled-orig')).removeData('html-orig disabled-orig');
+      });
+    });
+    boton = null;
   });
   // ── Armar paquetes (2026-11-19): cada paquete usa 1 unidad de cada libro; entre todos no se pasa de lo vendido suelto
   // (mismas reglas que fvd_armar_paquetes). Lo que no se arma queda suelto a su precio venta padre. ──

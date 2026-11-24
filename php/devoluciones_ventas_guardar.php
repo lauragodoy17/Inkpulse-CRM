@@ -29,14 +29,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$claves) {
     $es_vd = !empty($_POST['modo_vd']);
     $docs_sel = $es_vd ? array_map('strval', (array)($_POST['docs'] ?? [])) : null;
     $post_vd = $es_vd ? ['paquete' => (array)($_POST['paquete'] ?? []), 'suelto' => (array)($_POST['suelto'] ?? []), 'suelto_paq' => (array)($_POST['suelto_paq'] ?? []),
-                'abierto' => (array)($_POST['abierto'] ?? []), 'sp_desc' => (array)($_POST['sp_desc'] ?? []), 'sp_precio' => (array)($_POST['sp_precio'] ?? [])] : null;
+                'abierto' => (array)($_POST['abierto'] ?? []), 'sp_desc' => (array)($_POST['sp_desc'] ?? []), 'sp_precio' => (array)($_POST['sp_precio'] ?? []),
+                'suelto_curso' => (array)($_POST['suelto_curso'] ?? [])] : null;
+    // Reparto por curso de los títulos pedidos en varios cursos (curso[id_libro][cod_area], 2026-11-24).
+    $cursos_post = !$es_vd && is_array($_POST['curso'] ?? null) ? $_POST['curso'] : [];
     // Venta directa (2026-11-24): a qué venta (formato con consecutivo reservado) va la devolución; se valida ANTES de guardar.
     $id_formato = $es_vd ? (int)($_POST['id_formato'] ?? 0) : 0;
     $ped0 = $es_vd ? dvv_obtener_pedido($bdd, $claves[0]) : null;
     $error_venta = $ped0 ? svd_validar_venta($bdd, $id_formato, (int)$ped0['id_colegio'], (int)$ped0['id_periodo'], $claves) : null;
     $res = $error_venta ? ['ok' => false, 'error' => $error_venta]
          : dvv_guardar_devolucion($bdd, $claves, $cantidades, $observaciones, (string)($_POST['token'] ?? ''),
-                                  dvv_tipo_devolucion((string)($_POST['tipo_devolucion'] ?? '')), $docs_sel, $post_vd);
+                                  dvv_tipo_devolucion((string)($_POST['tipo_devolucion'] ?? '')), $docs_sel, $post_vd, $cursos_post);
     if ($res['ok']) {
         $redirect = '../devolucion_colegio.php?id_pedido=' . $res['id_devolucion'];
         // Venta directa (2026-11-11): la devolución crea su formato de venta directa (o se vincula al que ya tengan

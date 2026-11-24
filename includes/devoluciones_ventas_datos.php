@@ -501,6 +501,11 @@ function dvv_detalle_varios(PDO $bdd, array $claves, $tipoDevolucion = 'normal',
         $incluidos = array_filter($incluidos, fn($c) => isset($conDisponible[$c]));
     }
 
+    // Reparto por curso de los títulos pedidos en varios cursos (dvv_cursos_titulos, 2026-11-24).
+    $cursos = dvv_cursos_titulos($bdd, array_values($incluidos), $idColegio, $titulos);
+    foreach ($titulos as &$t) $t['cursos'] = $t['id_libro'] ? ($cursos[(int)$t['id_libro']] ?? []) : [];
+    unset($t);
+
     // Venta directa: paquetes remisionados en WO y libros sueltos (dvv_vd_estructura).
     $vd = $esVd ? dvv_vd_estructura($bdd, array_values($incluidos), $idColegio, (int)$primero['id_periodo'], $titulos, $paqWo) : null;
 
@@ -601,6 +606,120 @@ function dvv_grados_adopcion(PDO $bdd, $idColegio, $idPeriodo, array $idsLibros,
     }
     foreach ($bdd->query("SELECT id FROM libros WHERE id_materia = " . MATERIA_PLAN_LECTOR . " AND id IN (" . implode(',', $ids) . ")")->fetchAll(PDO::FETCH_COLUMN) as $l) $planLector[(int)$l] = true;
     return array_map(fn($g) => implode(', ', $g), $res);
+}
+
+/**
+ * Cursos de cada título (2026-11-24, la usuaria): un libro adoptado en varios cursos (p. ej. Jardín y Transición) se
+ * pide por curso (libros_pedidos.cod_area), pero la remisión de WO no dice de qué curso sale cada unidad. En la
+ * devolución el usuario reparte las unidades entre los cursos y se guarda una fila de libros_devol_v por curso.
+ *  - solicitada: lo pedido en ese curso en los pedidos elegidos.
+ *  - devuelta: lo ya devuelto de esos pedidos con esa área (reparto de libros_devol_v, devoluciones no anuladas).
+ *  - max: solicitada − devuelta (si entre todos los cursos no alcanza el disponible del título, p. ej. porque se
+ *    remisionó más de lo pedido, la diferencia se suma al curso con más unidades pedidas).
+ * Solo entran los títulos pedidos en 2 o más cursos. Devuelve [id_libro (del detalle) => [['cod_area','grado','solicitada','devuelta','max']]],
+ * ordenados por curso (Pre jardín → 11).
+ */
+function dvv_cursos_titulos(PDO $bdd, array $claves, $idColegio, array $titulos) {
+    $claves = array_values(array_unique(array_filter(array_map('strval', $claves))));
+    $disp = [];
+    foreach ($titulos as $t) if ($t['id_libro']) $disp[(int)$t['id_libro']] = (int)$t['disponible'];
+    if (!$claves || !$disp) return [];
+    $idsPed = array_map(fn($c) => (int)substr($c, 1), $claves);
+
+    $st = $bdd->query("SELECT lp.id_libro, lp.cod_area, SUM(lp.cantidad) AS n FROM libros_pedidos lp JOIN pedidos x ON x.codigo = lp.cod_pedido
+                       WHERE x.id IN (" . implode(',', $idsPed) . ") AND COALESCE(lp.cod_area, '') <> ''
+                       GROUP BY lp.id_libro, lp.cod_area HAVING n > 0");
+    $pedido = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (!$pedido) return [];
+
+    $cond = implode(' OR ', array_fill(0, count($claves), 'FIND_IN_SET(?, d.ids_pedidos_venta)'));
+    $st = $bdd->prepare("SELECT ld.id_libro, ld.cod_area, ld.reparto FROM libros_devol_v ld JOIN devoluciones_v d ON d.codigo = ld.cod_pedido
+                         WHERE d.estado <> " . DVD_ESTADO_DEVOL_ANULADA . " AND COALESCE(ld.cod_area, '') <> '' AND ($cond)");
+    $st->execute($claves);
+    $devol = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    // El mismo libro repetido en el catálogo se pasa al libros.id del título del detalle (como en dvv_detalle_varios).
+    $cat = dvv_claves_catalogo($bdd, array_merge(array_keys($disp), array_column($pedido, 'id_libro'), array_column($devol, 'id_libro')));
+    $tituloDeClave = [];
+    foreach ($disp as $l => $_) if (isset($cat[$l])) $tituloDeClave[$cat[$l]] = $l;
+    $canon = fn($l) => $tituloDeClave[$cat[(int)$l] ?? ''] ?? (int)$l;
+
+    $sol = []; // id_libro => [cod_area => n]
+    foreach ($pedido as $r) {
+        $l = $canon($r['id_libro']);
+        if (isset($disp[$l])) $sol[$l][(string)$r['cod_area']] = ($sol[$l][(string)$r['cod_area']] ?? 0) + (int)$r['n'];
+    }
+    $sol = array_filter($sol, fn($a) => count($a) > 1);
+    if (!$sol) return [];
+
+    $dev = [];
+    foreach ($devol as $r) {
+        $l = $canon($r['id_libro']);
+        if (!isset($sol[$l])) continue;
+        foreach (array_filter(explode(',', (string)$r['reparto'])) as $parte) {
+            [$c, $cant] = explode(':', $parte) + ['', 0];
+            if (in_array($c, $claves, true)) $dev[$l][(string)$r['cod_area']] = ($dev[$l][(string)$r['cod_area']] ?? 0) + (int)$cant;
+        }
+    }
+
+    // Curso de cada área de la adopción (en el grado "Otro" = 17, el grado específico).
+    $areas = [];
+    foreach ($sol as $a) foreach ($a as $cod => $_) $areas[$cod] = true;
+    $st = $bdd->prepare("SELECT a.codigo, g.id, g.grado FROM areas_objetivas a JOIN grados g ON g.id = IF(a.id_grado = 17 AND a.id_grado_otro > 0, a.id_grado_otro, a.id_grado)
+                         WHERE a.id_colegio = ? AND a.codigo IN (" . implode(',', array_fill(0, count($areas), '?')) . ")");
+    $st->execute(array_merge([(int)$idColegio], array_map('strval', array_keys($areas))));
+    $grado = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $grado[(string)$r['codigo']] = ['id' => (int)$r['id'], 'grado' => (string)$r['grado']];
+
+    $res = [];
+    foreach ($sol as $l => $porArea) {
+        $lista = [];
+        foreach ($porArea as $cod => $n) {
+            $ya = (int)($dev[$l][$cod] ?? 0);
+            $lista[] = ['cod_area' => (string)$cod, 'grado' => $grado[$cod]['grado'] ?? ('Área ' . $cod), 'orden' => $grado[$cod]['id'] ?? 99,
+                        'solicitada' => $n, 'devuelta' => $ya, 'max' => max(0, $n - $ya)];
+        }
+        usort($lista, fn($a, $b) => $a['orden'] <=> $b['orden'] ?: strcmp($a['cod_area'], $b['cod_area']));
+        // Dos áreas del mismo curso: se distinguen por el código del área.
+        $nombres = array_count_values(array_column($lista, 'grado'));
+        foreach ($lista as &$c) if ($nombres[$c['grado']] > 1) $c['grado'] .= ' (' . $c['cod_area'] . ')';
+        unset($c);
+        $falta = $disp[$l] - array_sum(array_column($lista, 'max'));
+        if ($falta > 0) {
+            $mayor = array_keys(array_column($lista, 'solicitada'), max(array_column($lista, 'solicitada')))[0];
+            $lista[$mayor]['max'] += $falta;
+        }
+        foreach ($lista as &$c) { $c['max'] = min($c['max'], $disp[$l]); unset($c['orden']); }
+        unset($c);
+        $res[$l] = $lista;
+    }
+    return $res;
+}
+
+/**
+ * Lee el reparto por curso del formulario (curso[id_libro][cod_area], o suelto_curso en venta directa) y lo valida
+ * contra los cursos del detalle (dvv_cursos_titulos). Devuelve ['cursos' => [id_libro => [cod_area => n]]] o ['error' => ...].
+ */
+function dvv_leer_cursos(array $detalle, array $post) {
+    $porLibro = [];
+    foreach ($detalle['titulos'] as $t) if ($t['id_libro']) $porLibro[(int)$t['id_libro']] = $t;
+    $res = [];
+    foreach ($post as $l => $areas) {
+        $t = $porLibro[(int)$l] ?? null;
+        if (!$t || empty($t['cursos']) || !is_array($areas)) return ['error' => 'Uno de los títulos no tiene reparto por curso; recarga la página e inténtalo de nuevo.'];
+        $validos = array_column($t['cursos'], null, 'cod_area');
+        foreach ($areas as $cod => $v) {
+            $v = trim((string)$v);
+            if (!preg_match('/^\d*$/', $v)) return ['error' => 'Las cantidades deben ser números enteros, sin decimales ni negativos.'];
+            $n = (int)$v;
+            if (!$n) continue;
+            $c = $validos[(string)$cod] ?? null;
+            if (!$c) return ['error' => 'Uno de los cursos de "' . $t['descripcion'] . '" no está en los pedidos elegidos.'];
+            if ($n > $c['max']) return ['error' => 'De "' . $t['descripcion'] . '" en ' . $c['grado'] . ' se pueden devolver máximo ' . $c['max'] . ' (pedidas ' . $c['solicitada'] . ', ya devueltas ' . $c['devuelta'] . ').'];
+            $res[(int)$l][(string)$cod] = $n;
+        }
+    }
+    return ['cursos' => $res];
 }
 
 /** Desglose de una devolución de venta directa: paquetes completos y libros sueltos (dvv_guardar_devolucion). */
@@ -878,6 +997,12 @@ function dvv_leer_vd(array $detalle, array $post) {
     $vd = $detalle['vd'] ?? null;
     if (!$vd) return ['error' => 'Este colegio no es de venta directa.'];
     $entero = function ($v) { $v = trim((string)$v); return preg_match('/^\d*$/', $v) ? (int)$v : null; };
+    // Sueltos repartidos por curso (suelto_curso[id_libro][cod_area], 2026-11-24): la suma es el suelto del libro.
+    // Cada curso se valida en dvv_guardar_devolucion (dvv_leer_cursos).
+    foreach ((array)($post['suelto_curso'] ?? []) as $l => $areas) {
+        if ($entero($post['suelto'][$l] ?? '')) return ['error' => 'De "' . dvv_vd_nombre($detalle, $l) . '" llegaron cantidades con y sin curso; recarga la página e inténtalo de nuevo.'];
+        $post['suelto'][$l] = (string)array_sum(array_map(fn($v) => (int)$entero($v), (array)$areas));
+    }
     $paquetes = [];
     foreach ($vd['paquetes'] as $p) $paquetes[(int)$p['id']] = $p;
     $cant = [];
@@ -981,7 +1106,8 @@ function dvv_leer_vd(array $detalle, array $post) {
  * es lo remisionado − todas las devoluciones del colegio (se vuelve a calcular dentro de la transacción).
  * Devuelve ['ok','error','id_devolucion','repetida'].
  */
-function dvv_guardar_devolucion(PDO $bdd, array $claves, array $cantidades, $observaciones, $token, $tipoDevolucion = 'normal', ?array $docsSel = null, ?array $postVd = null) {
+function dvv_guardar_devolucion(PDO $bdd, array $claves, array $cantidades, $observaciones, $token, $tipoDevolucion = 'normal', ?array $docsSel = null, ?array $postVd = null, array $postCursos = []) {
+    // $postCursos (2026-11-24): curso[id_libro][cod_area] del formulario normal; en venta directa llega en $postVd['suelto_curso'].
     // Venta directa (2026-11-10): $docsSel = documentos de WO elegidos; $postVd = paquete[]/suelto[]/suelto_paq[] del
     // formulario (dvv_leer_vd), que reemplaza a $cantidades; el desglose queda en devoluciones_v_vd.
     $tipoDevolucion = dvv_tipo_devolucion($tipoDevolucion);
@@ -1019,6 +1145,13 @@ function dvv_guardar_devolucion(PDO $bdd, array $claves, array $cantidades, $obs
 
     $porLibro = [];
     foreach ($detalle['titulos'] as $t) if ($t['id_libro']) $porLibro[(int)$t['id_libro']] = $t;
+    // Reparto por curso (dvv_cursos_titulos): en el formulario normal la cantidad del libro es la suma de sus cursos.
+    $lc = dvv_leer_cursos($detalle, $postVd !== null ? (array)($postVd['suelto_curso'] ?? []) : $postCursos);
+    if (isset($lc['error'])) return ['ok' => false, 'error' => $lc['error']];
+    $porCurso = $lc['cursos'];
+    if ($postVd === null) {
+        foreach ($postCursos as $l => $_) $cantidades[$l] = (string)array_sum($porCurso[(int)$l] ?? []);
+    }
     $aDevolver = [];
     foreach ($cantidades as $idLibro => $cant) {
         if (!preg_match('/^\d*$/', trim((string)$cant))) return ['ok' => false, 'error' => 'Las cantidades deben ser números enteros, sin decimales ni negativos.'];
@@ -1106,6 +1239,17 @@ function dvv_guardar_devolucion(PDO $bdd, array $claves, array $cantidades, $obs
                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())");
         foreach ($aDevolver as $idLibro => $cant) {
             $t = $porLibro[$idLibro];
+            // Una fila por curso (2026-11-24): las unidades repartidas por el usuario con su área; el resto (sin reparto,
+            // o paquetes de venta directa) con el área de dvv_areas_devolucion. Mismo área = una sola fila.
+            $filas = [];
+            $resto = $cant;
+            foreach ($porCurso[$idLibro] ?? [] as $cod => $n) {
+                $n = min($n, $resto);
+                if ($n <= 0) continue;
+                $filas[$cod] = ($filas[$cod] ?? 0) + $n;
+                $resto -= $n;
+            }
+            if ($resto > 0) { $a0 = (string)($areas[$idLibro] ?? ''); $filas[$a0] = ($filas[$a0] ?? 0) + $resto; }
             $productoWo = null;
             $despachada = null;
             $idsDocs = [];
@@ -1115,8 +1259,22 @@ function dvv_guardar_devolucion(PDO $bdd, array $claves, array $cantidades, $obs
                 if ($pa['fuente'] === 'auto') $despachada = (int)$despachada + $pa['base'];
                 foreach (array_filter(explode(',', $pa['ids_documentos'])) as $idDoc) $idsDocs[$idDoc] = $idDoc;
             }
-            $partes = array_map(fn($pa) => $pa['clave_pedido'] . ':' . $pa['cantidad'] . ':' . (int)$pa['producto_wo'], $reparto[$idLibro]);
-            $stL->execute([$codigo, $idLibro, $areas[$idLibro] ?? '', $cant, $productoWo, $despachada, mb_substr(implode(',', $idsDocs), 0, 255) ?: null, mb_substr(implode(',', $partes), 0, 500)]);
+            // El reparto por pedido se divide entre las filas en orden (cada fila lleva su parte, para no contarlo dos veces).
+            $colaReparto = array_map(fn($pa) => ['clave' => $pa['clave_pedido'], 'n' => (int)$pa['cantidad'], 'wo' => (int)$pa['producto_wo']], $reparto[$idLibro]);
+            $primera = true;
+            foreach ($filas as $cod => $n) {
+                $partes = [];
+                $falta = $n;
+                while ($falta > 0 && $colaReparto) {
+                    $toma = min($falta, $colaReparto[0]['n']);
+                    $partes[] = $colaReparto[0]['clave'] . ':' . $toma . ':' . $colaReparto[0]['wo'];
+                    $colaReparto[0]['n'] -= $toma;
+                    $falta -= $toma;
+                    if ($colaReparto[0]['n'] <= 0) array_shift($colaReparto);
+                }
+                $stL->execute([$codigo, $idLibro, (string)$cod, $n, $productoWo, $primera ? $despachada : null, mb_substr(implode(',', $idsDocs), 0, 255) ?: null, mb_substr(implode(',', $partes), 0, 500)]);
+                $primera = false;
+            }
         }
         // Mismas columnas y estado inicial (Pendiente) que php/devolucion.php.
         $bdd->prepare("INSERT INTO devoluciones_v (codigo, id_periodo, id_colegio, id_usuario, observaciones, cliente, tipo, estado,

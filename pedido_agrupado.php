@@ -144,7 +144,7 @@ $pedidos_label   = implode(', ', array_map('intval', (array)$pedidos_ids));
 $tipo_doc        = (intval($pedido['fac_rem'] ?? 0) == 1) ? 'Factura' : 'Remisión';
 $tipo_pedido_str = '';
 if ($show_plataforma) {
-  $tipo_pedido_str = (intval($pedido['petipo'] ?? 0) == 1) ? 'Libros sueltos' : 'Paquete';
+  $tipo_pedido_str = [1 => 'Libros sueltos', 2 => 'Paquete', 3 => 'Paquetes y libros sueltos'][intval($pedido['petipo'] ?? 0)] ?? 'Paquete';
 }
 $n_titulos = count($libros);
 ?>

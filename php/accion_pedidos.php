@@ -2,6 +2,7 @@
 require_once("../php/aut.php");
 require_once("../conexion/bdd.php");
 require_once("../includes/historial_estados.php");
+require_once("../includes/pedidos_op.php"); // OP obligatoria para procesar
 
 header("Content-Type:text/html;charset=utf-8");
 
@@ -48,11 +49,16 @@ try {
     } elseif (isset($_GET['procesar'])) {
 
         $id = intval($_GET['procesar']);
-        $bdd->prepare("UPDATE pedidos SET estado = '5' WHERE id = ?")->execute([$id]);
-        registrar_historial_estado($bdd, 'pedidos', $id, 5, $id_usuario_accion);
-        $titulo   = '¡Pedido Procesando!';
-        $mensaje  = "El pedido #$id fue marcado como procesando.";
-        $redirect = '../lista_pedidos.php?tp=3';
+        // Sin OP activa no pasa de Aprobado a Procesando (2026-11-24).
+        if (!pedido_tiene_op($bdd, $id)) {
+            $error = "El pedido #$id no tiene OP. Solicita la OP del pedido antes de pasarlo a Procesando. No se hizo ningún cambio.";
+        } else {
+            $bdd->prepare("UPDATE pedidos SET estado = '5' WHERE id = ?")->execute([$id]);
+            registrar_historial_estado($bdd, 'pedidos', $id, 5, $id_usuario_accion);
+            $titulo   = '¡Pedido Procesando!';
+            $mensaje  = "El pedido #$id fue marcado como procesando.";
+            $redirect = '../lista_pedidos.php?tp=3';
+        }
 
     } elseif (isset($_GET['facturacion'])) {
 

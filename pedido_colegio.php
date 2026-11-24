@@ -1019,6 +1019,11 @@ $('#entregar').on('click', function () {
   window.location = 'php/accion_pedidos.php?entregado=<?= $id_pedido ?>';
 });
 $('#procesar').on('click', function () {
+  // OP obligatoria para procesar (2026-11-24); el servidor también lo valida (php/accion_pedidos.php).
+  <?php if ($op == 0 && $op_agp == 0): ?>
+  if (window.inkToast) inkToast('Este pedido no tiene OP. Solicita la OP antes de pasarlo a Procesando.', 'error'); else alert('Este pedido no tiene OP. Solicita la OP antes de pasarlo a Procesando.');
+  return;
+  <?php endif; ?>
   window.location = 'php/accion_pedidos.php?procesar=<?= $id_pedido ?>';
 });
 $('#facturacion').on('click', function () {

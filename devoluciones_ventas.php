@@ -197,6 +197,12 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
     .dm-ped-card .dm-doc-top { margin-bottom:8px; }
     .dm-ped-docs { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
     .dm-reparto { font-size:.72rem; color:#94a3b8; margin-top:3px; }
+    /* Reparto por curso de un libro pedido en varios cursos (2026-11-24) */
+    .dm-tit-table tr.dm-curso-fila td { padding-top:4px; padding-bottom:6px; border-top:none; background:#fafbff; }
+    .dm-curso-nom { display:flex; align-items:center; gap:6px; padding-left:18px; font-size:.82rem; font-weight:600; color:#334155; }
+    .dm-curso-nom .bi { color:#94a3b8; }
+    .dm-curso-det { font-size:.72rem; color:#94a3b8; font-weight:500; }
+    .dm-curso-aviso { font-size:.72rem; color:#6366f1; font-weight:600; }
     /* Venta directa: remisiones a devolver, paquetes y libros sueltos */
     .dm-docs-sel { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:8px; }
     .dm-doc-op { display:flex; align-items:center; gap:10px; border:1.5px solid var(--dm-borde); border-radius:10px; padding:10px 12px; cursor:pointer; margin:0; background:#fff; transition:border-color .12s, background .12s; }
@@ -487,9 +493,15 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
 
   // VD_LIM_PAQ / VD_LIM_SUE: tope por parte de cada título (lo pedido en paquete y lo pedido suelto; dvv_vd_estructura).
   // Un título sin tope de parte usa solo su disponible (VD_DISP).
-  var VD_DISP = {}, VD_NOMBRE = {}, VD_PAQ = {}, VD_LIM_PAQ = {}, VD_LIM_SUE = {}, VD_PRECIOS = {}, VD_GRADO = {};
+  var VD_DISP = {}, VD_NOMBRE = {}, VD_PAQ = {}, VD_LIM_PAQ = {}, VD_LIM_SUE = {}, VD_PRECIOS = {}, VD_GRADO = {}, VD_CURSOS = {};
   // Grado del libro en la adopción del colegio (2026-11-13): etiqueta junto al título.
   function tagGrado(g) { return g ? ' <span class="dm-grado">' + esc(g) + '</span>' : ''; }
+  // Sub-fila de un curso de un libro pedido en varios cursos (2026-11-24): el usuario reparte lo devuelto entre los cursos.
+  function filaCurso(c, colspan, celda) {
+    return '<tr class="dm-curso-fila"><td colspan="' + colspan + '"><div class="dm-curso-nom"><i class="bi bi-arrow-return-right"></i>' + esc(c.grado)
+      + ' <span class="dm-curso-det">· pedidas ' + c.solicitada + (c.devuelta ? ' · ya devueltas ' + c.devuelta : '') + '</span></div></td>'
+      + '<td class="c">' + celda + '</td></tr>';
+  }
   var VD_LIB_PAQ = []; // títulos de los paquetes que se pueden devolver sueltos (vd.libros_paquete)
   function limParte(parte, l) {
     var lim = parte === 'sue' ? VD_LIM_SUE : VD_LIM_PAQ;
@@ -519,8 +531,8 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
   $(document).on('change', '.dm-venta input[type=radio]', function () { $('.dm-venta').removeClass('on'); $(this).closest('.dm-venta').addClass('on'); });
 
   function pintarVD(r) {
-    VD_DISP = {}; VD_NOMBRE = {}; VD_PAQ = {}; VD_GRADO = {};
-    r.titulos.forEach(function (t) { if (t.id_libro) { VD_DISP[t.id_libro] = t.disponible; VD_NOMBRE[t.id_libro] = t.descripcion; VD_GRADO[t.id_libro] = t.grado || ''; } });
+    VD_DISP = {}; VD_NOMBRE = {}; VD_PAQ = {}; VD_GRADO = {}; VD_CURSOS = {};
+    r.titulos.forEach(function (t) { if (t.id_libro) { VD_DISP[t.id_libro] = t.disponible; VD_NOMBRE[t.id_libro] = t.descripcion; VD_GRADO[t.id_libro] = t.grado || ''; VD_CURSOS[t.id_libro] = t.cursos || []; } });
     var vd = r.vd || { paquetes: [], sueltos: [], libros_paquete: [] };
     vd.paquetes.forEach(function (p) { VD_PAQ[p.id] = p; });
     VD_LIM_PAQ = vd.limite_paquete || {}; VD_LIM_SUE = vd.limite_suelto || {}; VD_PRECIOS = vd.precios || {}; VD_LIB_PAQ = vd.libros_paquete || [];
@@ -557,7 +569,17 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
     if (vd.sueltos.length) {
       h += '<div class="dm-subtitulo"><i class="bi bi-book"></i> Libros sueltos remisionados</div><div class="table-responsive"><table class="dm-tit-table"><thead><tr><th>Título</th><th class="c">Disponible</th><th class="c">A devolver</th></tr></thead><tbody>';
       vd.sueltos.forEach(function (l) {
-        var maxS = limParte('sue', l);
+        var maxS = limParte('sue', l), cursos = VD_CURSOS[l] || [];
+        if (cursos.length) {
+          h += '<tr class="vd-fila"><td><div class="dm-libro">' + esc(VD_NOMBRE[l]) + tagGrado(VD_GRADO[l]) + '</div></td><td class="c"><span class="dm-pill dm-pill-verde">' + maxS + '</span></td>'
+            + '<td class="c"><span class="dm-curso-aviso">Reparte por curso</span></td></tr>';
+          cursos.forEach(function (c) {
+            var m = Math.min(c.max, maxS);
+            h += filaCurso(c, 2, stepper('suelto_curso[' + l + '][' + esc(c.cod_area) + ']', m, 'data-parte="sue" data-libro="' + l + '" data-curso-max="' + c.max
+              + '" data-titulo="' + esc(VD_NOMBRE[l] + ' (' + c.grado + ')') + '"') + '<span class="dm-max vd-queda"></span>');
+          });
+          return;
+        }
         h += '<tr class="vd-fila"><td><div class="dm-libro">' + esc(VD_NOMBRE[l]) + tagGrado(VD_GRADO[l]) + '</div></td><td class="c"><span class="dm-pill dm-pill-verde vd-disp">' + maxS + '</span></td>'
           + '<td class="c">' + stepper('suelto[' + l + ']', maxS, 'data-parte="sue" data-libro="' + l + '" data-titulo="' + esc(VD_NOMBRE[l]) + '"') + '<span class="dm-max vd-queda"></span></td></tr>';
       });
@@ -621,6 +643,13 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
         maxCampo = Math.min(maxCampo, topeAb);
       }
       if (paq && $('.vd-ab[data-paq="' + paq + '"]').length) maxCampo = Math.min(maxCampo, Math.max(0, (VD_PAQ[paq].max_abiertos || 0) - abiertosDe(paq)));
+      // Curso (2026-11-24): no más de lo que le queda a ese curso (pedido en el curso − ya devuelto).
+      var cm = $in.data('curso-max');
+      if (cm !== undefined) {
+        cm = parseInt(cm, 10) || 0;
+        if (n > cm) { exceso = exceso.length ? exceso : [libros[0]]; malo = true; }
+        maxCampo = Math.min(maxCampo, cm); queda = Math.min(queda, cm);
+      }
       $in.data('max', maxCampo).attr('max', maxCampo);
       $in.closest('tr').find('.vd-disp').text(maxCampo).toggleClass('dm-pill-verde', maxCampo > 0).toggleClass('dm-pill-gris', maxCampo <= 0);
       $in.closest('.dm-stepper').toggleClass('activo', n > 0).toggleClass('vd-exceso', n > 0 && exceso.length > 0);
@@ -810,7 +839,7 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
       + '<th>Título</th><th>Documentos</th><th class="c">' + colBase + '</th><th class="c">' + colDevuelta + '</th><th class="c">Disponible</th><th class="c">A devolver</th>'
       + '</tr></thead><tbody>';
     r.titulos.forEach(function (t) {
-      var sinLibro = !t.id_libro, editable = !sinLibro && t.disponible > 0;
+      var sinLibro = !t.id_libro, editable = !sinLibro && t.disponible > 0, cursos = t.cursos || [];
       var pct = t.base > 0 ? Math.min(100, Math.round(t.devuelta * 100 / t.base)) : 0;
       // Con varios pedidos, de cuál sale el saldo (se descuenta del más antiguo primero).
       // En el corte el disponible es del colegio, no por pedido: no se muestra el desglose.
@@ -823,12 +852,24 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
         + '<td class="c"><span class="dm-num">' + t.base + '</span>' + (varios && t.pedidos.length > 1 ? '<div class="dm-num-sub">' + t.pedidos.length + ' pedidos</div>' : '') + '</td>'
         + '<td class="c"><span class="dm-num">' + t.devuelta + '</span><div class="dm-barra" title="' + pct + '% devuelto"><span style="width:' + pct + '%"></span></div></td>'
         + '<td class="c">' + (t.disponible > 0 ? '<span class="dm-pill dm-pill-verde">' + t.disponible + '</span>' : '<span class="dm-pill dm-pill-gris">0</span>') + reparto + '</td>'
-        + '<td class="c">' + (editable
+        + '<td class="c">' + (editable && cursos.length
+            ? '<span class="dm-curso-aviso">Reparte por curso</span>'
+            : editable
             ? '<div class="dm-stepper"><button type="button" class="dm-menos" tabindex="-1">−</button>'
               + '<input type="number" class="dm-input" name="cantidad[' + t.id_libro + ']" min="0" max="' + t.disponible + '" step="1" value="0" data-max="' + t.disponible + '" data-disp="' + t.disponible + '" data-libro="' + t.id_libro + '" data-titulo="' + esc(t.descripcion) + '">'
               + '<button type="button" class="dm-mas" tabindex="-1">+</button></div><span class="dm-max dm-tit-max">máx. ' + t.disponible + '</span>'
             : '<span class="dm-sub" style="justify-content:center;">' + (sinLibro ? 'No disponible' : 'Ya devuelto') + '</span>')
         + '</td></tr>';
+      // Libro pedido en varios cursos (2026-11-24): una fila por curso; la suma no pasa del disponible del título.
+      if (editable) cursos.forEach(function (c) {
+        var m = Math.min(c.max, t.disponible);
+        h += filaCurso(c, 5, m > 0
+          ? '<div class="dm-stepper"><button type="button" class="dm-menos" tabindex="-1">−</button>'
+            + '<input type="number" class="dm-input" name="curso[' + t.id_libro + '][' + esc(c.cod_area) + ']" min="0" max="' + m + '" step="1" value="0" data-max="' + m + '" data-disp="' + t.disponible
+            + '" data-libro="' + t.id_libro + '" data-curso-de="' + t.id_libro + '" data-titulo="' + esc(t.descripcion + ' (' + c.grado + ')') + '">'
+            + '<button type="button" class="dm-mas" tabindex="-1">+</button></div><span class="dm-max dm-tit-max">máx. ' + m + '</span>'
+          : '<span class="dm-sub" style="justify-content:center;">Ya devuelto</span>');
+      });
     });
     h += '</tbody></table></div>';
 
@@ -846,13 +887,23 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
     $('#dm-detalle').html(h);
   }
 
+  // Tope de un campo: su data-max; en un curso además lo que dejan los otros cursos del mismo libro (2026-11-24).
+  function maxDe($in) {
+    var max = parseInt($in.data('max'), 10) || 0, l = $in.data('curso-de');
+    if (l === undefined) return max;
+    var otros = 0;
+    $('.dm-input[data-curso-de="' + l + '"]').not($in).each(function () { otros += parseInt(this.value, 10) || 0; });
+    return Math.max(0, Math.min(max, (parseInt($in.data('disp'), 10) || 0) - otros));
+  }
   function recalcular() {
-    var total = 0, titulos = 0;
+    var total = 0, libros = {};
     $('.dm-input').each(function () {
       var n = parseInt($(this).val(), 10) || 0;
       $(this).closest('.dm-stepper').toggleClass('activo', n > 0);
-      if (n > 0) { total += n; titulos++; }
+      if (n > 0) { total += n; libros[$(this).data('libro')] = true; }
+      if ($(this).data('curso-de') !== undefined) $(this).closest('td').find('.dm-tit-max').text('máx. ' + maxDe($(this)));
     });
+    var titulos = Object.keys(libros).length;
     $('#dm-total').text(total);
     $('#dm-total-txt').text((total === 1 ? 'unidad' : 'unidades') + ' a devolver'
       + (titulos ? ' · ' + titulos + ' título' + (titulos === 1 ? '' : 's') : ''));
@@ -861,7 +912,7 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
 
   // Nunca más de lo disponible sumado (también se valida en el servidor).
   function ajustar($in) {
-    var max = parseInt($in.data('max'), 10), v = $in.val(), n = v === '' ? 0 : Number(v);
+    var max = maxDe($in), v = $in.val(), n = v === '' ? 0 : Number(v);
     if (!Number.isInteger(n) || n < 0) n = 0;
     if (n > max) { n = max; inkToast('Máximo ' + max + ' unidad(es) para "' + $in.data('titulo') + '".', 'warn'); }
     if (String(n) !== v) $in.val(n);
@@ -869,7 +920,7 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
   }
   $(document).on('change blur', '.dm-input', function () { ajustar($(this)); });
   $(document).on('input', '.dm-input', function () {
-    var max = parseInt($(this).data('max'), 10), n = Number($(this).val());
+    var max = maxDe($(this)), n = Number($(this).val());
     if (n > max) ajustar($(this)); else recalcular();
   });
   $(document).on('click', '.dm-mas, .dm-menos', function () {
@@ -877,7 +928,8 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
     $in.val(n + ($(this).hasClass('dm-mas') ? 1 : -1)); ajustar($in);
   });
   $(document).on('click', '#dm-todo', function () {
-    $('.dm-input').each(function () { $(this).val($(this).data('max')); });
+    // Los cursos de un libro se llenan en orden (Pre jardín → 11) hasta el disponible del libro.
+    $('.dm-input').val(0).each(function () { $(this).val(maxDe($(this))); });
     recalcular();
   });
 
@@ -885,7 +937,7 @@ $tipo_inicial = isset($_GET['tipo']) ? dvv_tipo_devolucion((string)$_GET['tipo']
     e.preventDefault();
     var form = this, total = 0, error = null;
     $('.dm-input').each(function () {
-      var max = parseInt($(this).data('max'), 10), v = $(this).val(), n = v === '' ? 0 : Number(v);
+      var max = maxDe($(this)), v = $(this).val(), n = v === '' ? 0 : Number(v);
       if (!Number.isInteger(n) || n < 0 || n > max) { error = 'Revisa la cantidad de "' + $(this).data('titulo') + '": debe estar entre 0 y ' + max + '.'; return false; }
       total += n;
     });

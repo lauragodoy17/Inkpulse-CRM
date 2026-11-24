@@ -23,6 +23,7 @@ require_once("../includes/historial_estados.php");
 require_once("../includes/planilla_pdf.php");
 require_once("../includes/sobrecosto_canal.php");      // canal "Venta directa - Eureka"
 require_once("../includes/pedidos_venta_directa.php"); // pedidos.para_andrea
+require_once("../includes/pedidos_op.php");             // OP obligatoria para procesar
 
 function lp_json($datos) {
     header('Content-Type: application/json; charset=utf-8');
@@ -78,6 +79,13 @@ if (($_SESSION['tipo'] ?? null) == 10) {
 }
 
 if (empty($rows)) lp_error('Ninguno de los pedidos seleccionados está disponible para procesar.');
+
+// OP obligatoria (2026-11-24): si alguno de los elegidos no tiene OP activa no se procesa ninguno.
+$sin_op = pedidos_sin_op($bdd, array_column($rows, 'id'));
+if ($sin_op) {
+    lp_error((count($sin_op) === 1 ? 'El pedido #' . $sin_op[0] . ' no tiene OP' : 'Los pedidos #' . implode(', #', $sin_op) . ' no tienen OP')
+        . '. Solicita la OP antes de pasarlos a Procesando, o quítalos de la selección. No se procesó ningún pedido.');
+}
 
 // Pedidos de venta directa: mismo criterio que dvd_sql_canal_vd() (includes/devoluciones_vd_datos.php),
 // pedido marcado para jornada de venta en el colegio (para_andrea) o colegio cuya adopción del período

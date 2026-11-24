@@ -156,3 +156,4 @@ $pdf->Ln($fila_h);
 }
 
 return $pdf->Output('S'); // devuelve el PDF como string, sin enviarlo aún
+}

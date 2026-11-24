@@ -126,6 +126,11 @@ $estados_uniq = array_column($req->fetchAll(), 'estado');
           <?php endforeach; ?>
         </select>
         <?php endif; ?>
+        <select class="ft-select" id="dv-tipo-dev">
+          <option value="">Todos los tipos</option>
+          <option value="normal">Física</option>
+          <option value="corte">De corte</option>
+        </select>
         <div class="ft-date-wrap">
           <span class="ft-date-label">Desde</span>
           <input type="date" class="ft-select" id="dv-fecha-desde" style="min-width:140px">
@@ -153,6 +158,7 @@ $estados_uniq = array_column($req->fetchAll(), 'estado');
                 <th>Colegio</th>
                 <th>Calendario</th>
                 <th>Cliente</th>
+                <th>Tipo</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
@@ -200,6 +206,7 @@ $(document).ready(function () {
       type: 'POST',
       data: function (d) {
         d.estado      = $('#dv-estado').val();
+        d.tipo_devolucion = $('#dv-tipo-dev').val();
         d.fecha_desde = $('#dv-fecha-desde').val();
         d.fecha_hasta = $('#dv-fecha-hasta').val();
       },
@@ -212,9 +219,16 @@ $(document).ready(function () {
       { data: 'id' },
       { data: 'fecha_d' },
       { data: 'usuario' },
-      { data: 'colegio' },
+      { data: 'colegio', render: function (data, type, row) {
+          return data + (row.origen ? '<div><span class="estado-badge teal" style="margin-top:3px;">' + row.origen + '</span></div>' : '');
+        }
+      },
       { data: 'calendario' },
       { data: 'cliente' },
+      { data: 'tipo_dev', render: function (data, type, row) {
+          return '<span class="estado-badge ' + (row.es_corte ? 'azul' : 'teal') + '">' + data + '</span>';
+        }
+      },
       { data: 'estado', render: function (data, type, row) {
           return '<span class="estado-badge ' + estadoCls(data) + '">' + data + '</span>';
         }
@@ -246,10 +260,11 @@ $(document).ready(function () {
     searchTimer = setTimeout(function () { table.search(val).draw(); }, 300);
   });
   $('#dv-btn-apply').on('click', function () { table.draw(); });
-  $('#dv-fecha-desde, #dv-fecha-hasta, #dv-estado').on('change', function () { table.draw(); });
+  $('#dv-fecha-desde, #dv-fecha-hasta, #dv-estado, #dv-tipo-dev').on('change', function () { table.draw(); });
   $('#dv-btn-clear').on('click', function () {
     $('#dv-search').val('');
     $('#dv-estado').val('');
+    $('#dv-tipo-dev').val('');
     $('#dv-fecha-desde, #dv-fecha-hasta').val('');
     table.search('').draw();
   });
