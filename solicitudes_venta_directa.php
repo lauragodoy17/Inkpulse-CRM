@@ -21,14 +21,15 @@ $periodo_sel = isset($_GET['periodo']) && in_array((int)$_GET['periodo'], $ids_p
 
 // Consecutivo de las ventas que ya llegaron (hoy o antes) y aún no lo tienen: se reserva vacío.
 $reservados = $periodo_sel ? svd_asignar_pendientes($bdd, $periodo_sel) : [];
-$colegios = $periodo_sel ? svd_listar($bdd, $periodo_sel) : [];
-// Primero los que venden hoy, luego las próximas ventas por fecha, luego los que ya vendieron y al final los sin fecha.
-$hoy = date('Y-m-d');
-usort($colegios, function ($a, $b) {
-    $ka = $a['proxima'] ?? ($a['jornadas'] ? '9998' : '9999');
-    $kb = $b['proxima'] ?? ($b['jornadas'] ? '9998' : '9999');
-    return strcmp($ka, $kb) ?: strcasecmp($a['colegio'], $b['colegio']);
-});
+$todos = $periodo_sel ? svd_listar($bdd, $periodo_sel) : [];
+// Filtros (2026-11-26): colegio y orden (próxima venta, o por fecha del pedido del más antiguo al más reciente o al revés).
+$opciones_colegio = $todos;
+usort($opciones_colegio, fn($a, $b) => strcasecmp($a['colegio'], $b['colegio']));
+$colegio_sel = (int)($_GET['colegio'] ?? 0);
+if (!in_array($colegio_sel, array_column($todos, 'id_colegio'), true)) $colegio_sel = 0;
+$orden_sel = isset(SVD_ORDENES[$_GET['orden'] ?? '']) ? $_GET['orden'] : 'proxima';
+$colegios = svd_filtrar_ordenar($todos, $colegio_sel, $orden_sel);
+$url_excel = 'php/solicitudes_vd_excel.php?' . http_build_query(['periodo' => $periodo_sel, 'colegio' => $colegio_sel, 'orden' => $orden_sel]);
 
 $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
 $fecha_txt = fn($f) => date('d/m/Y', strtotime($f));
@@ -96,25 +97,36 @@ $clase_estado = [1 => 'sv-e-pend', 2 => 'sv-e-aprob', 4 => 'sv-e-entr', 5 => 'sv
           <select name="periodo" onchange="this.form.submit()">
             <?php foreach ($periodos as $p): ?><option value="<?= (int)$p['id'] ?>" <?= (int)$p['id'] === $periodo_sel ? 'selected' : '' ?>>Período <?= $h($p['periodo']) ?></option><?php endforeach; ?>
           </select>
+          <select name="colegio" onchange="this.form.submit()" style="max-width:320px;">
+            <option value="0">Todos los colegios</option>
+            <?php foreach ($opciones_colegio as $oc): ?><option value="<?= (int)$oc['id_colegio'] ?>" <?= (int)$oc['id_colegio'] === $colegio_sel ? 'selected' : '' ?>><?= $h($oc['colegio']) ?></option><?php endforeach; ?>
+          </select>
+          <select name="orden" onchange="this.form.submit()">
+            <?php foreach (SVD_ORDENES as $k => $txt): ?><option value="<?= $h($k) ?>" <?= $k === $orden_sel ? 'selected' : '' ?>><?= $h($txt) ?></option><?php endforeach; ?>
+          </select>
           <input type="text" id="sv-buscar" placeholder="Buscar colegio o número de pedido...">
+          <?php if ($colegios): ?>
+          <a href="<?= $h($url_excel) ?>" id="sv-excel" class="btn btn-success" style="height:38px;display:inline-flex;align-items:center;gap:6px;"><i class="bi bi-file-earmark-excel"></i> Descargar Excel</a>
+          <?php endif; ?>
         </form>
 
         <?php if (!$colegios): ?>
-        <div class="sv-aviso info"><i class="bi bi-info-circle"></i><div>No hay pedidos de colegios con canal Venta directa - Eureka en este período.</div></div>
+        <div class="sv-aviso info"><i class="bi bi-info-circle"></i><div>No hay pedidos de colegios con canal Venta directa - Eureka en este período<?= $colegio_sel ? ' para el colegio elegido' : '' ?>.</div></div>
         <?php else: ?>
         <?php /* Comparativo en unidades (2026-11-24): solicitado, remisionado (WO), devuelto y vendido por colegio. Se llena
                  por colegio con ajax/solicitudes_vd_unidades.php porque lo remisionado se consulta en World Office. */ ?>
         <div class="sv-comp-tit"><i class="bi bi-bar-chart-steps"></i> Comparativo en unidades</div>
         <div class="table-responsive" style="margin-bottom:22px;">
           <table class="sv-comp" id="sv-comp">
-            <thead><tr><th>Pedido</th><th>Estado</th><th>Solicitado</th><th>Remisionado</th><th>Devuelto</th><th>Vendido</th></tr></thead>
+            <thead><tr><th>Pedido</th><th>Fecha</th><th>Estado</th><th>Solicitado</th><th>Remisionado</th><th>Devuelto</th><th>Vendido</th></tr></thead>
             <?php foreach ($colegios as $col):
               $buscar_c = mb_strtolower($col['colegio'] . ' ' . implode(' ', array_map(fn($p) => '#' . $p['id'], $col['pedidos']))); ?>
             <tbody class="sv-comp-col" data-colegio="<?= (int)$col['id_colegio'] ?>" data-buscar="<?= $h($buscar_c) ?>">
-              <tr class="sv-comp-grupo"><td colspan="6"><i class="bi bi-building"></i> <?= $h($col['colegio']) ?> <span class="sv-comp-err"></span></td></tr>
+              <tr class="sv-comp-grupo"><td colspan="7"><i class="bi bi-building"></i> <?= $h($col['colegio']) ?> <span class="sv-comp-err"></span></td></tr>
               <?php foreach ($col['pedidos'] as $p): ?>
               <tr data-pedido="<?= (int)$p['id'] ?>">
                 <td><a href="pedido_colegio.php?id_pedido=<?= (int)$p['id'] ?>" target="_blank">#<?= (int)$p['id'] ?></a></td>
+                <td style="white-space:nowrap;"><?= $p['fecha'] ? $h(date('d/m/Y', strtotime($p['fecha']))) : '—' ?></td>
                 <td><span class="sv-e <?= $clase_estado[$p['estado']] ?? 'sv-e-proc' ?>"><?= $h($p['estado_txt'] ?: 'Estado ' . $p['estado']) ?></span></td>
                 <td class="n" data-k="solicitado"><span class="sv-cargando"></span></td>
                 <td class="n" data-k="remisionado"><span class="sv-cargando"></span></td>
@@ -123,7 +135,7 @@ $clase_estado = [1 => 'sv-e-pend', 2 => 'sv-e-aprob', 4 => 'sv-e-entr', 5 => 'sv
               </tr>
               <?php endforeach; ?>
               <?php if (count($col['pedidos']) > 1): ?>
-              <tr class="sv-comp-sub"><td colspan="2">Subtotal <?= $h($col['colegio']) ?></td><td class="n" data-s="solicitado"></td><td class="n" data-s="remisionado"></td><td class="n" data-s="devuelto"></td><td class="n" data-s="vendido"></td></tr>
+              <tr class="sv-comp-sub"><td colspan="3">Subtotal <?= $h($col['colegio']) ?></td><td class="n" data-s="solicitado"></td><td class="n" data-s="remisionado"></td><td class="n" data-s="devuelto"></td><td class="n" data-s="vendido"></td></tr>
               <?php endif; ?>
             </tbody>
             <?php endforeach; ?>
@@ -142,6 +154,14 @@ $clase_estado = [1 => 'sv-e-pend', 2 => 'sv-e-aprob', 4 => 'sv-e-entr', 5 => 'sv
 <script src="vendors/scripts/layout-settings.js"></script>
 <script src="src/ink-alerts.js"></script>
 <script>
+// El Excel consulta World Office por cada colegio: puede tardar.
+$('#sv-excel').on('click', function () {
+  var $b = $(this);
+  if ($b.data('ocupado')) return false;
+  $b.data('ocupado', 1).css('opacity', .7).find('i').attr('class', 'sv-cargando');
+  setTimeout(function () { $b.data('ocupado', 0).css('opacity', 1).find('.sv-cargando').attr('class', 'bi bi-file-earmark-excel'); }, 15000);
+});
+
 $('#sv-buscar').on('input', function () {
   var q = $.trim(this.value).toLowerCase();
   $('#sv-comp tbody.sv-comp-col').each(function () { $(this).toggle(!q || String($(this).data('buscar')).indexOf(q) >= 0); });

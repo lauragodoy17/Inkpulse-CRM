@@ -630,6 +630,18 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
           </a>
         </div>
         <?php endif; ?>
+        <?php if ($es_vd && empty($pedido['para_andrea'])):
+          // Fecha de venta elegida (opcional) al solicitar el pedido, 2026-11-25. Va con las demás tarjetas, antes de las de ancho completo.
+          $vd_h = fn($h) => $h ? date('g:i a', strtotime($h)) : '';
+          if ($pedido['vd_fecha_venta']): ?>
+        <div class="mc-card">
+          <div class="mc-card-icon purple"><i class="bi bi-calendar-event"></i></div>
+          <div>
+            <p class="mc-card-label">Fecha de venta</p>
+            <p class="mc-card-val"><?= date('d/m/Y', strtotime($pedido['vd_fecha_venta'])) ?><?= $pedido['vd_hora_inicio'] ? ' · ' . $vd_h($pedido['vd_hora_inicio']) . ' a ' . $vd_h($pedido['vd_hora_fin']) : '' ?></p>
+          </div>
+        </div>
+        <?php endif; endif; ?>
         <?php if (!empty($pedido['dir_ent'])): ?>
         <div class="mc-card mc-card-full">
           <div class="mc-card-icon blue"><i class="bi bi-house-door"></i></div>
@@ -811,6 +823,12 @@ $ph_cant_aprob = $col_cant_aprob ? '' : ' d-print-none';
           <button type="button" id="imprimir" class="mc-btn mc-btn-teal">
             <i class="bi bi-printer"></i> Imprimir
           </button>
+          <?php endif; ?>
+          <?php if ($es_vd && intval($pedido['eid'] ?? 0) != ESTADO_ANULADO): ?>
+          <!-- Venta directa (2026-11-25): lleva al módulo Planillas de devolución con este pedido elegido. -->
+          <a href="planillas_devolucion.php?id_pedido=<?= (int)$id_pedido ?>" target="_blank" class="mc-btn mc-btn-teal" style="text-decoration:none">
+            <i class="bi bi-clipboard-check"></i> Planilla de devolución
+          </a>
           <?php endif; ?>
           <?php if ($can_act): ?>
             <?php if (intval($pedido['eid'] ?? 0) == 1): ?>

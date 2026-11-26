@@ -52,6 +52,10 @@ $sin_bodega = !empty($f['automatico']);
 $con_rec = $recibido && !$sin_bodega;
 $horas = trim(($f['hora_inicio'] ? date('g:i A', strtotime($f['hora_inicio'])) : '') . ($f['hora_fin'] ? ' - ' . date('g:i A', strtotime($f['hora_fin'])) : ''));
 $PESOS = '"$" #,##0;-"$" #,##0';
+// Tabla por grado del cierre de ventas (2026-11-26, includes/formatos_vd_libros.php): si el formato la tiene, va en lugar de la
+// tabla de paquetes y libros sueltos.
+$cl_filas = fvdl_sincronizar($bdd, $f);
+$cl = $cl_filas ? fvdl_calcular($bdd, $f, $cl_filas) : null;
 
 $libro = new Spreadsheet();
 $libro->getProperties()->setCreator('Inkpulse')->setTitle(fvd_numero($f['consecutivo']));
@@ -61,7 +65,9 @@ $hoja->getPageSetup()->setOrientation(PageSetup::ORIENTATION_LANDSCAPE)->setPape
      ->setFitToPage(true)->setFitToWidth(1)->setFitToHeight(0);
 // Columnas: A título, B detalle, C solicitud, D entregado, E devueltas,
 // F recibido final, G vendidas, H precio, I total, (J recibidas bodega)
-$ult = $con_rec ? 'J' : 'I';
+// Venta cerrada con la tabla por grado (2026-11-26): estructura del formato en Excel de la usuaria (php/formato_vd_excel_cierre.php).
+$formato_cierre = $cl && $f['activo'] && $f['etapa'] >= FVD_ETAPA_CERRADO;
+$ult = $con_rec && !$formato_cierre ? 'J' : 'I';
 $borde = ['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'CBD5E1']]]];
 $relleno = function ($rango, $color) use ($hoja) { $hoja->getStyle($rango)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($color); };
 $texto = function ($celda, $v) use ($hoja) { $hoja->setCellValueExplicit($celda, (string)$v, DataType::TYPE_STRING); };
@@ -106,6 +112,53 @@ $hoja->getStyle("A4:$ult" . ($fila - 1))->applyFromArray($borde);
 $fila++;
 $seccion($fila, 'Inventario y ventas');
 $fila++;
+if ($formato_cierre) require __DIR__ . '/formato_vd_excel_cierre.php'; // escribe el resto y descarga (exit)
+if ($cl) {
+    // Columnas: A libro, B solicitado, C remisionado, D devuelto, E vendido, F kit, G suelto, H sin inventario,
+    // I precio kit, J precio suelto, K total precio kit, L total precio suelto.
+    $hoja->fromArray(['Libro', 'Solicitado', 'Remisionado', 'Devuelto', 'Vendido', 'Kit', 'Suelto', 'Sin inventario', 'Precio kit', 'Precio suelto', 'Total precio kit', 'Total precio suelto'], null, "A$fila");
+    $hoja->getStyle("A$fila:L$fila")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+    $hoja->getStyle("A$fila:L$fila")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+    $relleno("A$fila:L$fila", '1F3864');
+    $hoja->getRowDimension($fila)->setRowHeight(30);
+    $cab = $fila;
+    $fila++;
+    $ini = $fila;
+    foreach ($cl['grados'] as $g) {
+        // Franja del grado: color propio; amarillo si algún libro se remisionó por debajo de lo solicitado.
+        $kits = $g['paquetes'] ? implode(' · ', array_map(fn($p) => $p['paquete'] . ': ' . $p['kits'] . ' kit(s) × $' . number_format($p['precio'], 0, ',', '.'), $g['paquetes'])) : 'Sin kits completos';
+        $texto("A$fila", mb_strtoupper($g['grado']) . ($g['faltante'] ? ' · REMISIONADO MENOR QUE LO SOLICITADO' : '') . ' — ' . $kits);
+        $hoja->mergeCells("A$fila:J$fila");
+        $hoja->setCellValue("K$fila", (float)$g['total_kit']);
+        $hoja->setCellValue("L$fila", (float)$g['total_suelto']);
+        $hoja->getStyle("A$fila:L$fila")->getFont()->setBold(true);
+        $relleno("A$fila:L$fila", $g['faltante'] ? 'FDE047' : 'E0E7FF');
+        $fila++;
+        foreach ($g['filas'] as $r) {
+            $texto("A$fila", $r['libro'] . ($r['plan_lector'] ? ' (Plan lector)' : ''));
+            $hoja->fromArray([(int)$r['solicitado'], (int)$r['remisionado'], (int)$r['devuelto'], (int)$r['vendido'], (int)$r['kit'], (int)$r['suelto'], (int)$r['sin_inventario'],
+                              (float)$r['precio_kit'], (float)$r['precio_suelto'], (float)$r['total_kit'], (float)$r['total_suelto']], null, "B$fila", true);
+            $fila++;
+        }
+    }
+    $fin = $fila - 1;
+    $hoja->setCellValue("A$fila", 'TOTAL PRECIO KIT (' . (int)$cl['kits'] . ' kit(s) completo(s) × precio del kit)');
+    $hoja->setCellValue("K$fila", (float)$cl['total_kit']);
+    $fila++;
+    $hoja->setCellValue("A$fila", 'TOTAL PRECIO SUELTO');
+    $hoja->setCellValue("L$fila", (float)$cl['total_suelto']);
+    $fila++;
+    $hoja->setCellValue("A$fila", 'GRAN TOTAL');
+    $hoja->setCellValue("K$fila", (float)$cl['gran_total']);
+    $hoja->mergeCells("K$fila:L$fila");
+    $hoja->getStyle("A" . ($fin + 1) . ":L$fila")->getFont()->setBold(true);
+    $relleno("A" . ($fin + 1) . ":L$fila", 'F1F5F9');
+    $hoja->getStyle("I$ini:L$fila")->getNumberFormat()->setFormatCode($PESOS);
+    $hoja->getStyle("B$ini:H$fila")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    $hoja->getStyle("A$cab:L$fila")->applyFromArray($borde);
+    foreach (['J', 'K', 'L'] as $c) $hoja->getColumnDimension($c)->setWidth(16);
+    $fila += 2;
+} else {
 // Pedidos y remisiones del formato solo en el encabezado de Solicitud / Inventario entregado (2026-11-23).
 $enc_sol = fvd_encabezado_solicitud($f);
 $enc_rem = fvd_encabezado_remisiones($f);
@@ -170,6 +223,7 @@ if ($fin >= $ini) {
 }
 $hoja->getStyle("A$cab:$ult$fila")->applyFromArray($borde);
 $fila += 2;
+}
 
 // Datos de la operación (A:B) y cierre de dinero (E:I) lado a lado, como en la pantalla.
 $operacion = [];

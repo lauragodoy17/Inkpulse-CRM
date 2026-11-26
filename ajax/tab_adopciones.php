@@ -580,10 +580,10 @@
     </div>
   </div>
 
-  <?php if ($adop_cerrada): ?>
+  <?php if ($adop_cerrada): require_once(__DIR__ . "/../includes/sobrecosto_canal.php"); ?>
   <div class="alert alert-secondary d-flex align-items-center" style="gap:8px;font-size:.85rem;">
     <i class="bi bi-lock-fill"></i>
-    <span>Esta adopción está <strong>cerrada</strong>: no se pueden añadir libros ni hacer cambios.</span>
+    <span>Esta adopción está <strong>cerrada</strong>: no se pueden añadir libros ni hacer cambios.<?= adopcion_es_venta_directa($bdd, $_GET['colegio'], $gp_periodo['id']) ? ' Solo se pueden agregar o modificar las <strong>fechas de venta</strong>.' : '' ?></span>
   </div>
   <?php endif; ?>
 
@@ -2131,6 +2131,11 @@ JS;
                                           <button type="button" class="vd-quitar" title="Quitar esta fecha"'.$vd_dis.'><i class="bi bi-trash"></i></button>
                                         </div>';
                             };
+                            // Adopción cerrada (2026-11-25): solo las fechas de venta siguen editables, con su estado
+                            // (programada / ejecutada con consecutivo / cancelada): includes/adopcion_vd_cerrada_panel.php.
+                            if ($adop_cerrada) {
+                              if ($con_sobrecosto) include(__DIR__ . "/../includes/adopcion_vd_cerrada_panel.php");
+                            } else {
                             echo '<div class="col-12" id="vd_panel"'.($con_sobrecosto ? '' : ' style="display:none"').'>
                                     <div class="vd-panel">
                                       <div class="vd-tit"><i class="bi bi-shop"></i> Venta directa - Eureka</div>
@@ -2327,6 +2332,7 @@ JS;
                                       return false;
                                     });
                                   </script>';
+                            } // fin adopción abierta
 
                             echo '
                             </div>
@@ -2954,7 +2960,8 @@ JS;
 <script>
   // Adopción cerrada: todo el formulario queda en solo lectura (el servidor también rechaza los guardados).
   $(function () {
-    $('#form_definicion').find('input, select, textarea').attr('disabled', 'disabled');
+    // Menos las fechas de venta (includes/adopcion_vd_cerrada_panel.php), que se cambian con la adopción cerrada.
+    $('#form_definicion').find('input, select, textarea').not('#vdc_panel :input').attr('disabled', 'disabled');
   });
 </script>
 <?php endif; ?>

@@ -95,6 +95,24 @@ $dv_devol = $req_dv->fetch();
 $dv_tipo = dvv_etiqueta_tipo($dv_devol['tipo_devolucion'] ?? null); // De corte / Física
 if ($dv_devol && $dv_devol['ids_pedidos_venta'] === null) $dv_devol = false;
 
+// Fecha de venta de la devolución (2026-11-25): la del formato de venta directa al que está vinculada; si no tiene
+// formato, la elegida en sus pedidos al solicitarlos (pedidos.vd_fecha_venta).
+$fecha_venta_dev = null; // ['fecha','hi','hf']
+$st_fv = $bdd->prepare("SELECT f.fecha_venta, f.hora_inicio, f.hora_fin FROM devoluciones_v d JOIN formatos_vd f ON f.id = d.id_formato_vd
+                        WHERE d.id = ? AND f.estado = " . FVD_ESTADO_ACTIVO . " AND f.fecha_venta IS NOT NULL");
+$st_fv->execute([$id_pedido]);
+if ($r_fv = $st_fv->fetch(PDO::FETCH_ASSOC)) $fecha_venta_dev = ['fecha' => $r_fv['fecha_venta'], 'hi' => $r_fv['hora_inicio'], 'hf' => $r_fv['hora_fin']];
+if (!$fecha_venta_dev && $dv_devol) {
+    require_once(__DIR__ . "/includes/pedidos_venta_directa.php");
+    asegurar_columnas_pedido_vd($bdd);
+    $ids_fv = [];
+    foreach (explode(',', str_replace(' ', '', (string)$dv_devol['ids_pedidos_venta'])) as $c_fv) if (preg_match('/^v(\d+)$/', $c_fv, $m_fv)) $ids_fv[] = (int)$m_fv[1];
+    if ($ids_fv) {
+        $r_fv = $bdd->query("SELECT vd_fecha_venta, vd_hora_inicio, vd_hora_fin FROM pedidos WHERE vd_fecha_venta IS NOT NULL AND id IN (" . implode(',', $ids_fv) . ") ORDER BY id LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        if ($r_fv) $fecha_venta_dev = ['fecha' => $r_fv['vd_fecha_venta'], 'hi' => $r_fv['vd_hora_inicio'], 'hf' => $r_fv['vd_hora_fin']];
+    }
+}
+
 // Venta directa (2026-11-11): con el desglose guardado (devoluciones_v_vd) la tabla se separa como en el pedido en
 // "En paquete" (cada paquete devuelto = una unidad de cada libro del paquete) y "Libros sueltos" (sueltos del pedido y
 // libros sueltos de paquetes abiertos). Si el desglose no cuadra con libros_devol_v, se muestra la lista de siempre.
@@ -468,6 +486,15 @@ if ($n_cole > 0) {
             <p class="mc-card-val"><?= htmlspecialchars($pedido['fecha'] ?? '') ?></p>
           </div>
         </div>
+        <?php if ($fecha_venta_dev): $h_fv = fn($h) => $h ? date('g:i a', strtotime($h)) : ''; ?>
+        <div class="mc-card">
+          <div class="mc-card-icon purple"><i class="bi bi-calendar-event"></i></div>
+          <div>
+            <p class="mc-card-label">Fecha de venta</p>
+            <p class="mc-card-val"><?= date('d/m/Y', strtotime($fecha_venta_dev['fecha'])) ?><?= $fecha_venta_dev['hi'] ? ' · ' . $h_fv($fecha_venta_dev['hi']) . ' a ' . $h_fv($fecha_venta_dev['hf']) : '' ?></p>
+          </div>
+        </div>
+        <?php endif; ?>
         <?php if ($n_cole > 0): ?>
         <div class="mc-card">
           <div class="mc-card-icon green"><i class="bi bi-building"></i></div>

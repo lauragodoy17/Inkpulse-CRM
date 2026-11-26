@@ -84,6 +84,10 @@ $en_vivo = $f['activo'] && $f['etapa'] < FVD_ETAPA_CERRADO;
 $con_devolucion = $devuelto || (bool)$f['legalizacion'];
 [$conc_v, $tot_v] = fvd_conciliar($f, $conciliado ? null : fvd_precios_actuales($bdd, $f));
 $conc_por_id = array_column($conc_v, null, 'id');
+// Tabla por grado del cierre de ventas (2026-11-26, includes/formatos_vd_libros.php): si el formato la tiene, el formato
+// completo la muestra en lugar de la tabla de paquetes y libros sueltos.
+$cl_filas = fvdl_sincronizar($bdd, $f);
+$cl = $cl_filas ? fvdl_calcular($bdd, $f, $cl_filas) : null;
 $huella = fvd_huella($bdd, $f['id']);
 // Momento de la operación (2026-11-24, la usuaria): se ve en la etiqueta del título y en las columnas pendientes de la tabla.
 $n_devs = count($f['legalizacion']['ids'] ?? []);
@@ -128,6 +132,8 @@ $pend = fn($ok) => $ok ? '' : '<div class="fx-th-pend fx-noprint">Pendiente</div
     .fx-tabla tbody tr.fx-curso.fx-plan td { background:#dcfce7 !important; color:#166534; }
     .fx-tabla th .fx-th-ref { font-size:.68rem; font-weight:700; color:#1d4ed8; text-transform:none; margin-top:2px; }
     .fx-tabla tbody tr.fx-curso td { background:#e2e8f0 !important; font-weight:800; font-size:.74rem; text-transform:uppercase; letter-spacing:.03em; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .fx-tabla tbody tr.fx-grado td { background:#e0e7ff !important; color:#1e1b4b; font-weight:800; font-size:.76rem; letter-spacing:.03em; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .fx-tabla tbody tr.fx-grado.fx-grado-falta td { background:#fde047 !important; color:#713f12; }
     .fx-det { font-size:.74rem; color:#475569; }
     .fx-resumen { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid #cbd5e1; border-top:none; font-size:.84rem; }
     .fx-resumen div { padding:5px 10px; border-right:1px solid #e2e8f0; }
@@ -291,6 +297,34 @@ $pend = fn($ok) => $ok ? '' : '<div class="fx-th-pend fx-noprint">Pendiente</div
         <div class="fx-obs"><div>Observaciones de la recepción (justifica cualquier diferencia)</div><div><?= $h($f['obs_recepcion']) ?></div></div>
 
 <?php else: ?>
+<?php if ($cl): /* tabla por grado del cierre de ventas (2026-11-26) */ ?>
+        <div class="table-responsive">
+          <table class="fx-tabla">
+            <thead><tr><th style="text-align:left;">Libro</th><th>Solicitado<?php $enc_sol = fvd_encabezado_solicitud($f); if ($enc_sol !== ''): ?><div class="fx-th-ref"><?= $h($enc_sol) ?></div><?php endif; ?></th>
+              <th>Remisionado<?php $enc_rem = fvd_encabezado_remisiones($f); if ($enc_rem !== ''): ?><div class="fx-th-ref"><?= $h($enc_rem) ?></div><?php endif; ?></th>
+              <th>Devuelto<?php foreach ($f['legalizacion']['todas'] ?? [] as $i_dv => $dv_h): ?><div class="fx-th-ref"><?= $n_devs > 1 ? ($i_dv + 1) . 'ª: ' : '' ?>Devolución #<?= (int)$dv_h['id'] ?></div><?php endforeach; ?></th>
+              <th>Vendido</th><?php if ($cl["novedades"]): ?><th>Kit</th><th>Suelto</th><th>Sin inventario</th><?php endif; ?><th>Precio kit</th><th>Precio suelto</th><th>Total precio kit</th><th>Total precio suelto</th></tr></thead>
+            <?php foreach ($cl['grados'] as $g): ?>
+            <tbody>
+              <tr class="fx-grado<?= $g['faltante'] ? ' fx-grado-falta' : '' ?>"><td colspan="<?= $cl['novedades'] ? 10 : 7 ?>"><?= $h(mb_strtoupper($g['grado'])) ?><?= $g['faltante'] ? ' · REMISIONADO MENOR QUE LO SOLICITADO' : '' ?>
+                <div class="fx-det" style="color:inherit;text-transform:none;font-weight:600;"><?= $g['paquetes'] ? $h(implode(' · ', array_map(fn($p) => $p['paquete'] . ': ' . $p['kits'] . ' kit(s) × ' . $pesos($p['precio']), $g['paquetes']))) : 'Sin kits completos' ?></div></td>
+                <td class="r"><?= $pesos($g['total_kit']) ?></td><td class="r"><?= $pesos($g['total_suelto']) ?></td></tr>
+              <?php foreach ($g['filas'] as $r): ?>
+              <tr><td><?= $h($r['libro']) ?><?= $r['plan_lector'] ? ' <span class="fx-det">(Plan lector)</span>' : '' ?></td>
+                <td class="c"><?= (int)$r['solicitado'] ?></td><td class="c"<?= $r['faltante'] ? ' style="background:#fde047;font-weight:800;"' : '' ?>><?= (int)$r['remisionado'] ?></td><td class="c"><?= (int)$r['devuelto'] ?></td><td class="c"><b><?= (int)$r['vendido'] ?></b></td>
+                <?php if ($cl['novedades']): ?><td class="c"><?= (int)$r['kit'] ?></td><td class="c"><?= (int)$r['suelto'] ?></td><td class="c"><?= (int)$r['sin_inventario'] ?></td><?php endif; ?>
+                <td class="r"><?= $pesos($r['precio_kit']) ?></td><td class="r"><?= $pesos($r['precio_suelto']) ?></td><td class="r"><?= $pesos($r['total_kit']) ?></td><td class="r"><?= $pesos($r['total_suelto']) ?></td></tr>
+              <?php endforeach; ?>
+            </tbody>
+            <?php endforeach; ?>
+            <tfoot>
+              <tr><td colspan="<?= $cl['novedades'] ? 10 : 7 ?>">TOTAL PRECIO KIT (<?= (int)$cl['kits'] ?> kit(s))</td><td class="r"><?= $pesos($cl['total_kit']) ?></td><td></td></tr>
+              <tr><td colspan="<?= $cl['novedades'] ? 10 : 7 ?>">TOTAL PRECIO SUELTO</td><td></td><td class="r"><?= $pesos($cl['total_suelto']) ?></td></tr>
+              <tr><td colspan="<?= $cl['novedades'] ? 10 : 7 ?>">GRAN TOTAL</td><td class="r" colspan="2"><?= $pesos($cl['gran_total']) ?></td></tr>
+            </tfoot>
+          </table>
+        </div>
+<?php else: ?>
         <div class="table-responsive">
           <table class="fx-tabla">
             <?php $n_cols = 8 + ($recibido && !$sin_bodega ? 1 : 0); ?>
@@ -324,6 +358,7 @@ $pend = fn($ok) => $ok ? '' : '<div class="fx-th-pend fx-noprint">Pendiente</div
               <td class="c"><?= $con_devolucion ? (int)$tot_v['inv_final'] : '' ?></td><td class="c"><?= $con_devolucion ? (int)$tot_v['vendidas'] : '' ?></td><td></td><td class="r"><?= $con_devolucion && !$tot_v['sin_precio'] ? $pesos($tot_v['total_venta']) : '' ?></td><?php if ($recibido && !$sin_bodega): ?><td class="c"><?= $t['rec'] ?></td><?php endif; ?></tr></tfoot>
           </table>
         </div>
+<?php endif; /* fin tabla por grado / tabla anterior */ ?>
 
         <?php if ($sin_bodega): ?>
         <div class="fx-caja">

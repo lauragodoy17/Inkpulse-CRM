@@ -46,6 +46,37 @@ function adopcion_vd_asegurar(PDO $bdd) {
             $bdd->exec("ALTER TABLE adopcion_vd_jornadas ADD COLUMN id_usuario INT NULL");
         }
     } catch (Exception $e) {}
+    // Venta cancelada (2026-11-25): ya no se borra, queda marcada para verla como "Cancelada" en la adopción cerrada.
+    // Toda consulta de fechas vigentes filtra cancelada = 0.
+    try {
+        if (!$bdd->query("SHOW COLUMNS FROM adopcion_vd_jornadas LIKE 'cancelada'")->fetch()) {
+            $bdd->exec("ALTER TABLE adopcion_vd_jornadas ADD COLUMN cancelada TINYINT(1) NOT NULL DEFAULT 0,
+                        ADD COLUMN cancelada_at DATETIME NULL, ADD COLUMN cancelada_por INT NULL");
+        }
+    } catch (Exception $e) {}
+}
+
+/**
+ * Todas las fechas de venta del colegio en el período con su estado (2026-11-25, adopción cerrada):
+ * 'programada' (sin formato), 'ejecutada' (con formato de venta directa: 'formato' => ['id','consecutivo']) o 'cancelada'.
+ * Filas: id, fecha, hora_inicio, hora_fin (HH:MM), estado, formato, cancelada_at, cancelo. Ordenadas por fecha.
+ */
+function adopcion_vd_estados(PDO $bdd, $idColegio, $idPeriodo) {
+    adopcion_vd_asegurar($bdd);
+    $st = $bdd->prepare("SELECT j.id, j.id_colegio, j.id_periodo, j.fecha, TIME_FORMAT(j.hora_inicio, '%H:%i') AS hora_inicio,
+                                TIME_FORMAT(j.hora_fin, '%H:%i') AS hora_fin, j.cancelada, j.cancelada_at,
+                                TRIM(CONCAT(COALESCE(u.nombres, ''), ' ', COALESCE(u.apellidos, ''))) AS cancelo
+                         FROM adopcion_vd_jornadas j LEFT JOIN usuarios u ON u.id = j.cancelada_por
+                         WHERE j.id_colegio = ? AND j.id_periodo = ? ORDER BY j.fecha, j.hora_inicio, j.id");
+    $st->execute([(int)$idColegio, (int)$idPeriodo]);
+    $filas = $st->fetchAll(PDO::FETCH_ASSOC);
+    $atendidas = adopcion_vd_atendidas($bdd, array_values(array_filter($filas, fn($j) => !(int)$j['cancelada'])));
+    foreach ($filas as &$j) {
+        $j['formato'] = (int)$j['cancelada'] ? null : ($atendidas[$j['id']] ?? null);
+        $j['estado'] = (int)$j['cancelada'] ? 'cancelada' : ($j['formato'] ? 'ejecutada' : 'programada');
+    }
+    unset($j);
+    return $filas;
 }
 
 /**
@@ -58,7 +89,7 @@ function adopcion_vd_leer(PDO $bdd, $idColegio, $idPeriodo) {
     $st->execute([(int)$idColegio, (int)$idPeriodo]);
     $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
     $st = $bdd->prepare("SELECT fecha, TIME_FORMAT(hora_inicio, '%H:%i') AS hora_inicio, TIME_FORMAT(hora_fin, '%H:%i') AS hora_fin
-                         FROM adopcion_vd_jornadas WHERE id_colegio = ? AND id_periodo = ? ORDER BY fecha, hora_inicio, id");
+                         FROM adopcion_vd_jornadas WHERE id_colegio = ? AND id_periodo = ? AND cancelada = 0 ORDER BY fecha, hora_inicio, id");
     $st->execute([(int)$idColegio, (int)$idPeriodo]);
     $jornadas = $st->fetchAll(PDO::FETCH_ASSOC);
     $tiene = ($r['vd_tiene_fechas'] ?? null) === null ? ($jornadas ? true : null) : ((int)$r['vd_tiene_fechas'] === 1);
@@ -155,7 +186,7 @@ function adopcion_vd_guardar(PDO $bdd, $idColegio, $idPeriodo, array $datos, $id
     // Por diferencias (2026-11-10): las fechas que no cambian conservan su id (y con él quién las programó y si ya se
     // envió su recordatorio); se borran las que se quitaron y se insertan solo las nuevas.
     $st = $bdd->prepare("SELECT id, CONCAT(fecha, ' ', TIME_FORMAT(hora_inicio, '%H:%i'), ' ', TIME_FORMAT(hora_fin, '%H:%i')) AS clave
-                         FROM adopcion_vd_jornadas WHERE id_colegio = ? AND id_periodo = ?");
+                         FROM adopcion_vd_jornadas WHERE id_colegio = ? AND id_periodo = ? AND cancelada = 0");
     $st->execute([(int)$idColegio, (int)$idPeriodo]);
     $existentes = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $existentes[$r['clave']][] = (int)$r['id'];

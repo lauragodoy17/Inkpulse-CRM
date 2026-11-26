@@ -9,7 +9,7 @@ $agenda_active       = $current_page === 'agenda.php';
 $muestreo_active     = in_array($current_page, ['solicitar_muestreo.php','legalizaciones_muestras.php','lista_muestreo.php','ver_muestreo.php','muestras_entregadas.php']);
 $pedidos_active      = in_array($current_page, ['ver_pedidos.php','lista_pedidos.php','agrupar_pedidos.php','pedido_colegio.php']);
 $devoluciones_active = in_array($current_page, ['devol_muestras_sa.php','devoluciones_muestras.php','devoluciones_ventas.php','saldos_colegio.php','ver_devol_muestras.php','ver_devol_ventas.php','ver_devol_proveedores.php','proveedores.php']);
-$venta_directa_active = in_array($current_page, ['formatos_venta_directa.php','formato_venta_directa.php','ver_formato_venta_directa.php','devoluciones_venta_directa.php','ver_saldo_devolucion.php','reporte_venta_directa.php','calendario_venta_directa.php','solicitudes_venta_directa.php']);
+$venta_directa_active = in_array($current_page, ['formatos_venta_directa.php','formato_venta_directa.php','ver_formato_venta_directa.php','devoluciones_venta_directa.php','ver_saldo_devolucion.php','reporte_venta_directa.php','calendario_venta_directa.php','solicitudes_venta_directa.php','planillas_devolucion.php']);
 // devoluciones_ventas.php?vd=1 = Devolución de venta directa (2026-11-10): se resalta el menú Venta directa, no Devoluciones.
 if ($current_page === 'devoluciones_ventas.php' && (string)($_REQUEST['vd'] ?? '') === '1') { $venta_directa_active = true; $devoluciones_active = false; }
 $pedidos_sa_active   = in_array($current_page, ['solicitar_pedido_sa.php','ver_pedidos_sa.php','lista_pedidos_sa.php','pedido_colegio_sa.php']);
@@ -496,6 +496,7 @@ register_shutdown_function(function () use ($bdd) {
 									<li><a href="formatos_venta_directa.php">Formatos de venta directa</a></li>
 									<!-- 2026-11-13: sin "Ver devoluciones venta directa" ni "Saldos de devolución" (ya no se manejan desde aquí; las devoluciones se ven en Devoluciones → Ver devoluciones de ventas). -->
 									<li><a href="calendario_venta_directa.php">Calendario</a></li>
+									<li><a href="planillas_devolucion.php">Planillas de devolución</a></li><!-- 2026-11-25 -->
 									<li><a href="reporte_venta_directa.php">Reporte</a></li>
 								</ul>
 							</li>

@@ -20,6 +20,8 @@ function asegurar_columnas_pedido_vd(PDO $bdd) {
 		"vd_responsable VARCHAR(150) NULL",
 		// Teléfono del responsable de la venta: también se pregunta al aprobar (2026-11-13).
 		"vd_tel_responsable VARCHAR(40) NULL",
+		// Fecha de venta de la adopción elegida al solicitar el pedido (adopcion_vd_jornadas.id, opcional, 2026-11-25).
+		"vd_id_jornada INT NULL",
 	];
 	foreach ($columnas as $col) {
 		try {
@@ -67,6 +69,120 @@ function leer_pedido_vd(array $post) {
 		return ['ok' => false, 'error' => 'La fecha de recogida debe estar entre ' . date('d/m/Y', strtotime($desde)) . ' y ' . date('d/m/Y', strtotime($fecha)) . ' (hasta 2 días antes de la venta).'];
 	}
 
+	return ['ok' => true, 'error' => null, 'datos' => $datos];
+}
+
+/**
+ * Fechas de venta (adopcion_vd_jornadas.id) que ya eligió otro pedido no anulado del colegio en el período (2026-11-25):
+ * cada fecha se asigna a un solo pedido, así que no se ofrecen ni se aceptan en un pedido nuevo. [id_jornada => id_pedido].
+ */
+function pedido_vd_jornadas_usadas(PDO $bdd, $idColegio, $idPeriodo) {
+	asegurar_columnas_pedido_vd($bdd);
+	$st = $bdd->prepare("SELECT vd_id_jornada, id FROM pedidos WHERE id_colegio = ? AND id_periodo = ? AND vd_id_jornada IS NOT NULL AND estado <> 3");
+	$st->execute([(int)$idColegio, (int)$idPeriodo]);
+	return array_map('intval', $st->fetchAll(PDO::FETCH_KEY_PAIR));
+}
+
+/**
+ * Pedidos de cada fecha de venta con el punto en que van (2026-11-25, la usuaria: modal del calendario de venta directa).
+ * Pedidos de una fecha: los que la eligieron al solicitarse (pedidos.vd_id_jornada) y los del formato de venta directa que
+ * atiende esa fecha ($atendidas = adopcion_vd_atendidas). Sin anulados. Estado, del más avanzado al menos:
+ *  - cerrado: su formato de venta directa con la operación cerrada (enlace al formato).
+ *  - devolucion: tiene devolución de venta no anulada (enlace a la devolución).
+ *  - facturacion: el pedido está en Facturación, En despacho o Entregado; documento de WO guardado en su OP (sin enlace).
+ *  - procesando / pendiente / aprobado: enlace al pedido.
+ * Devuelve [id_jornada => [['id','estado','titulo','detalle','url'], ...]].
+ */
+function pedido_vd_estados_por_jornada(PDO $bdd, array $idsJornadas, array $atendidas) {
+	$idsJornadas = array_values(array_filter(array_map('intval', $idsJornadas)));
+	if (!$idsJornadas) return [];
+	asegurar_columnas_pedido_vd($bdd);
+	$porPedido = []; // id_pedido => [id_jornada, ...]
+	$st = $bdd->query("SELECT id, vd_id_jornada FROM pedidos WHERE estado <> 3 AND vd_id_jornada IN (" . implode(',', $idsJornadas) . ")");
+	foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $porPedido[(int)$r['id']][(int)$r['vd_id_jornada']] = true;
+	$formatos = [];
+	foreach ($atendidas as $idJ => $f) if (in_array((int)$idJ, $idsJornadas, true)) $formatos[(int)$f['id']] = (int)$idJ;
+	$formatoDe = []; // id_pedido => ['id','consecutivo','etapa']
+	if ($formatos) {
+		$st = $bdd->query("SELECT id, consecutivo, etapa, ids_pedidos FROM formatos_vd WHERE estado = 1 AND id IN (" . implode(',', array_keys($formatos)) . ")");
+		foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $f) {
+			foreach (array_filter(explode(',', str_replace(' ', '', (string)$f['ids_pedidos']))) as $c) {
+				if (!preg_match('/^v(\d+)$/', $c, $m)) continue;
+				$porPedido[(int)$m[1]][$formatos[(int)$f['id']]] = true;
+				$formatoDe[(int)$m[1]] = $f;
+			}
+		}
+	}
+	if (!$porPedido) return [];
+	$ids = implode(',', array_keys($porPedido));
+	// Formato de los pedidos que eligieron la fecha pero cuyo formato no es el que atiende la fecha.
+	$sinFormato = array_diff(array_keys($porPedido), array_keys($formatoDe));
+	if ($sinFormato) {
+		$cond = implode(' OR ', array_map(fn($id) => "FIND_IN_SET('v" . (int)$id . "', REPLACE(ids_pedidos, ' ', ''))", $sinFormato));
+		foreach ($bdd->query("SELECT id, consecutivo, etapa, ids_pedidos FROM formatos_vd WHERE estado = 1 AND ($cond)")->fetchAll(PDO::FETCH_ASSOC) as $f) {
+			foreach ($sinFormato as $id) if (in_array('v' . $id, explode(',', str_replace(' ', '', $f['ids_pedidos'])), true)) $formatoDe[$id] = $f;
+		}
+	}
+	$pedidos = $bdd->query("SELECT p.id, p.estado, ep.estado AS estado_txt FROM pedidos p LEFT JOIN estados_pedidos ep ON ep.id = p.estado
+	                        WHERE p.id IN ($ids) AND p.estado <> 3 ORDER BY p.id")->fetchAll(PDO::FETCH_ASSOC);
+	// Devolución de venta más reciente (no anulada) de cada pedido.
+	$devolucion = [];
+	$cond = implode(' OR ', array_map(fn($id) => "FIND_IN_SET('v" . (int)$id . "', REPLACE(ids_pedidos_venta, ' ', ''))", array_keys($porPedido)));
+	foreach ($bdd->query("SELECT id, ids_pedidos_venta FROM devoluciones_v WHERE estado <> 3 AND ($cond) ORDER BY id")->fetchAll(PDO::FETCH_ASSOC) as $d) {
+		foreach (explode(',', str_replace(' ', '', (string)$d['ids_pedidos_venta'])) as $c) if (preg_match('/^v(\d+)$/', $c, $m)) $devolucion[(int)$m[1]] = (int)$d['id'];
+	}
+	// Documento de WO de la OP del pedido (directa o agrupada; la más reciente no anulada).
+	$documento = [];
+	$st = $bdd->query("SELECT x.id_pedido, o.n_doc, t.tipo FROM (
+	                       SELECT id_pedido, id AS op FROM ordenes_pedidos WHERE id_pedido IN ($ids) AND estado <> 4
+	                       UNION SELECT id_pedido, op FROM op_pedidos_agrupados WHERE id_pedido IN ($ids)
+	                   ) x JOIN ordenes_pedidos o ON o.id = x.op AND o.estado <> 4 LEFT JOIN tipo_doc t ON t.id = o.tipo_doc
+	                   ORDER BY o.id");
+	foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+		if (trim((string)$r['n_doc']) !== '') $documento[(int)$r['id_pedido']] = trim(trim((string)$r['tipo']) . ' ' . trim($r['n_doc']));
+	}
+
+	$res = [];
+	foreach ($pedidos as $p) {
+		$id = (int)$p['id'];
+		$f = $formatoDe[$id] ?? null;
+		$verPedido = 'pedido_colegio.php?id_pedido=' . $id;
+		if ($f && (int)$f['etapa'] >= 7) {
+			$e = ['estado' => 'cerrado', 'titulo' => 'Cerrado', 'detalle' => 'Formato venta directa No. ' . (int)$f['consecutivo'], 'url' => 'formato_venta_directa.php?id=' . (int)$f['id']];
+		} elseif (isset($devolucion[$id])) {
+			$e = ['estado' => 'devolucion', 'titulo' => 'En devolución', 'detalle' => 'Devolución No. ' . $devolucion[$id], 'url' => 'devolucion_colegio.php?id_pedido=' . $devolucion[$id]];
+		} elseif (in_array((int)$p['estado'], [4, 6, 7], true)) {
+			$e = ['estado' => 'facturacion', 'titulo' => (int)$p['estado'] === 6 ? 'En facturación' : (string)$p['estado_txt'],
+			      'detalle' => isset($documento[$id]) ? 'Factura WO ' . $documento[$id] : 'Sin documento de WO registrado', 'url' => ''];
+		} else {
+			$e = ['estado' => (int)$p['estado'] === 5 ? 'procesando' : 'pendiente', 'titulo' => (string)$p['estado_txt'], 'detalle' => '', 'url' => ''];
+		}
+		$e = ['id' => $id] + $e + ['pedido_url' => $verPedido];
+		foreach (array_keys($porPedido[$id]) as $idJ) $res[$idJ][] = $e;
+	}
+	return $res;
+}
+
+/**
+ * Pregunta opcional al solicitar un pedido de un colegio con canal "Venta directa - Eureka" (2026-11-25, la usuaria):
+ * ¿Tiene fecha de venta? (vd_tiene_fecha) Sí → se elige una de las fechas registradas en el colegio (vd_id_jornada,
+ * sin las canceladas); se copian su fecha y horario al pedido. Sin responder o con "No" el pedido se guarda igual.
+ * El responsable del colegio NO se pide aquí: se registra en la adopción al agregar fechas de venta (Adopciones o calendario). Devuelve ['ok','error','datos' => [columna de pedidos => valor]].
+ */
+function leer_pedido_vd_opcional(PDO $bdd, array $post, $idColegio, $idPeriodo) {
+	$datos = [];
+	if ((string)($post['vd_tiene_fecha'] ?? '') === '1') {
+		require_once __DIR__ . '/adopcion_vd_datos.php';
+		adopcion_vd_asegurar($bdd);
+		$st = $bdd->prepare("SELECT id, fecha, hora_inicio, hora_fin FROM adopcion_vd_jornadas WHERE id = ? AND id_colegio = ? AND id_periodo = ? AND cancelada = 0");
+		$st->execute([(int)($post['vd_id_jornada'] ?? 0), (int)$idColegio, (int)$idPeriodo]);
+		$j = $st->fetch(PDO::FETCH_ASSOC);
+		if (!$j) return ['ok' => false, 'error' => 'Elige una de las fechas de venta del colegio (o responde "No" a si tiene fecha de venta).'];
+		if (isset(pedido_vd_jornadas_usadas($bdd, $idColegio, $idPeriodo)[(int)$j['id']])) {
+			return ['ok' => false, 'error' => 'Esa fecha de venta ya está asignada a otro pedido del colegio. Elige otra.'];
+		}
+		$datos += ['vd_id_jornada' => (int)$j['id'], 'vd_fecha_venta' => $j['fecha'], 'vd_hora_inicio' => $j['hora_inicio'], 'vd_hora_fin' => $j['hora_fin']];
+	}
 	return ['ok' => true, 'error' => null, 'datos' => $datos];
 }
 
@@ -145,7 +261,7 @@ function datos_venta_vd(PDO $bdd, array $claves, $fechaRef = null, array $fechas
 	if (!$ids) return [];
 	asegurar_columnas_pedido_vd($bdd);
 	$st = $bdd->prepare("SELECT id_colegio, id_periodo, vd_fecha_venta, vd_hora_inicio, vd_hora_fin, vd_contacto_colegio, vd_tel_contacto,
-	                            vd_direccion, vd_responsable, vd_tel_responsable
+	                            vd_direccion, vd_responsable, vd_tel_responsable, vd_id_jornada
 	                     FROM pedidos WHERE id IN (" . implode(',', array_fill(0, count($ids), '?')) . ") ORDER BY id");
 	$st->execute($ids);
 	$pedidos = $st->fetchAll(PDO::FETCH_ASSOC);
@@ -163,7 +279,12 @@ function datos_venta_vd(PDO $bdd, array $claves, $fechaRef = null, array $fechas
 	// Jornada de la venta.
 	$jornadas = array_values(array_filter($adop['jornadas'], fn($j) => !in_array($j['fecha'], $fechasOcupadas, true)));
 	$jornada = null;
-	if ($jornadas) {
+	// 2026-11-25: la fecha de venta elegida al solicitar el pedido manda, si sigue vigente y libre.
+	foreach ($pedidos as $p) {
+		if (!(int)$p['vd_id_jornada'] || $jornada) continue;
+		foreach ($jornadas as $j) if ($j['fecha'] === $p['vd_fecha_venta']) { $jornada = $j; break; }
+	}
+	if ($jornadas && !$jornada) {
 		$ref = $fechaRef ?: date('Y-m-d');
 		foreach ($jornadas as $j) if ($j['fecha'] === $ref) { $jornada = $j; break; }
 		if (!$jornada) foreach ($jornadas as $j) if ($j['fecha'] <= $ref) $jornada = $j;

@@ -62,7 +62,7 @@ if ($colegios) {
     $pp = [];
     foreach ($colegios as $c) { $pares[] = '(?, ?)'; $pp[] = (int)$c['id_colegio']; $pp[] = (int)$c['id_periodo']; }
     $st = $bdd->prepare("SELECT id, id_colegio, id_periodo, fecha, TIME_FORMAT(hora_inicio, '%H:%i') AS hi, TIME_FORMAT(hora_fin, '%H:%i') AS hf
-                         FROM adopcion_vd_jornadas WHERE (id_colegio, id_periodo) IN (" . implode(',', $pares) . ") ORDER BY fecha, hora_inicio");
+                         FROM adopcion_vd_jornadas WHERE (id_colegio, id_periodo) IN (" . implode(',', $pares) . ") AND cancelada = 0 ORDER BY fecha, hora_inicio");
     $st->execute($pp);
     $filas_j = $st->fetchAll(PDO::FETCH_ASSOC);
     $atendidas = adopcion_vd_atendidas($bdd, $filas_j); // fechas con formato de venta directa registrado

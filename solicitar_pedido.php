@@ -32,6 +32,24 @@ if ($cliente_predet !== '') {
     $cliente_sel = $stmt_cl_sel->fetch();
 }
 
+// Venta directa - Eureka (2026-11-25): pregunta opcional de fecha de venta (una de las registradas en el colegio, sin las
+// canceladas). Ver leer_pedido_vd_opcional. El responsable del colegio va en la adopción, no en el pedido.
+require_once("includes/sobrecosto_canal.php");
+require_once("includes/adopcion_vd_datos.php");
+require_once("includes/pedidos_venta_directa.php");
+$es_vd_pedido = adopcion_es_venta_directa($bdd, $id_colegio, $periodo_id);
+$vd_fechas_pedido = [];
+if ($es_vd_pedido) {
+    // Sin las canceladas ni las que ya tiene otro pedido no anulado (pedido_vd_jornadas_usadas).
+    $vd_usadas = pedido_vd_jornadas_usadas($bdd, $id_colegio, $periodo_id);
+    $vd_fechas_pedido = array_values(array_filter(adopcion_vd_estados($bdd, $id_colegio, $periodo_id),
+        fn($j) => $j['estado'] !== 'cancelada' && !isset($vd_usadas[(int)$j['id']])));
+}
+$vd_h12 = function ($h) {
+    $hh = (int)substr($h, 0, 2);
+    return (($hh % 12) ?: 12) . ':' . substr($h, 3, 2) . ($hh < 12 ? ' a. m.' : ' p. m.');
+};
+
 // Verificar si existe documento de adopción cargado (solo aplica para tipos 1, 3, 10)
 $tiene_archivo = true;
 if (in_array($_SESSION['tipo'], [1, 3, 10])) {
@@ -186,6 +204,8 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
     .sp-qty-input::-webkit-outer-spin-button,
     .sp-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .sop-hint { font-size: .74rem; color: #6b7280; margin: 0; }
+    .sop-sino { display: flex; gap: 18px; font-size: .875rem; }
+    .sop-sino label { display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
     .sop-select:disabled { background: #eef2f7; color: #475569; cursor: not-allowed; }
     .sp-plat-check { width: 18px; height: 18px; cursor: pointer; accent-color: #2563eb; }
     /* Títulos de cada paquete (desplegable) */
@@ -340,6 +360,36 @@ if (in_array($_SESSION['tipo'], [1, 3, 10])) {
             </div>
 
             <hr class="sop-divider" />
+
+            <?php if ($es_vd_pedido):
+              $vd_dias_sem = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']; ?>
+            <!-- Venta directa - Eureka: fecha de venta (opcional, 2026-11-25) -->
+            <p class="sop-section-title"><i class="bi bi-shop"></i> Venta directa <small class="sop-hint" style="text-transform:none;letter-spacing:0;">(opcional)</small></p>
+            <div class="sop-grid">
+              <div class="sop-field sop-span2">
+                <label class="sop-label">¿El pedido tiene fecha de venta?</label>
+                <div class="sop-sino">
+                  <label><input type="radio" name="vd_tiene_fecha" value="1"> Sí</label>
+                  <label><input type="radio" name="vd_tiene_fecha" value="0"> No</label>
+                </div>
+                <div id="vd_fecha_campo" style="display:none">
+                  <?php if ($vd_fechas_pedido): ?>
+                  <select name="vd_id_jornada" id="vd_id_jornada" class="sop-select" disabled>
+                    <option value="">Elegir fecha de venta</option>
+                    <?php foreach ($vd_fechas_pedido as $j): $ts = strtotime($j['fecha']); ?>
+                    <option value="<?= (int)$j['id'] ?>"><?= $vd_dias_sem[(int)date('w', $ts)] . ' ' . date('d/m/Y', $ts) . ' · ' . $vd_h12($j['hora_inicio']) . ' a ' . $vd_h12($j['hora_fin'])
+                      . ($j['estado'] === 'ejecutada' ? ' · Formato venta directa No. ' . (int)$j['formato']['consecutivo'] : ' · Programada') ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                  <?php else: ?>
+                  <p class="sop-hint"><i class="bi bi-info-circle"></i> El colegio no tiene fechas de venta disponibles: no tiene fechas registradas o todas ya están asignadas a otros pedidos. Agrega una nueva en la pestaña <strong>Adopciones</strong> del colegio o en el calendario de venta directa.</p>
+                  <?php endif; ?>
+                </div>
+              </div>
+            </div>
+
+            <hr class="sop-divider" />
+            <?php endif; ?>
 
             <?php if (in_array($tipo_adop_ped, [2, 3], true)): ?>
             <!-- Paquetes (Tipo de adopción "Paquetes" o "Ambos"): cada paquete pedido lleva sus libros con la misma cantidad. -->
@@ -551,8 +601,21 @@ $(document).on('change', '.sp-plat-check', function () {
   $('#libro' + key).val(buildLibroVal(key));
 });
 
+// Venta directa (opcional): con "Sí" se muestra y exige la fecha de venta.
+$('input[name=vd_tiene_fecha]').on('change', function () {
+  var si = this.value === '1';
+  $('#vd_fecha_campo').toggle(si);
+  $('#vd_id_jornada').prop('disabled', !si).prop('required', si);
+});
+
 // Garantiza que todos los hidden inputs estén poblados al enviar; debe ir al menos un paquete o libro.
 $('form[action="php/pedido.php"]').on('submit', function (e) {
+  var avisar = function (m) { if (typeof window.inkToast === 'function') window.inkToast(m, 'warn'); else alert(m); };
+  if ($('input[name=vd_tiene_fecha]:checked').val() === '1' && !$('#vd_id_jornada').length) {
+    e.preventDefault();
+    avisar('El colegio no tiene fechas de venta disponibles: responde "No" o agrega una nueva en Adopciones o en el calendario.');
+    return false;
+  }
   var total = 0;
   $('.sp-qty-input').each(function () {
     var key = $(this).data('key');

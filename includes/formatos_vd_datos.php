@@ -32,6 +32,7 @@
 require_once __DIR__ . '/devoluciones_vd_datos.php';
 require_once __DIR__ . '/historial_estados.php';
 require_once __DIR__ . '/pedidos_venta_directa.php';
+require_once __DIR__ . '/formatos_vd_libros.php'; // tabla por grado del cierre de ventas (2026-11-26)
 
 const FVD_ESTADO_ACTIVO = 1;
 const FVD_ESTADO_ANULADO = 3;
@@ -203,6 +204,8 @@ function fvd_asegurar_tablas(PDO $bdd) {
             try { $bdd->exec($sql); } catch (Exception $e) { /* ya existe */ }
         }
     }
+    // Tabla por grado del cierre de ventas: libros con Kit / Suelto y kits armados solos (2026-11-26, formatos_vd_libros.php).
+    fvdl_asegurar_tabla($bdd);
     // Formatos creados antes del flujo por etapas (2026-10-22).
     if (!$bdd->query("SHOW COLUMNS FROM formatos_vd LIKE 'etapa'")->fetch()) {
         foreach (["ALTER TABLE formatos_vd ADD COLUMN etapa TINYINT NOT NULL DEFAULT 1 AFTER ids_pedidos",
@@ -577,6 +580,9 @@ function fvd_recalcular_cierre(PDO $bdd, $id) {
     if ($t['sin_precio']) {
         return ['ok' => false, 'error' => 'falta el precio de venta de ' . implode(', ', array_column(array_filter($filas, fn($x) => $x['sin_precio']), 'descripcion')) . '. Configúralo en Adopciones y vuelve a guardar.'];
     }
+    // Con la tabla por grado del cierre (2026-11-26) el total de venta es su gran total.
+    $gran = fvdl_gran_total($bdd, $g);
+    if ($gran !== null) $t['total_venta'] = $gran;
     return fvd_en_transaccion($bdd, $g['id'], $g['etapa'], function () use ($bdd, $g, $filas, $t) {
         $up = $bdd->prepare("UPDATE formatos_vd_items SET vendidas = ?, vendidas_2 = ?, inv_final = ?, precio = ?, precio_origen = ?, precio_2 = ?, precio_2_origen = ?, total = ? WHERE id = ? AND id_formato = ?");
         foreach ($filas as $x) $up->execute([$x['vend'], $x['n2'], $x['fin'], (float)$x['precio_v'], $x['origen_v'], $x['precio2_v'], $x['origen2_v'], (float)$x['total_v'], (int)$x['id'], (int)$g['id']]);
@@ -749,7 +755,8 @@ function fvd_huella(PDO $bdd, $idFormato) {
     $st = $bdd->prepare("SELECT nombre, valor FROM formatos_vd_auxiliares WHERE id_formato = ? ORDER BY id");
     $st->execute([(int)$idFormato]);
     $aux = $st->fetchAll(PDO::FETCH_ASSOC);
-    return md5(json_encode([$f, $items, $devs, $firmas, $aux]));
+    $libros = array_values(fvdl_filas($bdd, $idFormato)); // tabla por grado del cierre (2026-11-26)
+    return md5(json_encode([$f, $items, $devs, $firmas, $aux, $libros]));
 }
 
 /** Formatos dentro del alcance del usuario, los más recientes primero. */
@@ -2068,10 +2075,25 @@ function fvd_guardar_dinero(PDO $bdd, array $f, array $post, $cerrar) {
         $precios[$it['clave']] = ['precio' => $p > 0 ? $p : null, 'origen' => $origen, 'precio_2' => $p2 > 0 ? $p2 : null, 'origen_2' => $origen2, 'cant_2' => $n2];
     }
     [$filas, $t] = fvd_conciliar($f, $precios);
-    if ($t['sin_precio']) {
+    // Tabla por grado del cierre de ventas (2026-11-26, formatos_vd_libros.php): cantidades y precios por libro escritos a
+    // mano; su gran total (kits completos × precio del kit + sueltos × precio suelto) es el total de venta.
+    $cl = null;
+    $libros = fvdl_filas($bdd, $f['id']);
+    if ($libros) {
+        $leidos = fvdl_leer($libros, $post);
+        if (isset($leidos['error'])) return ['ok' => false, 'error' => $leidos['error']];
+        $libros = $leidos['filas'];
+        // ¿La venta tuvo novedades? (casilla del cierre): sin novedades los kits se arman solos con lo vendido.
+        $novedades = isset($post['cl_novedades']) ? (int)((string)$post['cl_novedades'] === '1') : null;
+        $cl = fvdl_calcular($bdd, $f, $libros, $novedades);
+        $d['libros_novedades'] = (int)$cl['novedades']; // Kit / Suelto / Sin inventario se guardan tal como se escribieron
+        if ($cerrar && $cl['errores']) {
+            return ['ok' => false, 'error' => 'Revisa la tabla del cierre antes de cerrar: ' . implode(' ', array_slice($cl['errores'], 0, 3)) . (count($cl['errores']) > 3 ? ' (y ' . (count($cl['errores']) - 3) . ' más)' : '')];
+        }
+    } elseif ($t['sin_precio']) {
         return ['ok' => false, 'error' => 'Falta el precio aplicado de: ' . implode(', ', array_column(array_filter($filas, fn($x) => $x['sin_precio']), 'descripcion')) . '.'];
     }
-    $d['total_venta'] = $t['total_venta'];
+    $d['total_venta'] = $cl ? $cl['gran_total'] : $t['total_venta'];
     $d['valor_inventario'] = $t['valor_inventario'];
     $d['base_devuelta'] = $d['base_entregada'] - $d['gastos'];
     $d['suma_total'] = $d['efectivo'] + $d['datafono'] + $d['breb'];
@@ -2107,9 +2129,10 @@ function fvd_guardar_dinero(PDO $bdd, array $f, array $post, $cerrar) {
         if ($cerrar && $cajas === null) return ['ok' => false, 'error' => 'Escribe el total de cajas para cerrar la operación.'];
         $d['total_cajas'] = $cajas;
     }
-    return fvd_en_transaccion($bdd, $f['id'], FVD_ETAPA_RECIBIDO, function () use ($bdd, $f, $d, $cerrar, $aux, $filas, $manual, $manual2) {
+    return fvd_en_transaccion($bdd, $f['id'], FVD_ETAPA_RECIBIDO, function () use ($bdd, $f, $d, $cerrar, $aux, $filas, $manual, $manual2, $cl, $libros) {
         $bdd->prepare("UPDATE formatos_vd SET " . implode(', ', array_map(fn($c) => "$c = ?", array_keys($d))) . ", updated_at = NOW() WHERE id = ?")
             ->execute(array_merge(array_values($d), [(int)$f['id']]));
+        if ($cl) fvdl_guardar_filas($bdd, $f['id'], $libros);
         $up = $bdd->prepare("UPDATE formatos_vd_items SET vendidas_2 = ?, precio = ?, precio_origen = ?, precio_manual = ?, precio_2 = ?, precio_2_origen = ?, precio_2_manual = ?, total = ? WHERE id = ? AND id_formato = ?");
         foreach ($filas as $x) $up->execute([$x['n2'], (float)$x['precio_v'], $x['origen_v'], $manual[(int)$x['id']], $x['precio2_v'], $x['origen2_v'], $manual2[(int)$x['id']] ?? null, (float)$x['total_v'], (int)$x['id'], (int)$f['id']]);
         if ($aux !== null) {

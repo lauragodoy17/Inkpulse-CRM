@@ -19,6 +19,7 @@ $id_formato = (int)($_GET['id'] ?? 0);
 $error = null;
 $token = '';
 $armado = null; // pantalla Armar paquetes (fvd_armado_datos)
+$cl = null; // tabla por grado del cierre de ventas (fvdl_calcular)
 $f = null;
 $dos_dev = false; // formato con 2 devoluciones de venta directa (2026-11-24): vendidas a dos precios
 $hist = [];
@@ -69,6 +70,11 @@ if ($id_formato) {
     $vinculables = $etapa === FVD_ETAPA_ENTREGADO && $f['activo'] ? fvd_devoluciones_para_vincular($bdd, $f) : [];
     // Armar paquetes con lo vendido suelto, después de la devolución (2026-11-19, fvd_armado_datos).
     $armado = $etapa >= FVD_ETAPA_DEV_GENERADA && $f['legalizacion'] ? fvd_armado_datos($bdd, $f) : null;
+    // Tabla por grado del cierre de ventas (2026-11-26, includes/formatos_vd_libros.php): desde el cierre de dinero, una fila
+    // por libro con Kit / Suelto; los kits se arman solos con la columna Kit (reemplaza la sección "Armar paquetes").
+    $cl_filas = fvdl_sincronizar($bdd, $f);
+    $cl = $cl_filas ? fvdl_calcular($bdd, $f, $cl_filas) : null;
+    if ($cl) $armado = null;
   }
 } else {
   $prop = fvd_propuesta($bdd, (array)($_GET['claves'] ?? []));
@@ -303,6 +309,27 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     .fv-resumen-dif.mal { background:#fef2f2; border-color:#fecaca; } .fv-resumen-dif.mal strong { color:#dc2626; }
     .fv-armar-lib { font-size:.8rem; color:#334155; line-height:1.55; } .fv-armar-lib .bi-check-circle { color:#16a34a; }
     .fv-armar-lib.falta { color:#dc2626; font-weight:600; } .fv-armar-off td { background:#fafafa; } .fv-armar-off .fv-paq { color:#94a3b8; }
+    /* Tabla por grado del cierre de ventas (2026-11-26) */
+    .fv-cl { font-size:.82rem; }
+    .fv-cl th { white-space:normal; line-height:1.2; text-align:center; }
+    .fv-cl th:first-child { text-align:left; }
+    .fv-cl td { padding:6px 8px; }
+    .fv-cl .fv-num { width:64px; padding:5px 4px; }
+    .fv-cl .fv-cl-pesos { padding:0 6px; min-width:110px; }
+    .fv-cl .fv-cl-pesos input { padding:5px 0; font-size:.84rem; }
+    .fv-cl tr.fv-cl-head td { background:#e0e7ff; color:#1e1b4b; font-weight:800; border-top:2px solid #a5b4fc; border-bottom:1px solid #c7d2fe; }
+    .fv-cl tr.fv-cl-head.faltante td { background:#fde047; color:#713f12; border-top-color:#eab308; border-bottom-color:#facc15; }
+    .fv-cl .fv-cl-falta { display:none; margin-left:8px; font-size:.7rem; font-weight:700; text-transform:none; }
+    .fv-cl tr.fv-cl-head.faltante .fv-cl-falta { display:inline; }
+    .fv-cl .fv-cl-kits { font-size:.72rem; font-weight:600; margin-top:2px; opacity:.85; }
+    .fv-cl tr.fv-cl-fila.mal td { background:#fef2f2; }
+    .fv-cl tfoot tr.fv-cl-gran td { font-size:1rem; background:#eff6ff; color:#1e3a8a; }
+    .fv-cl.sin-nov .fv-cl-nc { display:none; }
+    .fv-cl td.fv-cl-rem.falta { background:#fde047; color:#713f12; font-weight:800; }
+    .fv-cl td.fv-cl-rem.falta .fv-num { border-color:#eab308; background:#fef9c3; }
+    .fv-cl-nov-lbl { display:inline-flex; align-items:center; gap:8px; font-size:.86rem; font-weight:700; color:var(--fv-tinta); margin:0 0 10px; cursor:pointer; }
+    .fv-cl-nov-lbl input[type="checkbox"] { width:17px; height:17px; }
+    .fv-cl-amarillo { background:#fde047; color:#713f12; font-weight:700; padding:0 6px; border-radius:4px; }
     .fv-modal { position:fixed; inset:0; background:rgba(15,23,42,.5); z-index:9980; display:none; align-items:center; justify-content:center; padding:16px; }
     .fv-modal > form { background:#fff; border-radius:14px; padding:22px; width:440px; max-width:100%; }
     @media (max-width:992px) { .fv-caja { grid-template-columns:1fr; } .fv-resumen { grid-template-columns:1fr 1fr; } .fv-quien { margin-left:0; width:100%; } }
@@ -336,7 +363,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
       <?php if (!$activo) echo html_motivo_anulacion(obtener_historial_estado($bdd, FVD_MODULO_HISTORIAL, $f['id'], ESTADO_ANULADO), 'Formato anulado'); ?>
 
       <?php if ($solo_cierre): ?>
-      <div class="fv-aviso ok"><i class="bi bi-info-circle"></i> Formato generado con <?= $f['legalizacion'] ? htmlspecialchars(fvd_texto_devoluciones($f['legalizacion'])) : 'la devolución' ?>: primero <a href="#fv-armar">arma los paquetes</a> con lo vendido (lo demás queda suelto a precio venta padre); <?= $etapa < FVD_ETAPA_RECIBIDO ? 'falta un precio de venta para calcular el total (abajo). Después se habilita el cierre de dinero.' : 'llena los auxiliares y el cierre de dinero.' ?> Al confirmar el cierre se genera el formato completo para imprimir.</div>
+      <div class="fv-aviso ok"><i class="bi bi-info-circle"></i> Formato generado con <?= $f['legalizacion'] ? htmlspecialchars(fvd_texto_devoluciones($f['legalizacion'])) : 'la devolución' ?>: <?= $etapa < FVD_ETAPA_RECIBIDO ? 'falta un precio de venta para calcular el total (abajo). Después se habilita el cierre de dinero.' : 'revisa la tabla por grado (reparte lo vendido de cada libro entre Kit y Suelto; los kits se arman solos), y llena los auxiliares y el cierre de dinero.' ?> Al confirmar el cierre se genera el formato completo para imprimir.</div>
       <?php else: ?>
       <div class="fv-steps">
         <?php foreach ($pasos as $n => $p): $e = $estado_paso($n); ?>
@@ -746,7 +773,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
         <?php if ($e6 === 'bloqueado'): ?><div class="fv-lock"><?= $bloqueo_txt[6] ?></div>
         <?php else: $cerrado = $e6 === 'hecho'; ?>
         <div class="fv-sec-body">
-          <form method="POST" action="php/formato_vd_guardar.php" id="fv-form-6" autocomplete="off" data-total="<?= (float)$f['total_venta'] ?>">
+          <form method="POST" action="php/formato_vd_guardar.php" id="fv-form-6" autocomplete="off" data-total="<?= (float)($cl ? $cl['gran_total'] : $f['total_venta']) ?>">
             <input type="hidden" name="id" value="<?= (int)$f['id'] ?>">
             <div class="fv-sub">Ventas</div>
             <?php
@@ -757,6 +784,60 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
             $ocultos = count($items) - count($vendibles);
             $ids_l = $f['legalizacion']['ids'] ?? [];
             ?>
+            <?php if ($cl): /* ── Tabla por grado del cierre de ventas (2026-11-26, includes/formatos_vd_libros.php) ── */
+              $cl_ed = !$cerrado && $activo;
+              $cl_in = function ($r, $k, $campo) use ($cl_ed, $h) {
+                $v = (int)$r[$campo];
+                if (!$cl_ed) return '<span class="fv-cl-v" data-k="' . $k . '" data-v="' . $v . '">' . $v . '</span>';
+                return '<input type="number" class="fv-num fv-cl-in" data-k="' . $k . '" name="cl[' . (int)$r['id'] . '][' . $k . ']" min="0" step="1" value="' . $v . '">';
+              };
+              $cl_pin = function ($r, $k, $campo) use ($cl_ed, $pesos) {
+                $v = (int)round((float)$r[$campo]);
+                if (!$cl_ed) return '<span class="fv-cl-v" data-k="' . $k . '" data-v="' . $v . '">' . $pesos($v) . '</span>';
+                return '<div class="fv-pesos-in fv-cl-pesos"><span>$</span><input type="number" class="fv-cl-in" data-k="' . $k . '" name="cl[' . (int)$r['id'] . '][' . $k . ']" min="0" step="1" value="' . $v . '"></div>';
+              }; ?>
+            <?php $nov = $cl['novedades']; $span = $nov ? 10 : 7; /* sin novedades no se ven Kit, Suelto ni Sin inventario */ ?>
+            <div class="fv-v-ayuda"><i class="bi bi-info-circle"></i><div>Un renglón por libro, agrupado por grado. <strong>Vendido = Remisionado − Devuelto</strong>. Sin novedades, los kits se arman solos con lo vendido (cada paquete lleva 1 unidad de cada uno de sus libros) y lo demás queda suelto. Si la venta tuvo <strong>novedades</strong>, márcalo para repartir lo vendido de cada libro entre <strong>Kit</strong> y <strong>Suelto</strong> y anotar lo <strong>Sin inventario</strong>: las tres arrancan en 0 y solo cuenta lo que escribas; un paquete sale aunque solo uno de sus libros tenga Kit, y lo vendido que no va en kits se cobra suelto. Los precios vienen de la adopción y se pueden cambiar aquí sin modificar la adopción. <span class="fv-cl-amarillo">En amarillo</span> = remisionado por debajo de lo solicitado (World Office).</div></div>
+            <label class="fv-cl-nov-lbl"><input type="hidden" name="cl_novedades" value="0"><input type="checkbox" name="cl_novedades" value="1" id="fv-cl-nov" <?= $nov ? 'checked' : '' ?> <?= $cl_ed ? '' : 'disabled' ?>> La venta tuvo novedades <span class="fv-det" style="display:inline;">(muestra Kit, Suelto y Sin inventario)</span></label>
+            <div class="table-responsive">
+              <table class="fv-tabla fv-cl<?= $nov ? '' : ' sin-nov' ?>" id="fv-cl">
+                <thead><tr><th>Libro</th><th class="c">Solicitado</th><th class="c">Remisionado</th><th class="c">Devuelto</th><th class="c">Vendido</th><th class="c fv-cl-nc">Kit</th><th class="c fv-cl-nc">Suelto</th><th class="c fv-cl-nc">Sin inventario</th><th class="r">Precio kit</th><th class="r">Precio suelto</th><th class="r">Total precio kit</th><th class="r">Total precio suelto</th></tr></thead>
+                <?php foreach ($cl['grados'] as $g): ?>
+                <tbody class="fv-cl-g" data-grado="<?= $h($g['clave']) ?>">
+                  <tr class="fv-cl-head<?= $g['faltante'] ? ' faltante' : '' ?>">
+                    <td class="fv-cl-span" colspan="<?= $span ?>"><i class="bi bi-mortarboard"></i> <?= $h(mb_strtoupper($g['grado'])) ?>
+                      <span class="fv-cl-falta"><i class="bi bi-exclamation-triangle-fill"></i> Remisionado menor que lo solicitado</span>
+                      <div class="fv-cl-kits"><?= $g['paquetes'] ? $h(implode(' · ', array_map(fn($p) => $p['paquete'] . ': ' . $p['kits'] . ' kit(s) × ' . $pesos($p['precio']), $g['paquetes']))) : 'Sin kits' ?></div></td>
+                    <td class="r fv-cl-gk"><?= $pesos($g['total_kit']) ?></td><td class="r fv-cl-gs"><?= $pesos($g['total_suelto']) ?></td>
+                  </tr>
+                  <?php foreach ($g['filas'] as $r): ?>
+                  <tr class="fv-cl-fila" data-id="<?= (int)$r['id'] ?>" data-paq="<?= $h($r['paquetes']) ?>">
+                    <td><div class="fv-paq"><?= $h($r['libro']) ?><?= $r['plan_lector'] ? '<span class="fv-tag">Plan lector</span>' : '' ?><?= trim((string)$r['paquetes']) === '' ? '<span class="fv-tag" title="No hace parte de ningún paquete de la adopción: solo se vende suelto.">Solo suelto</span>' : '' ?></div></td>
+                    <td class="c"><?= $cl_in($r, 'sol', 'solicitado') ?></td>
+                    <td class="c fv-cl-rem<?= $r['faltante'] ? ' falta' : '' ?>"><?= $cl_in($r, 'rem', 'remisionado') ?></td>
+                    <td class="c"><?= $cl_in($r, 'dev', 'devuelto') ?></td>
+                    <td class="c"><strong class="fv-cl-vend"><?= (int)$r['vendido'] ?></strong></td>
+                    <td class="c fv-cl-nc"><?= $cl_in($r, 'kit', 'kit') ?></td>
+                    <td class="c fv-cl-nc"><?= $cl_in($r, 'suelto', 'suelto') ?></td>
+                    <td class="c fv-cl-nc"><?= $cl_in($r, 'sinv', 'sin_inventario') ?></td>
+                    <td class="r"><?= $cl_pin($r, 'pk', 'precio_kit') ?></td>
+                    <td class="r"><?= $cl_pin($r, 'ps', 'precio_suelto') ?></td>
+                    <td class="r fv-cl-tk"><?= $pesos($r['total_kit']) ?></td>
+                    <td class="r fv-cl-ts"><?= $pesos($r['total_suelto']) ?></td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+                <?php endforeach; ?>
+                <tfoot>
+                  <tr><td class="fv-cl-span" colspan="<?= $span ?>">Total precio kit <span class="fv-det" style="display:inline;">· <span id="fv-cl-nkits"><?= (int)$cl['kits'] ?></span> kit(s) × precio del kit</span></td><td class="r" id="fv-cl-tk"><?= $pesos($cl['total_kit']) ?></td><td></td></tr>
+                  <tr><td class="fv-cl-span" colspan="<?= $span ?>">Total precio suelto <span class="fv-det" style="display:inline;">· libros sueltos × precio individual</span></td><td></td><td class="r" id="fv-cl-ts"><?= $pesos($cl['total_suelto']) ?></td></tr>
+                  <tr class="fv-cl-gran"><td class="fv-cl-span" colspan="<?= $span ?>">GRAN TOTAL <span class="fv-det" style="display:inline;">· total precio kit + total precio suelto</span></td><td class="r" colspan="2" id="fv-cl-gran"><?= $pesos($cl['gran_total']) ?></td></tr>
+                </tfoot>
+              </table>
+            </div>
+            <div class="fv-aviso err<?= $cl['errores'] ? '' : ' d-none' ?>" id="fv-cl-errores" style="margin-top:12px;"><i class="bi bi-exclamation-triangle"></i> <strong>Revisa la tabla antes de cerrar:</strong><ul style="margin:6px 0 0 18px;padding:0;"><?php foreach ($cl['errores'] as $e_cl): ?><li><?= $h($e_cl) ?></li><?php endforeach; ?></ul></div>
+            <script>var FV_CL = <?= json_encode(['paquetes' => array_map(fn($p) => ['id' => $p['id'], 'grado' => 'g' . (int)$p['id_grado'], 'nombre' => $p['paquete'], 'libros' => $p['libros']], $cl['paquetes'])], JSON_UNESCAPED_UNICODE) ?>;</script>
+            <?php else: ?>
             <?php if ($dos_dev): ?>
             <div class="fv-v-ayuda"><i class="bi bi-info-circle"></i><div>Este formato tiene <strong>2 devoluciones</strong> (#<?= (int)$ids_l[0] ?> y #<?= (int)end($ids_l) ?>). Las vendidas de cada título son lo entregado menos lo que volvió en las dos.
               <?php if ($precio_ed): ?>En los títulos que tuvieron unidades en la 2ª devolución, si parte se vendió a otro precio usa <strong>Agregar 2º precio</strong> y escribe cuántas unidades van a ese precio; las demás quedan al precio 1. Los títulos sin 2ª devolución llevan un solo precio.<?php endif; ?></div></div>
@@ -806,6 +887,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
             </div>
             <?php endif; ?>
             <?php if ($ocultos): ?><div class="fv-det" style="max-width:none;margin-top:6px;"><i class="bi bi-eye-slash"></i> No se muestran <?= $ocultos ?> fila(s) sin unidades vendidas (paquetes no armados y títulos que volvieron completos).</div><?php endif; ?>
+            <?php endif; /* fin tabla por grado / tabla de ventas anterior */ ?>
             <fieldset <?= $cerrado ? 'disabled' : '' ?>>
             <?php if ($f['automatico'] || trim((string)$f['responsable']) === ''): /* 2026-11-23: obligatorio para cerrar (fvd_guardar_dinero); se propone el del pedido. */ ?>
             <div class="fv-sub">Responsable de la venta</div>
@@ -851,7 +933,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
               </div>
             </div>
             <div class="fv-resumen">
-              <div><span>Total venta</span><strong id="fv-total-venta"><?= $pesos($f['total_venta']) ?></strong><small><?= array_sum(array_column($items, 'vendidas')) ?> unidades vendidas</small></div>
+              <div><span>Total venta</span><strong id="fv-total-venta"><?= $pesos($cl ? $cl['gran_total'] : $f['total_venta']) ?></strong><small><?= $cl ? 'Gran total de la tabla por grado' : array_sum(array_column($items, 'vendidas')) . ' unidades vendidas' ?></small></div>
               <div><span>Suma total recaudada</span><strong id="fv-suma2">$ 0</strong><small>Efectivo + datáfono + Bre-B</small></div>
               <div class="fv-resumen-dif" id="fv-dif-box"><span>Diferencia</span><strong id="fv-dif">$ 0</strong><small id="fv-dif-txt">Recaudo − total venta</small></div>
               <div><span>Valor inventario devuelto</span><strong id="fv-valor-inv"><?= $pesos($f['valor_inventario']) ?></strong><small>Recibido final × precio</small></div>
@@ -1032,6 +1114,84 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
   $(document).on('input change', '.fv-rec', recalcRecepcion);
   recalcRecepcion();
 
+  // ── Paso 6: tabla por grado del cierre de ventas (2026-11-26; mismo cálculo que fvdl_calcular) ──
+  var clVal = function ($tr, k) {
+    var $i = $tr.find('.fv-cl-in[data-k="' + k + '"]');
+    return $i.length ? num($i) : Number($tr.find('.fv-cl-v[data-k="' + k + '"]').data('v')) || 0;
+  };
+  var clNov = function () { return $('#fv-cl-nov').is(':checked'); };
+  // Kit / Suelto / Sin inventario son solo lo que se escribe (arrancan en 0 y no se llenan solos).
+  $(document).on('input change', '#fv-cl .fv-cl-in', function () { recalcCL(); recalcDinero(); });
+  // Casilla "La venta tuvo novedades": muestra u oculta Kit / Suelto / Sin inventario.
+  $('#fv-cl-nov').on('change', function () {
+    var nov = clNov();
+    $('#fv-cl').toggleClass('sin-nov', !nov).find('.fv-cl-span').attr('colspan', nov ? 10 : 7);
+    recalcCL(); recalcDinero();
+  });
+  function recalcCL() {
+    var $t = $('#fv-cl'); if (!$t.length || !window.FV_CL) return;
+    var nov = clNov(), filas = {}, errores = [], libre = {}, porGrado = {}, totKit = 0, totSue = 0, nKits = 0, kitsGrado = {};
+    $t.find('.fv-cl-fila').each(function () {
+      var $tr = $(this), id = String($tr.data('id')), x = {};
+      ['sol', 'rem', 'dev', 'kit', 'suelto', 'sinv', 'pk', 'ps'].forEach(function (k) { x[k] = clVal($tr, k); });
+      x.$tr = $tr; x.vend = x.rem - x.dev; x.nombre = $tr.find('.fv-paq').contents().first().text();
+      x.grado = String($tr.closest('tbody').data('grado')); x.tk = 0; x.enKit = 0;
+      filas[id] = x; libre[id] = Math.max(0, x.vend);
+    });
+    // Kits de cada paquete: con novedades y Kit escrito en alguno de sus libros, el mayor escrito; si no, se arma solo con lo vendido.
+    FV_CL.paquetes.forEach(function (p) {
+      var pres = p.libros.filter(function (l) { return l.fila !== null && filas[String(l.fila)]; }).map(function (l) { return String(l.fila); });
+      if (!pres.length) return;
+      var escrito = nov ? Math.max.apply(null, pres.map(function (i) { return filas[i].kit; })) : 0, n;
+      if (escrito > 0) n = escrito;
+      else if (pres.length === p.libros.length) n = Math.min.apply(null, pres.map(function (i) { return libre[i]; }));
+      else return;
+      if (n <= 0) return;
+      var precio = 0;
+      p.libros.forEach(function (l) {
+        var i = l.fila === null ? null : String(l.fila);
+        if (i === null || !filas[i]) { precio += l.pk; return; }
+        var x = filas[i];
+        precio += x.pk; libre[i] -= Math.min(libre[i], n); x.enKit += n; x.tk += n * x.pk;
+      });
+      var g = $t.find('tbody[data-grado="' + p.grado + '"]').length ? p.grado : filas[pres[0]].grado;
+      (kitsGrado[g] = kitsGrado[g] || []).push({ nombre: p.nombre, kits: n, precio: precio });
+      porGrado[g] = porGrado[g] || { k: 0, s: 0, falta: false }; porGrado[g].k += n * precio; totKit += n * precio; nKits += n;
+    });
+    Object.keys(filas).forEach(function (id) {
+      var x = filas[id], $tr = x.$tr, mal = false, sinPaq = !String($tr.data('paq'));
+      var suelto = libre[id]; // lo vendido que no fue en kits
+      if (nov && x.suelto > 0) {
+        if (x.suelto !== libre[id]) { errores.push('"' + x.nombre + '": se vendieron ' + Math.max(0, x.vend) + (x.enKit ? ' y ' + Math.min(Math.max(0, x.vend), x.enKit) + ' van en kits' : '') + ': el Suelto debe ser ' + libre[id] + ' (escribiste ' + x.suelto + ').'); mal = true; }
+        suelto = x.suelto;
+      }
+      porGrado[x.grado] = porGrado[x.grado] || { k: 0, s: 0, falta: false };
+      var falta = x.rem < x.sol;
+      if (falta) porGrado[x.grado].falta = true;
+      $tr.find('.fv-cl-rem').toggleClass('falta', falta);
+      $tr.find('.fv-cl-vend').text(x.vend);
+      $tr.find('.fv-cl-tk').text(pesos(x.tk)); $tr.find('.fv-cl-ts').text(pesos(suelto * x.ps));
+      porGrado[x.grado].s += suelto * x.ps; totSue += suelto * x.ps;
+      if (x.vend < 0) { errores.push('"' + x.nombre + '": lo devuelto (' + x.dev + ') es más que lo remisionado (' + x.rem + ').'); mal = true; }
+      if (nov && x.kit > 0 && sinPaq) { errores.push('"' + x.nombre + '" no hace parte de ningún paquete de la adopción: no puede ir en Kit.'); mal = true; }
+      if (suelto > 0 && x.ps <= 0) { errores.push('"' + x.nombre + '": falta el precio suelto.'); mal = true; }
+      if (x.tk > 0 && x.pk <= 0) { errores.push('"' + x.nombre + '": falta el precio kit.'); mal = true; }
+      $tr.toggleClass('mal', mal);
+    });
+    $t.find('tbody.fv-cl-g').each(function () {
+      var g = String($(this).data('grado')), d = porGrado[g] || { k: 0, s: 0, falta: false }, $h = $(this).find('.fv-cl-head');
+      $h.toggleClass('faltante', d.falta);
+      $h.find('.fv-cl-gk').text(pesos(d.k)); $h.find('.fv-cl-gs').text(pesos(d.s));
+      $h.find('.fv-cl-kits').text(kitsGrado[g] ? kitsGrado[g].map(function (p) { return p.nombre + ': ' + p.kits + ' kit(s) × ' + pesos(p.precio); }).join(' · ') : 'Sin kits');
+    });
+    $('#fv-cl-tk').text(pesos(totKit)); $('#fv-cl-ts').text(pesos(totSue)); $('#fv-cl-gran').text(pesos(totKit + totSue)); $('#fv-cl-nkits').text(nKits);
+    var $e = $('#fv-cl-errores');
+    $e.toggleClass('d-none', !errores.length).find('ul').html(errores.map(function (t) { return '<li>' + $('<div>').text(t).html() + '</li>'; }).join(''));
+    $('#fv-form-6').data('total', totKit + totSue).data('cl-errores', errores);
+    $('#fv-total-venta').text(pesos(totKit + totSue));
+  }
+  recalcCL();
+
   // ── Paso 6: mismos cálculos que fvd_guardar_dinero() ──
   function recalcDinero() {
     var $form = $('#fv-form-6'); if (!$form.length) return;
@@ -1102,6 +1262,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
         if (parseInt(v, 10) > Number($(this).data('ent'))) { error = 'En "' + nombre + '" no se puede devolver más de lo entregado.'; return false; }
       });
     }
+    if (!error && accion === 'dinero_cerrar' && ($form.data('cl-errores') || []).length) error = 'Revisa la tabla del cierre antes de cerrar: ' + $form.data('cl-errores')[0];
     if (!error && accion === 'dinero_cerrar' && !$('#fv-cierre-req').hasClass('d-none') && !$.trim($('[name="obs_cierre"]').val())) error = 'El recaudo no cuadra con el total de venta: justifica la diferencia en las observaciones del cierre.';
     if (!error && $b.is('[formnovalidate]') === false && !$form[0].checkValidity()) { $form[0].reportValidity(); return; }
     if (error) { inkToast(error, 'error'); return; }

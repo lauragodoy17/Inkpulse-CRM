@@ -74,8 +74,9 @@ function svd_listar(PDO $bdd, $idPeriodo) {
     unset($col, $p);
 
     // Fechas de venta y su formato (adopcion_vd_atendidas: el formato cuya fecha de venta coincide).
+    adopcion_vd_asegurar($bdd);
     $jor = $bdd->query("SELECT id, id_colegio, id_periodo, fecha, TIME_FORMAT(hora_inicio, '%H:%i') AS hi, TIME_FORMAT(hora_fin, '%H:%i') AS hf
-                        FROM adopcion_vd_jornadas WHERE id_periodo = " . (int)$idPeriodo . " AND id_colegio IN ($ids) ORDER BY fecha, hora_inicio")->fetchAll(PDO::FETCH_ASSOC);
+                        FROM adopcion_vd_jornadas WHERE id_periodo = " . (int)$idPeriodo . " AND id_colegio IN ($ids) AND cancelada = 0 ORDER BY fecha, hora_inicio")->fetchAll(PDO::FETCH_ASSOC);
     $atendidas = adopcion_vd_atendidas($bdd, $jor);
     $hoy = date('Y-m-d');
     foreach ($jor as $j) {
@@ -85,6 +86,33 @@ function svd_listar(PDO $bdd, $idPeriodo) {
         if ($j['fecha'] >= $hoy && ($res[(int)$j['id_colegio']]['proxima'] === null)) $res[(int)$j['id_colegio']]['proxima'] = $j['fecha'];
     }
     return array_values($res);
+}
+
+/** Órdenes de la lista de solicitudes (2026-11-26, la usuaria). */
+const SVD_ORDENES = ['proxima' => 'Próxima venta primero', 'antiguo' => 'Pedido más antiguo → más reciente', 'reciente' => 'Pedido más reciente → más antiguo'];
+
+/**
+ * Filtra y ordena las filas de svd_listar() (2026-11-26, la usuaria): $idColegio = 0 todos; $orden (SVD_ORDENES):
+ *  - 'proxima': primero los que venden hoy, luego las próximas ventas, luego los que ya vendieron y al final los sin fecha;
+ *  - 'antiguo' / 'reciente': por la fecha de los pedidos (dentro de cada colegio también); el colegio va según su pedido
+ *    más antiguo (o más reciente).
+ */
+function svd_filtrar_ordenar(array $colegios, $idColegio = 0, $orden = 'proxima') {
+    if ($idColegio) $colegios = array_values(array_filter($colegios, fn($c) => $c['id_colegio'] === (int)$idColegio));
+    $clave_p = fn($p) => $p['fecha'] . sprintf('|%010d', $p['id']);
+    if ($orden === 'antiguo' || $orden === 'reciente') {
+        $dir = $orden === 'antiguo' ? 1 : -1;
+        foreach ($colegios as &$c) usort($c['pedidos'], fn($a, $b) => $dir * strcmp($clave_p($a), $clave_p($b)));
+        unset($c);
+        usort($colegios, fn($a, $b) => $dir * strcmp($clave_p($a['pedidos'][0]), $clave_p($b['pedidos'][0])) ?: strcasecmp($a['colegio'], $b['colegio']));
+        return $colegios;
+    }
+    usort($colegios, function ($a, $b) {
+        $ka = $a['proxima'] ?? ($a['jornadas'] ? '9998' : '9999');
+        $kb = $b['proxima'] ?? ($b['jornadas'] ? '9998' : '9999');
+        return strcmp($ka, $kb) ?: strcasecmp($a['colegio'], $b['colegio']);
+    });
+    return $colegios;
 }
 
 /**
@@ -139,6 +167,31 @@ function svd_asignar_pendientes(PDO $bdd, $idPeriodo) {
             $r = svd_reservar($bdd, $col['id_colegio'], $col['id_periodo'], $j);
             if ($r && empty($r['repetido'])) $creados[] = $r + ['colegio' => $col['colegio'], 'fecha' => $j['fecha']];
         }
+    }
+    return $creados;
+}
+
+/**
+ * Lo mismo que svd_asignar_pendientes, solo para un colegio (2026-11-25: al ver los estados de sus fechas de venta en la
+ * adopción cerrada). Reserva solo si el colegio tiene el canal de venta directa y al menos un pedido no anulado.
+ */
+function svd_asignar_colegio(PDO $bdd, $idColegio, $idPeriodo) {
+    adopcion_vd_asegurar($bdd);
+    $st = $bdd->prepare("SELECT COUNT(*) FROM pedidos x JOIN recursos r ON r.id_colegio = x.id_colegio AND r.id_periodo = x.id_periodo
+                         WHERE x.id_colegio = ? AND x.id_periodo = ? AND x.estado <> " . SVD_ESTADO_ANULADO . " AND " . sql_adopcion_tiene_canal([canal_andrea_id($bdd)]));
+    $st->execute([(int)$idColegio, (int)$idPeriodo]);
+    if (!(int)$st->fetchColumn()) return [];
+    $st = $bdd->prepare("SELECT id, id_colegio, id_periodo, fecha, TIME_FORMAT(hora_inicio, '%H:%i') AS hi, TIME_FORMAT(hora_fin, '%H:%i') AS hf
+                         FROM adopcion_vd_jornadas WHERE id_colegio = ? AND id_periodo = ? AND cancelada = 0 ORDER BY fecha, hora_inicio");
+    $st->execute([(int)$idColegio, (int)$idPeriodo]);
+    $jor = $st->fetchAll(PDO::FETCH_ASSOC);
+    $atendidas = adopcion_vd_atendidas($bdd, $jor);
+    $hoy = date('Y-m-d');
+    $creados = [];
+    foreach ($jor as $j) {
+        if ($j['fecha'] > $hoy || isset($atendidas[$j['id']])) continue;
+        $r = svd_reservar($bdd, $idColegio, $idPeriodo, $j);
+        if ($r && empty($r['repetido'])) $creados[] = $r;
     }
     return $creados;
 }

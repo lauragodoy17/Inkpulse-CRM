@@ -33,6 +33,17 @@
 		exit;
 	}
 
+	// Venta directa (2026-11-25): fecha de venta opcional (leer_pedido_vd_opcional).
+	$vd_pedido = ['ok' => true, 'datos' => []];
+	require_once("../includes/sobrecosto_canal.php");
+	if (adopcion_es_venta_directa($bdd, $id_colegio_p, $id_periodo_p)) {
+		$vd_pedido = leer_pedido_vd_opcional($bdd, $_POST, $id_colegio_p, $id_periodo_p);
+		if (!$vd_pedido['ok']) {
+			header('Location: ../solicitar_pedido.php?id_colegio='.$id_colegio_p.'&periodo='.$id_periodo_p.'&ink_status=error&ink_msg='.urlencode($vd_pedido['error'].' No se guardó el pedido.'));
+			exit;
+		}
+	}
+
 
 	do {
 	         $caracteres = "1234567890"; //posibles caracteres a usar
@@ -103,6 +114,12 @@
 		if ($sth_p2 == false) {
 			print_r($query_p2->errorInfo());
 			die ('Erreur execute');
+		}
+		if ($vd_pedido['datos']) {
+			$id_pedido_vd = (int)$bdd->lastInsertId();
+			$vd_cols = array_keys($vd_pedido['datos']);
+			$bdd->prepare("UPDATE pedidos SET " . implode(' = ?, ', $vd_cols) . " = ? WHERE id = ?")
+				->execute(array_merge(array_values($vd_pedido['datos']), [$id_pedido_vd]));
 		}
 
 

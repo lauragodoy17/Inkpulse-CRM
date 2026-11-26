@@ -27,7 +27,7 @@ $cond_canal = sql_adopcion_tiene_canal([canal_andrea_id($bdd)]);
 $st = $bdd->prepare("SELECT DISTINCT pe.id, pe.periodo FROM adopcion_vd_jornadas j
                      JOIN recursos r ON r.id_colegio = j.id_colegio AND r.id_periodo = j.id_periodo
                      JOIN colegios c ON c.id = j.id_colegio JOIN periodos pe ON pe.id = j.id_periodo
-                     WHERE $cond_canal $alcance ORDER BY pe.id DESC");
+                     WHERE $cond_canal $alcance AND j.cancelada = 0 ORDER BY pe.id DESC");
 $st->execute($params_alcance);
 $periodos = $st->fetchAll(PDO::FETCH_ASSOC);
 $periodo_sel = (int)($_GET['periodo'] ?? 0);
@@ -45,7 +45,7 @@ $st = $bdd->prepare("SELECT j.id, j.fecha, TIME_FORMAT(j.hora_inicio, '%H:%i') A
                      JOIN colegios c ON c.id = j.id_colegio
                      JOIN periodos pe ON pe.id = j.id_periodo
                      LEFT JOIN zonas z ON z.codigo = c.cod_zona
-                     WHERE $cond_canal $alcance $filtro
+                     WHERE $cond_canal $alcance AND j.cancelada = 0 $filtro
                      ORDER BY j.fecha, j.hora_inicio, c.colegio");
 $st->execute($params);
 $jornadas = $st->fetchAll(PDO::FETCH_ASSOC);
@@ -76,6 +76,9 @@ $por_atender = 0;
 $prox7 = 0;
 $este_mes = 0;
 $con_formato = adopcion_vd_atendidas($bdd, $jornadas); // [id_jornada => formato]
+// Pedidos de cada venta y en qué van (2026-11-25): se muestran en el modal de la venta.
+require_once("includes/pedidos_venta_directa.php");
+$pedidos_venta = pedido_vd_estados_por_jornada($bdd, array_column($jornadas, 'id'), $con_formato);
 foreach ($jornadas as $j) {
     if (!isset($colores[$j['id_colegio']])) $colores[$j['id_colegio']] = $paleta[count($colores) % count($paleta)];
     [$h1, $m1] = array_map('intval', explode(':', $j['hi']));
@@ -110,6 +113,7 @@ foreach ($jornadas as $j) {
         'formato'   => $formato ? 'Formato venta directa No. ' . $formato['consecutivo'] : '',
         'formato_url' => $formato ? 'formato_venta_directa.php?id=' . $formato['id'] : '',
         'pasada'    => $j['fecha'] < $hoy,
+        'pedidos'   => $pedidos_venta[(int)$j['id']] ?? [],
         'hi'        => $j['hi'],
         'hf'        => $j['hf'],
         'cruces'    => array_values(array_unique($cruces[$j['id']] ?? [])),
@@ -118,12 +122,12 @@ foreach ($jornadas as $j) {
     ];
 }
 
-// Colegios a los que se les puede agendar una venta: canal Venta directa - Eureka, dentro del alcance, adopción abierta.
-require_once("includes/adopcion_cerrada.php");
-asegurar_columna_cerrado($bdd);
-$st = $bdd->prepare("SELECT c.id AS id_colegio, c.colegio, c.ciudad, pe.id AS id_periodo, pe.periodo
+// Colegios a los que se les puede agendar una venta: canal Venta directa - Eureka y dentro del alcance. Desde 2026-11-25
+// también con la adopción cerrada (las fechas de venta son lo único que se cambia en una adopción cerrada).
+$st = $bdd->prepare("SELECT c.id AS id_colegio, c.colegio, c.ciudad, pe.id AS id_periodo, pe.periodo,
+                            r.vd_contacto_nombre, r.vd_contacto_celular, r.vd_contacto_correo
                      FROM recursos r JOIN colegios c ON c.id = r.id_colegio JOIN periodos pe ON pe.id = r.id_periodo
-                     WHERE $cond_canal $alcance AND COALESCE(r.cerrado, 0) <> 1" . ($periodo_sel > 0 ? ' AND r.id_periodo = ?' : '') . "
+                     WHERE $cond_canal $alcance" . ($periodo_sel > 0 ? ' AND r.id_periodo = ?' : '') . "
                      ORDER BY pe.id DESC, c.colegio");
 $st->execute($periodo_sel > 0 ? array_merge($params_alcance, [$periodo_sel]) : $params_alcance);
 $colegios_agendar = $st->fetchAll(PDO::FETCH_ASSOC);
@@ -275,6 +279,20 @@ $fmt_dur = fn($m) => trim((intdiv($m, 60) ? intdiv($m, 60) . ' h' : '') . ($m % 
     .vdc-det-nota.ok { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; }
     .vdc-det-nota.pend { background:#faf5ff; color:#6b21a8; border:1px solid #e9d5ff; }
     .vdc-det-nota a { font-weight:700; color:inherit; text-decoration:underline; }
+    /* Pedidos de la venta y su estado (2026-11-25) */
+    .vdc-ped-tit { margin:14px 0 6px; font-size:.74rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.03em; }
+    .vdc-ped { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:6px; font-size:.84rem; }
+    .vdc-ped-n { font-weight:700; color:#1e293b; white-space:nowrap; }
+    .vdc-ped-n a { color:inherit; }
+    .vdc-ped-est { padding:2px 9px; border-radius:999px; font-size:.72rem; font-weight:700; white-space:nowrap; }
+    .vdc-ped-det { color:#475569; min-width:0; }
+    .vdc-ped-det a { font-weight:700; color:#4338ca; text-decoration:underline; }
+    .vdc-ped-pendiente .vdc-ped-est { background:#f1f5f9; color:#475569; }
+    .vdc-ped-procesando .vdc-ped-est { background:#e0e7ff; color:#3730a3; }
+    .vdc-ped-facturacion .vdc-ped-est { background:#fef3c7; color:#92400e; }
+    .vdc-ped-devolucion .vdc-ped-est { background:#ffedd5; color:#9a3412; }
+    .vdc-ped-cerrado .vdc-ped-est { background:#dcfce7; color:#166534; }
+    .vdc-ped-vacio { font-size:.82rem; color:#64748b; }
     .vdc-ag-col { padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:9px; font-size:.86rem; margin-bottom:12px; }
     .vdc-ag-col small { display:block; color:#64748b; }
     .vdc-btn:disabled { opacity:.6; cursor:wait; }
@@ -287,6 +305,8 @@ $fmt_dur = fn($m) => trim((intdiv($m, 60) ? intdiv($m, 60) . ' h' : '') . ($m % 
     .vdc-ag-dur { margin:-4px 0 8px; font-size:.78rem; font-weight:700; color:#4338ca; }
     .vdc-ag-dur:empty { display:none; }
     .vdc-ag-dur i { margin-right:4px; }
+    .vdc-ag-nota { display:block; font-size:.74rem; color:#64748b; margin-top:2px; }
+    .vdc-ag-nota.falta { color:#b45309; }
     @media (max-width: 480px) { .vdc-campos3 { grid-template-columns:1fr 1fr; } .vdc-campos3 .vdc-campo:first-child { grid-column:1 / -1; } }
     #vdc-cal td.fc-day, #vdc-cal .fc-time-grid .fc-slats td { cursor:copy; }
   </style>
@@ -349,6 +369,7 @@ $fmt_dur = fn($m) => trim((intdiv($m, 60) ? intdiv($m, 60) . ' h' : '') . ($m % 
         <div class="vdc-det" id="vdc-det-body"></div>
         <div id="vdc-det-cruce" style="margin-top:12px"></div>
         <div id="vdc-det-estado"></div>
+        <div id="vdc-det-pedidos"></div>
       </div>
       <div class="modal-footer" style="border:none" id="vdc-det-pie">
         <div class="vdc-btns">
@@ -373,7 +394,7 @@ $fmt_dur = fn($m) => trim((intdiv($m, 60) ? intdiv($m, 60) . ' h' : '') . ($m % 
         <div class="vdc-ag-col" id="vdc-ag-colinfo" style="display:none"></div>
         <div id="vdc-ag-colcampo">
         <?php if (!$colegios_agendar): ?>
-          <div class="vdc-vacio" style="padding:14px">No hay colegios con canal <strong>Venta directa - Eureka</strong> y adopción abierta<?= $periodo_sel > 0 ? ' en este período' : '' ?>.</div>
+          <div class="vdc-vacio" style="padding:14px">No hay colegios con canal <strong>Venta directa - Eureka</strong> dentro de tu alcance<?= $periodo_sel > 0 ? ' en este período' : '' ?>.</div>
         <?php else: ?>
         <div class="vdc-campo">
           <label for="vdc-ag-colegio">Colegio <span style="color:#dc2626">*</span></label>
@@ -383,7 +404,8 @@ $fmt_dur = fn($m) => trim((intdiv($m, 60) ? intdiv($m, 60) . ' h' : '') . ($m % 
               if ($per_act !== $c['id_periodo']): if ($per_act !== null) echo '</optgroup>'; $per_act = $c['id_periodo']; ?>
                 <optgroup label="Período <?= $e($c['periodo']) ?>">
               <?php endif; ?>
-              <option value="<?= (int)$c['id_colegio'] ?>|<?= (int)$c['id_periodo'] ?>"><?= $e($c['colegio']) ?><?= $c['ciudad'] ? ' · ' . $e($c['ciudad']) : '' ?></option>
+              <option value="<?= (int)$c['id_colegio'] ?>|<?= (int)$c['id_periodo'] ?>"
+                      data-contacto="<?= $e(json_encode([(string)$c['vd_contacto_nombre'], (string)$c['vd_contacto_celular'], (string)$c['vd_contacto_correo']])) ?>"><?= $e($c['colegio']) ?><?= $c['ciudad'] ? ' · ' . $e($c['ciudad']) : '' ?></option>
             <?php endforeach; ?></optgroup>
           </select>
         </div>
@@ -400,6 +422,17 @@ $fmt_dur = fn($m) => trim((intdiv($m, 60) ? intdiv($m, 60) . ' h' : '') . ($m % 
             <div class="vd-inp vd-pick" data-tipo="hora" data-rol="fin" data-requerido><i class="bi bi-clock-history"></i><input type="text" class="vd-pick-txt" readonly placeholder="--:--"><input type="hidden" id="vdc-ag-fin"><i class="bi bi-chevron-down vd-caret"></i></div></div>
         </div>
         <div class="vdc-ag-dur" id="vdc-ag-dur"></div>
+        <!-- Responsable del colegio (2026-11-25): obligatorio al agendar. Viene de la adopción del colegio; si se cambia
+             o se escribe aquí, se guarda en la adopción. -->
+        <div id="vdc-ag-contacto" style="display:none">
+          <div class="vdc-campo" style="margin-bottom:6px"><label><i class="bi bi-person-lines-fill"></i> Responsable del colegio <span style="color:#dc2626">*</span></label>
+            <small class="vdc-ag-nota" id="vdc-ag-contacto-nota"></small></div>
+          <div class="vdc-campos3" style="grid-template-columns:1.4fr 1fr 1.2fr">
+            <div class="vdc-campo"><div class="vd-inp"><i class="bi bi-person"></i><input type="text" id="vdc-ag-cnombre" maxlength="150" placeholder="Nombre y apellido"></div></div>
+            <div class="vdc-campo"><div class="vd-inp"><i class="bi bi-phone"></i><input type="tel" id="vdc-ag-ccelular" maxlength="17" inputmode="tel" placeholder="Celular"></div></div>
+            <div class="vdc-campo"><div class="vd-inp"><i class="bi bi-envelope"></i><input type="email" id="vdc-ag-ccorreo" maxlength="150" placeholder="Correo (opcional)"></div></div>
+          </div>
+        </div>
         <div id="vdc-ag-aviso"></div>
       </div>
       <div class="modal-footer" style="border:none">
@@ -463,6 +496,15 @@ $fmt_dur = fn($m) => trim((intdiv($m, 60) ? intdiv($m, 60) . ' h' : '') . ($m % 
       ? '<div class="vdc-det-nota ok"><i class="bi bi-check-circle-fill"></i><div><strong>Venta atendida.</strong> Tiene registrado el <a href="' + esc(ev.formato_url) + '">' + esc(ev.formato) + '</a>.</div></div>'
       : '<div class="vdc-det-nota pend"><i class="bi bi-clock"></i><div><strong>Pendiente.</strong> ' + (ev.pasada ? 'La fecha ya pasó y no tiene formato de venta directa registrado.' : 'Aún no tiene formato de venta directa registrado.') + '</div></div>');
     // Venta programada (sin formato): solo Reprogramar y Cancelar venta. Atendida: sin acciones.
+    // Pedidos de la venta: estado y enlace al detalle (pedido, devolución o formato; la factura de WO va sin enlace).
+    var ped = ev.pedidos || [];
+    $('#vdc-det-pedidos').html('<div class="vdc-ped-tit"><i class="bi bi-receipt"></i> Pedidos de esta venta</div>' + (ped.length
+      ? ped.map(function (p) {
+          var det = p.url ? '<a href="' + esc(p.url) + '" target="_blank">' + esc(p.detalle) + '</a>' : esc(p.detalle);
+          return '<div class="vdc-ped vdc-ped-' + esc(p.estado) + '"><span class="vdc-ped-n"><a href="' + esc(p.pedido_url) + '" target="_blank">Pedido No. ' + p.id + '</a></span>'
+            + '<span class="vdc-ped-est">' + esc(p.titulo) + '</span><span class="vdc-ped-det">' + det + '</span></div>';
+        }).join('')
+      : '<div class="vdc-ped-vacio">Ningún pedido tiene asignada esta fecha de venta.</div>'));
     $('#vdc-det-pie').toggle(!ev.atendida);
     $('#vdc-det-repro, #vdc-det-quitar').data('id', ev.id).prop('disabled', false);
     $('#vdc-detalle').modal('show');
@@ -633,11 +675,25 @@ $fmt_dur = fn($m) => trim((intdiv($m, 60) ? intdiv($m, 60) . ' h' : '') . ($m % 
     $('#vdc-ag-form .vd-pick').removeClass('vd-falta');
     window.vdPickers.sincronizar($('#vdc-ag-form .vd-pick'));
     aviso();
+    llenarContacto();
     $('#vdc-agendar').modal('show');
   }
   $('#vdc-agendar').on('shown.bs.modal', function () { if (!reprogramando && !$('#vdc-ag-colegio').val()) $('#vdc-ag-colegio').trigger('focus'); });
   $('#vdc-nuevo').on('click', function () { abrirAgendar(moment().format('YYYY-MM-DD'), '', ''); });
   $('#vdc-ag-form').on('input change', 'input, select', aviso);
+  // Responsable del colegio: se trae de la adopción del colegio elegido (solo al agendar, no al reprogramar).
+  function llenarContacto() {
+    var $op = $('#vdc-ag-colegio option:selected');
+    var c = (!reprogramando && $op.val()) ? ($op.data('contacto') || ['', '', '']) : null;
+    $('#vdc-ag-contacto').toggle(!!c);
+    if (!c) return;
+    $('#vdc-ag-cnombre').val(c[0]); $('#vdc-ag-ccelular').val(c[1]); $('#vdc-ag-ccorreo').val(c[2]);
+    var tiene = !!(c[0] && c[1]);
+    $('#vdc-ag-contacto-nota').toggleClass('falta', !tiene).text(tiene
+      ? 'Tomado de la adopción del colegio. Si lo cambias, se actualiza en la adopción.'
+      : 'La adopción del colegio aún no tiene responsable: escríbelo y quedará guardado en la adopción.');
+  }
+  $('#vdc-ag-colegio').on('change', llenarContacto);
   $('#vdc-agendar').on('hide.bs.modal', function () { window.vdPickers.cerrar(false); });
   $('#vdc-ag-ini').on('change', function () {
     // Al elegir "desde": si "hasta" está vacío o queda antes, propone 2 horas después (sin pasar de las 11:55 p. m.).
@@ -658,7 +714,13 @@ $fmt_dur = fn($m) => trim((intdiv($m, 60) ? intdiv($m, 60) . ' h' : '') . ($m % 
     if (hi && hf && hf <= hi) { window.inkToast('La hora "hasta" debe ser posterior a "desde".', 'warn'); return; }
     var datos = reprogramando
       ? { accion: 'reprogramar', id: reprogramando.id, fecha: $('#vdc-ag-fecha').val(), hora_ini: hi, hora_fin: hf }
-      : { accion: 'agendar', id_colegio: partes[0], id_periodo: partes[1], fecha: $('#vdc-ag-fecha').val(), hora_ini: hi, hora_fin: hf };
+      : { accion: 'agendar', id_colegio: partes[0], id_periodo: partes[1], fecha: $('#vdc-ag-fecha').val(), hora_ini: hi, hora_fin: hf,
+          contacto_nombre: $.trim($('#vdc-ag-cnombre').val()), contacto_celular: $.trim($('#vdc-ag-ccelular').val()), contacto_correo: $.trim($('#vdc-ag-ccorreo').val()) };
+    if (!reprogramando && (!datos.contacto_nombre || !datos.contacto_celular)) {
+      window.inkToast('Escribe el responsable del colegio (nombre y celular).', 'warn');
+      $(datos.contacto_nombre ? '#vdc-ag-ccelular' : '#vdc-ag-cnombre').trigger('focus');
+      return;
+    }
     var verbo = reprogramando ? 'reprogramar' : 'agendar';
     var $b = $('#vdc-ag-guardar').prop('disabled', true);
     $.post('php/calendario_vd_accion.php', datos, null, 'json').done(function (r) {

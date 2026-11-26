@@ -205,13 +205,15 @@ function alertas_vd_recordatorios(PDO $bdd, $forzar = false) {
                     ON DUPLICATE KEY UPDATE enviado_at = NOW()");
     }
 
+    require_once __DIR__ . '/adopcion_vd_datos.php';
+    adopcion_vd_asegurar($bdd); // columna cancelada
     $hoy = date('Y-m-d');
     $limite = date('Y-m-d', strtotime('+' . ALERTAS_VD_DIAS_RECORDATORIO . ' days'));
     $cond_canal = sql_adopcion_tiene_canal([canal_andrea_id($bdd)]);
     $st = $bdd->prepare("SELECT j.id FROM adopcion_vd_jornadas j
                          JOIN recursos r ON r.id_colegio = j.id_colegio AND r.id_periodo = j.id_periodo
                          LEFT JOIN adopcion_vd_alertas a ON a.id_jornada = j.id AND a.tipo = 'recordatorio'
-                         WHERE a.id IS NULL AND $cond_canal AND j.fecha BETWEEN ? AND ?
+                         WHERE a.id IS NULL AND $cond_canal AND j.cancelada = 0 AND j.fecha BETWEEN ? AND ?
                            AND (j.fecha > ? OR j.hora_fin > CURTIME())");
     $st->execute([$hoy, $limite, $hoy]);
     $ids = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
