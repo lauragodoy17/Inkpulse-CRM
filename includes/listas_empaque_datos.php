@@ -36,7 +36,7 @@ require_once(__DIR__ . '/prueba_post2.php');
 require_once(__DIR__ . '/prueba_get2.php');
 require_once(__DIR__ . '/matching_colegios.php');
 
-const LE_TIPOS_WO = ['REM' => 'Remisión', 'FV' => 'Factura de Venta'];
+const LE_TIPOS_WO = ['REM' => 'Remisión', 'FV' => 'Factura de Venta', 'SA' => 'Salida de Almacen'];
 const LE_OP_ESTADO_ANULADA = 4;
 const LE_PEDIDO_ESTADO_ANULADO = 3;
 
@@ -677,7 +677,7 @@ function le_buscar_documentos_manual(PDO $bdd, $idPedido, $texto) {
 
 /** Documento puntual por su clave "TIPO:id" (para validar al guardar uno asociado a mano). */
 function le_documento_por_clave(PDO $bdd, $clave) {
-    if (!preg_match('/^(REM|FV):(\d+)$/', (string)$clave, $m)) return null;
+    if (!preg_match('/^(REM|FV|SA):(\d+)$/', (string)$clave, $m)) return null;
     $r = le_buscar_wo_por_id((int)$m[2], [$m[1]]);
     if (!$r) return null;
     $d = le_base_documento($r['tipo'], $r['row']);

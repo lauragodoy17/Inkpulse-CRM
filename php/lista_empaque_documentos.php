@@ -18,5 +18,5 @@ require_once("../includes/listas_empaque_datos.php");
 set_time_limit(120);
 
 le_crear_tablas($bdd);
-$claves = array_filter(explode(',', (string)($_GET['claves'] ?? '')), fn($c) => preg_match('/^(REM|FV):\d+$/', $c));
+$claves = array_filter(explode(',', (string)($_GET['claves'] ?? '')), fn($c) => preg_match('/^(REM|FV|SA):\d+$/', $c));
 echo json_encode(le_datos_documentos($bdd, explode(',', (string)($_GET['clientes'] ?? '')), $claves), JSON_UNESCAPED_UNICODE);

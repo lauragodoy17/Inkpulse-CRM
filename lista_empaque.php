@@ -111,7 +111,7 @@ le_crear_tablas($bdd);
 
       <!-- Paso 1: cliente y sus remisiones/facturas -->
       <div class="le-section">
-        <div class="le-section-head"><p class="le-section-title"><span class="le-paso">1</span> Seleccionar los clientes y sus remisiones o facturas</p></div>
+        <div class="le-section-head"><p class="le-section-title"><span class="le-paso">1</span> Seleccionar los clientes y sus documentos</p></div>
         <div class="le-section-body">
           <div class="row">
             <div class="col-md-8 form-group le-clientes">
@@ -280,7 +280,7 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
     idsClientes = ($(this).val() || []).map(String);
     var consulta = ++consultaClientes;
     if (!idsClientes.length) { docsCliente = []; elegidos = {}; $('#le-lista-cliente').html(''); cargando(''); return; }
-    cargando('Consultando las remisiones y facturas de ' + (idsClientes.length > 1 ? idsClientes.length + ' clientes' : 'el cliente') + ' en World Office…');
+    cargando('Consultando las documentos de ' + (idsClientes.length > 1 ? idsClientes.length + ' clientes' : 'el cliente') + ' en World Office…');
     $.getJSON('php/lista_empaque_documentos_cliente.php', { clientes: idsClientes.join(',') }).done(function (r) {
       if (consulta !== consultaClientes) return;
       if (!r.ok) { $('#le-error-pedido').text(r.error || 'No se pudieron consultar los documentos.').removeClass('le-hidden'); $('#le-lista-cliente').html(''); return; }
@@ -290,7 +290,7 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
       elegidos = siguen;
       if (!docsCliente.length) {
         $('#le-lista-cliente').html('');
-        $('#le-error-pedido').text('World Office no tiene remisiones ni facturas a nombre de ' + (idsClientes.length > 1 ? 'estos clientes.' : 'este cliente.')).removeClass('le-hidden');
+        $('#le-error-pedido').text('World Office no tiene remisiones, facturas o salidas de almacén a nombre de ' + (idsClientes.length > 1 ? 'estos clientes.' : 'este cliente.')).removeClass('le-hidden');
         return;
       }
       pintarListaCliente();
@@ -331,7 +331,7 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
   function clavesElegidas() { return docsCliente.filter(function (d) { return elegidos[d.clave]; }).map(function (d) { return d.clave; }); }
   function actualizarContador() {
     var c = clavesElegidas().length;
-    $('#le-contador').text(c ? c + ' seleccionado(s)' : 'Marca una o varias remisiones o facturas');
+    $('#le-contador').text(c ? c + ' seleccionado(s)' : 'Marca una o varios documentos');
     $('#le-continuar').prop('disabled', !c);
   }
   $(document).on('input', '#le-filtro-docs', function () {

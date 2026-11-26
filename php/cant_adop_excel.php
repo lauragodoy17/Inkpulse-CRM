@@ -164,13 +164,13 @@ $pres_por_libro = [];
 if (!empty($libro_ids)) {
     $ph_lb = implode(',', array_fill(0, count($libro_ids), '?'));
     if ($_POST['promotor'] != 0) {
-        $sql_pres = "SELECT p.id_libro, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p WHERE p.id_libro IN ($ph_lb) AND p.definido=1 AND p.id_periodo=? AND p.id_usuario=? AND p.probabilidad!=3 GROUP BY p.id_libro, p.id_colegio";
+        $sql_pres = "SELECT p.id_libro, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p WHERE p.id_libro IN ($ph_lb) AND p.definido=1 AND p.id_periodo=? AND p.id_usuario=? AND p.probabilidad!=3 GROUP BY p.id_libro, p.id_colegio, p.cod_area";
         $params_pres = array_merge($libro_ids, [$_POST['periodo'], $_POST['promotor']]);
     } elseif (isset($_POST['desde'])) {
-        $sql_pres = "SELECT p.id_libro, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p WHERE p.id_libro IN ($ph_lb) AND p.definido=1 AND p.id_periodo=? AND p.probabilidad!=3 AND p.conse BETWEEN ? AND ? GROUP BY p.id_libro, p.id_colegio";
+        $sql_pres = "SELECT p.id_libro, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p WHERE p.id_libro IN ($ph_lb) AND p.definido=1 AND p.id_periodo=? AND p.probabilidad!=3 AND p.conse BETWEEN ? AND ? GROUP BY p.id_libro, p.id_colegio, p.cod_area";
         $params_pres = array_merge($libro_ids, [$_POST['periodo'], $_POST['desde'], $_POST['hasta']]);
     } else {
-        $sql_pres = "SELECT p.id_libro, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p WHERE p.id_libro IN ($ph_lb) AND p.definido=1 AND p.id_periodo=? AND p.probabilidad!=3 GROUP BY p.id_libro, p.id_colegio";
+        $sql_pres = "SELECT p.id_libro, p.tasa_compra, p.tasa_compra_d, p.descuento, p.descuento_d, p.definido, p.cod_area, p.id_colegio, SUM(p.uni_vr) AS uni_vr FROM presupuestos p WHERE p.id_libro IN ($ph_lb) AND p.definido=1 AND p.id_periodo=? AND p.probabilidad!=3 GROUP BY p.id_libro, p.id_colegio, p.cod_area";
         $params_pres = array_merge($libro_ids, [$_POST['periodo']]);
     }
     $req_pres = $bdd->prepare($sql_pres);
