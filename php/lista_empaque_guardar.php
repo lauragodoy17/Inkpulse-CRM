@@ -29,4 +29,7 @@ if (!is_array($entrada)) {
     echo json_encode(['ok' => false, 'error' => 'Solicitud no válida.']);
     exit;
 }
-echo json_encode(le_guardar($bdd, $entrada, intval($_SESSION['id'] ?? 0)), JSON_UNESCAPED_UNICODE);
+$res = le_guardar($bdd, $entrada, intval($_SESSION['id'] ?? 0));
+// Si se armó desde un borrador, ya no hace falta: la lista quedó generada.
+if (!empty($res['ok']) && intval($entrada['id_borrador'] ?? 0) > 0) le_borrador_eliminar($bdd, intval($entrada['id_borrador']));
+echo json_encode($res, JSON_UNESCAPED_UNICODE);

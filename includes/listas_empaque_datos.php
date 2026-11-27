@@ -131,6 +131,131 @@ function le_crear_tablas(PDO $bdd) {
         ultimo INT NOT NULL DEFAULT 0
     ) ENGINE=InnoDB");
     $bdd->exec("INSERT IGNORE INTO listas_empaque_consecutivo (id, ultimo) VALUES (1, 0)");
+    // Borradores (2026-11-27): lo que el usuario lleva armado en lista_empaque.php, para seguir
+    // editándolo después. No tienen consecutivo ni reservan los documentos de WO: todo se vuelve a
+    // validar al generar la lista (le_guardar()), y al generarla el borrador se elimina.
+    $bdd->exec("CREATE TABLE IF NOT EXISTS listas_empaque_borradores (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        clientes VARCHAR(500) NOT NULL DEFAULT '',
+        total_documentos INT NOT NULL DEFAULT 0,
+        total_cajas INT NOT NULL DEFAULT 0,
+        datos_json MEDIUMTEXT NOT NULL,
+        id_usuario INT NOT NULL,
+        id_usuario_modifica INT NOT NULL,
+        fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        fecha_modificacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_modificacion (fecha_modificacion)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+/**
+ * Guarda (crea o actualiza) un borrador. No exige que la lista esté completa: solo al menos un
+ * cliente. Se guarda únicamente lo que el usuario escribió/eligió (clientes, claves de documentos,
+ * reparto por cajas y campos del formulario), limpio y acotado; los datos de WO se vuelven a
+ * consultar al abrirlo. Si el borrador ya no existe (otro usuario lo eliminó o se generó), se crea uno nuevo.
+ */
+function le_borrador_guardar(PDO $bdd, array $entrada, $idUsuario) {
+    le_crear_tablas($bdd);
+    $idsCliente = array_values(array_unique(array_filter(array_map('intval', (array)($entrada['clientes'] ?? [])))));
+    if (!$idsCliente) return ['ok' => false, 'error' => 'Elige al menos un cliente antes de guardar el borrador.'];
+    $idsCliente = array_slice($idsCliente, 0, 50);
+    $in = implode(',', $idsCliente);
+    $nombres = $bdd->query("SELECT cliente FROM clientes WHERE id IN ($in) ORDER BY cliente")->fetchAll(PDO::FETCH_COLUMN);
+    if (count($nombres) !== count($idsCliente)) return ['ok' => false, 'error' => 'Uno de los clientes no existe.'];
+
+    $txt = fn($k, $max) => mb_substr(trim((string)($entrada[$k] ?? '')), 0, $max);
+    $documentos = [];
+    foreach ((array)($entrada['documentos'] ?? []) as $c) {
+        if (preg_match('/^(REM|FV|SA):\d+$/', (string)$c)) $documentos[(string)$c] = true;
+    }
+    $cajas = [];
+    foreach (array_slice(array_values((array)($entrada['cajas'] ?? [])), 0, 500) as $c) {
+        $items = [];
+        foreach (array_slice(array_values((array)($c['items'] ?? [])), 0, 500) as $it) {
+            $cant = trim((string)($it['cantidad'] ?? ''));
+            $idInv = (int)($it['id_inventario'] ?? 0);
+            $items[] = ['id_inventario' => $idInv > 0 ? (string)$idInv : '', 'cantidad' => preg_match('/^\d{1,9}$/', $cant) ? $cant : ''];
+        }
+        $cajas[] = [
+            'peso' => mb_substr(trim((string)($c['peso'] ?? '')), 0, 20),
+            'peso_txt' => mb_substr(trim((string)($c['peso_txt'] ?? '')), 0, 20),
+            'dimensiones' => mb_substr((string)($c['dimensiones'] ?? ''), 0, 60),
+            'items' => $items,
+        ];
+    }
+    $datos = [
+        'clientes' => $idsCliente,
+        'documentos' => array_keys($documentos),
+        'cargado' => !empty($entrada['cargado']),
+        'cajas' => $cajas,
+        'ciudad' => $txt('ciudad', 150),
+        'direccion' => $txt('direccion', 500),
+        'persona_recibe' => $txt('persona_recibe', 150),
+        'telefono_recibe' => $txt('telefono_recibe', 50),
+        'peso_neto' => $txt('peso_neto', 20),
+        'empacado_por' => $txt('empacado_por', 150),
+        'observaciones' => $txt('observaciones', 1000),
+    ];
+    $json = json_encode($datos, JSON_UNESCAPED_UNICODE);
+    $resumen = [mb_substr(implode(', ', $nombres), 0, 500), count($datos['documentos']), count($cajas)];
+
+    $id = (int)($entrada['id'] ?? 0);
+    if ($id > 0) {
+        $existe = $bdd->prepare("SELECT id FROM listas_empaque_borradores WHERE id = ?");
+        $existe->execute([$id]);
+        if (!$existe->fetchColumn()) $id = 0;
+    }
+    if ($id > 0) {
+        $bdd->prepare("UPDATE listas_empaque_borradores SET clientes = ?, total_documentos = ?, total_cajas = ?, datos_json = ?,
+                       id_usuario_modifica = ?, fecha_modificacion = NOW() WHERE id = ?")
+            ->execute(array_merge($resumen, [$json, (int)$idUsuario, $id]));
+    } else {
+        $bdd->prepare("INSERT INTO listas_empaque_borradores (clientes, total_documentos, total_cajas, datos_json, id_usuario, id_usuario_modifica, fecha, fecha_modificacion)
+                       VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())")
+            ->execute(array_merge($resumen, [$json, (int)$idUsuario, (int)$idUsuario]));
+        $id = (int)$bdd->lastInsertId();
+    }
+    // La fecha que guardó MySQL (NOW()), la misma que muestra el historial.
+    $fecha = $bdd->prepare("SELECT fecha_modificacion FROM listas_empaque_borradores WHERE id = ?");
+    $fecha->execute([$id]);
+    return ['ok' => true, 'error' => null, 'id' => $id, 'fecha' => date('d/m/Y H:i', strtotime($fecha->fetchColumn()))];
+}
+
+/** Un borrador con sus datos y los clientes como los muestra el selector ([{id, text}]). */
+function le_borrador_obtener(PDO $bdd, $id) {
+    $stmt = $bdd->prepare("SELECT * FROM listas_empaque_borradores WHERE id = ?");
+    $stmt->execute([(int)$id]);
+    $b = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$b) return null;
+    $datos = json_decode((string)$b['datos_json'], true) ?: [];
+    $ids = array_values(array_filter(array_map('intval', (array)($datos['clientes'] ?? []))));
+    $clientes = [];
+    if ($ids) {
+        $porId = [];
+        foreach ($bdd->query("SELECT id, cliente, documento FROM clientes WHERE id IN (" . implode(',', $ids) . ")")->fetchAll(PDO::FETCH_ASSOC) as $c) $porId[(int)$c['id']] = $c;
+        foreach ($ids as $i) {
+            if (isset($porId[$i])) $clientes[] = ['id' => $i, 'text' => $porId[$i]['cliente'] . ($porId[$i]['documento'] ? ' — ' . $porId[$i]['documento'] : '')];
+        }
+    }
+    unset($datos['clientes']);
+    return ['id' => (int)$b['id'], 'clientes' => $clientes, 'datos' => $datos,
+            'fecha_modificacion' => date('d/m/Y H:i', strtotime($b['fecha_modificacion']))];
+}
+
+/** Borradores para el historial, el más reciente primero. */
+function le_borradores_listar(PDO $bdd) {
+    return $bdd->query("SELECT b.id, b.clientes, b.total_documentos, b.total_cajas, b.fecha, b.fecha_modificacion,
+                               CONCAT(TRIM(u.nombres), ' ', TRIM(u.apellidos)) AS usuario,
+                               CONCAT(TRIM(um.nombres), ' ', TRIM(um.apellidos)) AS usuario_modifica
+                        FROM listas_empaque_borradores b
+                        LEFT JOIN usuarios u ON u.id = b.id_usuario
+                        LEFT JOIN usuarios um ON um.id = b.id_usuario_modifica
+                        ORDER BY b.fecha_modificacion DESC LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function le_borrador_eliminar(PDO $bdd, $id) {
+    $bdd->prepare("DELETE FROM listas_empaque_borradores WHERE id = ?")->execute([(int)$id]);
+    return ['ok' => true, 'error' => null];
 }
 
 function le_formatear_consecutivo($n) {

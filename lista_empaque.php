@@ -10,6 +10,7 @@ if (!in_array($tipo_sesion, [1, 2], true)) {
 require_once("conexion/bdd.php");
 require_once("includes/listas_empaque_datos.php");
 le_crear_tablas($bdd);
+$idBorrador = intval($_GET['borrador'] ?? 0);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -95,7 +96,7 @@ le_crear_tablas($bdd);
       <div class="page-header">
         <div class="row align-items-center">
           <div class="col-md-8 col-sm-12">
-            <div class="title"><h4>Nueva lista de empaque</h4></div>
+            <div class="title"><h4>Nueva lista de empaque <span id="le-borrador-badge" class="le-badge le-badge-gris le-hidden" style="vertical-align:middle; font-size:.75rem;"></span></h4></div>
             <nav aria-label="breadcrumb">
               <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="listas_empaque.php">Listas de empaque</a></li>
@@ -103,7 +104,8 @@ le_crear_tablas($bdd);
               </ol>
             </nav>
           </div>
-          <div class="col-md-4 col-sm-12 text-md-right">
+          <div class="col-md-4 col-sm-12 text-md-right" style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+            <button type="button" class="le-btn le-btn-outline le-guardar-borrador" disabled title="Guarda lo que llevas para seguir editándolo después"><i class="bi bi-save"></i> Guardar borrador</button>
             <a href="listas_empaque.php" class="le-btn le-btn-outline"><i class="bi bi-clock-history"></i> Historial</a>
           </div>
         </div>
@@ -198,7 +200,8 @@ le_crear_tablas($bdd);
             </div>
           </div>
           <div id="le-error-final" class="le-aviso le-aviso-error le-hidden"></div>
-          <div style="text-align:right;">
+          <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+            <button type="button" class="le-btn le-btn-outline le-guardar-borrador" disabled><i class="bi bi-save"></i> Guardar borrador</button>
             <button type="button" class="le-btn" id="le-vista-previa"><i class="bi bi-eye"></i> Vista previa</button>
           </div>
         </div>
@@ -210,6 +213,7 @@ le_crear_tablas($bdd);
           <p class="le-section-title"><span class="le-paso">5</span> Vista previa</p>
           <div style="display:flex; gap:10px;">
             <button type="button" class="le-btn le-btn-outline le-btn-sm" id="le-corregir"><i class="bi bi-pencil"></i> Corregir</button>
+            <button type="button" class="le-btn le-btn-outline le-btn-sm le-guardar-borrador" disabled><i class="bi bi-save"></i> Guardar borrador</button>
             <button type="button" class="le-btn le-btn-success" id="le-generar"><i class="bi bi-file-earmark-pdf"></i> Generar lista de empaque</button>
           </div>
         </div>
@@ -278,6 +282,12 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
   $('#le-cliente-filtro').on('change', function () {
     reiniciar();
     idsClientes = ($(this).val() || []).map(String);
+    actualizarBotonBorrador();
+    consultarDocsCliente();
+  });
+
+  // Trae los documentos de los clientes elegidos; `despues` se llama solo si llegaron bien.
+  function consultarDocsCliente(despues) {
     var consulta = ++consultaClientes;
     if (!idsClientes.length) { docsCliente = []; elegidos = {}; $('#le-lista-cliente').html(''); cargando(''); return; }
     cargando('Consultando las documentos de ' + (idsClientes.length > 1 ? idsClientes.length + ' clientes' : 'el cliente') + ' en World Office…');
@@ -294,11 +304,12 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
         return;
       }
       pintarListaCliente();
+      if (despues) despues();
     }).fail(function () {
       if (consulta !== consultaClientes) return;
       $('#le-error-pedido').text('No se pudo consultar World Office. Intenta de nuevo.').removeClass('le-hidden');
     }).always(function () { if (consulta === consultaClientes) cargando(''); });
-  });
+  }
 
   function variosClientes() { return idsClientes.length > 1; }
 
@@ -358,7 +369,7 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
   }
 
   // Trae los documentos marcados con sus productos.
-  function cargarDocumentos(claves) {
+  function cargarDocumentos(claves, despues) {
     reiniciar();
     cargando('Consultando los productos de ' + claves.length + ' documento(s) en World Office…');
     $('#le-continuar').prop('disabled', true);
@@ -366,6 +377,7 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
       if (!r.ok) { $('#le-error-pedido').text(r.error || 'No se pudieron cargar los documentos.').removeClass('le-hidden'); return; }
       datos = r;
       pintarDocumentos();
+      if (despues) { despues(); return; }
       $('html,body').animate({ scrollTop: $('#le-sec-docs').offset().top - 80 }, 250);
     }).fail(function () {
       $('#le-error-pedido').text('No se pudo consultar World Office. Intenta de nuevo.').removeClass('le-hidden');
@@ -740,12 +752,16 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
       telefono_recibe: $('#le-telefono-recibe').val(),
       observaciones: $('#le-observaciones').val(),
       peso_neto: normPeso($('#le-peso-neto').val()),
-      empacado_por: $('#le-empacado-por').val()
+      empacado_por: $('#le-empacado-por').val(),
+      id_borrador: idBorrador || null
     };
     $.ajax({ url: 'php/lista_empaque_guardar.php', method: 'POST', contentType: 'application/json', data: JSON.stringify(cuerpo), dataType: 'json' })
       .done(function (r) {
         if (!r.ok) { inkToast(h(r.error || 'No se pudo generar la lista.'), 'error'); return; }
         guardada = true;
+        // El servidor eliminó el borrador: recargar la página ya no debe intentar abrirlo.
+        if (idBorrador) { idBorrador = 0; history.replaceState(null, '', 'lista_empaque.php'); $('#le-borrador-badge').addClass('le-hidden'); }
+        actualizarBotonBorrador();
         $('#le-preview').html(htmlVistaPrevia(r.consecutivo));
         $('#le-generar, #le-corregir').hide();
         $('#le-resultado').html('<div class="le-aviso le-aviso-ok" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;"><span><i class="bi bi-check-circle"></i> Se generó la <strong>lista de empaque ' + h(r.consecutivo) + '</strong>.</span>' +
@@ -760,6 +776,112 @@ setInterval(function () { $.get('php/sesion_ping.php'); }, 5 * 60 * 1000);
       .fail(function (xhr) { inkToast(h((xhr.responseJSON && xhr.responseJSON.error) || 'No se pudo generar la lista. Intenta de nuevo.'), 'error'); })
       .always(function () { $btn.prop('disabled', false).html('<i class="bi bi-file-earmark-pdf"></i> Generar lista de empaque'); });
   });
+
+  // ── Borradores ─────────────────────────────────────────────────
+  // Se guarda lo que el usuario lleva (clientes, documentos marcados, cajas y datos) sin validar que
+  // esté completo; los documentos NO quedan reservados: todo se valida de nuevo al generar.
+  var idBorrador = <?= $idBorrador ?>;
+  var guardandoBorrador = false;
+
+  function actualizarBotonBorrador() {
+    $('.le-guardar-borrador').prop('disabled', guardada || guardandoBorrador || !idsClientes.length).toggle(!guardada);
+  }
+  function mostrarBadgeBorrador(fecha) {
+    $('#le-borrador-badge').html('<i class="bi bi-save"></i> Borrador · guardado ' + h(fecha)).removeClass('le-hidden');
+  }
+
+  function estadoBorrador() {
+    return {
+      accion: 'guardar', id: idBorrador || null,
+      clientes: idsClientes,
+      documentos: clavesElegidas(),
+      cargado: !!datos,
+      cajas: cajas.map(function (c) {
+        return { peso: c.peso, peso_txt: c.peso_txt !== undefined ? c.peso_txt : c.peso, dimensiones: c.dimensiones || '',
+                 items: c.items.map(function (it) { return { id_inventario: it.id_inventario, cantidad: it.cantidad }; }) };
+      }),
+      ciudad: $('#le-ciudad').val(),
+      direccion: $('#le-direccion').val(),
+      persona_recibe: $('#le-persona-recibe').val(),
+      telefono_recibe: $('#le-telefono-recibe').val(),
+      peso_neto: $('#le-peso-neto').val(),
+      empacado_por: $('#le-empacado-por').val(),
+      observaciones: $('#le-observaciones').val()
+    };
+  }
+
+  $(document).on('click', '.le-guardar-borrador', function () {
+    if (guardada || guardandoBorrador) return;
+    if (!idsClientes.length) { inkToast('Elige al menos un cliente antes de guardar el borrador.', 'warn'); return; }
+    guardandoBorrador = true; actualizarBotonBorrador();
+    $.ajax({ url: 'php/lista_empaque_borrador.php', method: 'POST', contentType: 'application/json', data: JSON.stringify(estadoBorrador()), dataType: 'json' })
+      .done(function (r) {
+        if (!r.ok) { inkToast(h(r.error || 'No se pudo guardar el borrador.'), 'error'); return; }
+        idBorrador = r.id;
+        history.replaceState(null, '', 'lista_empaque.php?borrador=' + r.id);
+        mostrarBadgeBorrador(r.fecha);
+        inkToast('Borrador guardado. Puedes seguir editándolo desde el historial de listas de empaque.', 'ok');
+      })
+      .fail(function (xhr) { inkToast(h((xhr.responseJSON && xhr.responseJSON.error) || 'No se pudo guardar el borrador. Intenta de nuevo.'), 'error'); })
+      .always(function () { guardandoBorrador = false; actualizarBotonBorrador(); });
+  });
+
+  // Abre un borrador: clientes → sus documentos (marcando los del borrador) → productos → cajas y datos.
+  function abrirBorrador(id) {
+    cargando('Abriendo el borrador…');
+    $.getJSON('php/lista_empaque_borrador.php', { id: id }).done(function (r) {
+      if (!r.ok) {
+        cargando('');
+        idBorrador = 0; history.replaceState(null, '', 'lista_empaque.php');
+        $('#le-error-pedido').text(r.error || 'No se pudo abrir el borrador.').removeClass('le-hidden');
+        return;
+      }
+      var b = r.borrador, d = b.datos || {};
+      mostrarBadgeBorrador(b.fecha_modificacion);
+      $('#le-ciudad').val(d.ciudad || ''); $('#le-direccion').val(d.direccion || '');
+      $('#le-persona-recibe').val(d.persona_recibe || ''); $('#le-telefono-recibe').val(d.telefono_recibe || '');
+      $('#le-peso-neto').val(d.peso_neto || ''); $('#le-empacado-por').val(d.empacado_por || '');
+      $('#le-observaciones').val(d.observaciones || '');
+      if (!b.clientes.length) { cargando(''); $('#le-error-pedido').text('Los clientes del borrador ya no existen en el CRM.').removeClass('le-hidden'); return; }
+
+      // Se cargan las opciones en el selector sin disparar el 'change' propio (que reinicia todo).
+      var $sel = $('#le-cliente-filtro');
+      b.clientes.forEach(function (c) { $sel.append(new Option(c.text, c.id, true, true)); });
+      $sel.trigger('change.select2');
+      idsClientes = b.clientes.map(function (c) { return String(c.id); });
+      actualizarBotonBorrador();
+
+      var claves = d.documentos || [];
+      claves.forEach(function (k) { elegidos[k] = true; });
+      consultarDocsCliente(function () {
+        // Los que ya no se pueden usar (anulados en WO o puestos en otra lista mientras tanto) se quitan.
+        var perdidos = claves.filter(function (k) { return !elegidos[k]; });
+        if (perdidos.length) {
+          var nombres = perdidos.map(function (k) { var doc = docsCliente.find(function (x) { return x.clave === k; }); return doc ? doc.documento + (doc.bloqueo ? ' (' + doc.bloqueo + ')' : '') : k; });
+          inkToast(h('Se quitaron del borrador documentos que ya no están disponibles: ' + nombres.join(', ') + '.'), 'warn');
+        }
+        var vigentes = clavesElegidas();
+        if (!d.cargado || !vigentes.length) return;
+        cargarDocumentos(vigentes, function () {
+          var quitados = 0;
+          cajas = (d.cajas || []).map(function (c) {
+            var items = (c.items || []).filter(function (it) {
+              var ok = !it.id_inventario || despachado[it.id_inventario];
+              if (!ok) quitados++;
+              return ok;
+            });
+            return { peso: c.peso || '', peso_txt: c.peso_txt || c.peso || '', dimensiones: c.dimensiones || '', items: items };
+          });
+          if (quitados) inkToast('Algunos productos del borrador ya no están en los documentos de World Office y se quitaron de las cajas. Revisa el control de cantidades.', 'warn');
+          if (cajas.length) $('#le-ir-cajas').trigger('click');
+        });
+      });
+    }).fail(function () {
+      cargando('');
+      $('#le-error-pedido').text('No se pudo abrir el borrador. Recarga la página.').removeClass('le-hidden');
+    });
+  }
+  if (idBorrador) abrirBorrador(idBorrador);
 })();
 </script>
 <script src="src/ink-alerts.js"></script>

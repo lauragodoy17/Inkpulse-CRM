@@ -18,6 +18,7 @@ $f = [
     'hasta'       => preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['hasta'] ?? '') ? $_GET['hasta'] : '',
 ];
 $listas = le_historial($bdd, $f);
+$borradores = le_borradores_listar($bdd);
 $hayFiltro = implode('', $f) !== '';
 ?>
 <!DOCTYPE html>
@@ -50,6 +51,8 @@ $hayFiltro = implode('', $f) !== '';
     .le-badge-ok { background:#dcfce7; color:#15803d; }
     .le-badge-anulada { background:#fee2e2; color:#b91c1c; }
     tr.le-anulada td { color:#94a3b8; }
+    .le-btn-danger { background:#fff; color:#dc2626; border:1.5px solid #fecaca; }
+    .le-sec-titulo { font-size:.95rem; font-weight:700; color:#0f172a; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
   </style>
 </head>
 <body>
@@ -74,6 +77,36 @@ $hayFiltro = implode('', $f) !== '';
           </div>
         </div>
       </div>
+
+      <?php if ($borradores): ?>
+      <div class="le-section" id="le-borradores">
+        <div class="le-section-body">
+          <p class="le-sec-titulo"><i class="bi bi-save"></i> Borradores <span class="le-badge" style="background:#f1f5f9; color:#475569;"><?= count($borradores) ?></span></p>
+          <div class="table-responsive">
+            <table class="le-table">
+              <thead><tr>
+                <th>Cliente(s)</th><th class="num">Documentos</th><th class="num">Cajas</th><th>Creó</th><th>Última modificación</th><th></th>
+              </tr></thead>
+              <tbody>
+              <?php foreach ($borradores as $b): ?>
+                <tr data-borrador="<?= (int)$b['id'] ?>">
+                  <td><?= htmlspecialchars($b['clientes']) ?></td>
+                  <td class="num"><?= (int)$b['total_documentos'] ?></td>
+                  <td class="num"><?= (int)$b['total_cajas'] ?></td>
+                  <td><?= htmlspecialchars($b['usuario'] ?? '') ?></td>
+                  <td style="white-space:nowrap;"><?= date('d/m/Y H:i', strtotime($b['fecha_modificacion'])) ?><?php if (($b['usuario_modifica'] ?? '') !== '' && $b['usuario_modifica'] !== $b['usuario']): ?> <span style="color:#64748b;">· <?= htmlspecialchars($b['usuario_modifica']) ?></span><?php endif; ?></td>
+                  <td style="white-space:nowrap;">
+                    <a href="lista_empaque.php?borrador=<?= (int)$b['id'] ?>" class="le-btn le-btn-sm" title="Seguir editando"><i class="bi bi-pencil"></i> Seguir editando</a>
+                    <button type="button" class="le-btn le-btn-danger le-btn-sm le-eliminar-borrador" data-id="<?= (int)$b['id'] ?>" title="Eliminar borrador"><i class="bi bi-trash"></i></button>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
 
       <div class="le-section">
         <div class="le-section-body">
@@ -131,5 +164,21 @@ $hayFiltro = implode('', $f) !== '';
 <script src="vendors/scripts/script.min.js"></script>
 <script src="vendors/scripts/process.js"></script>
 <script src="vendors/scripts/layout-settings.js"></script>
+<script src="src/ink-alerts.js"></script>
+<script>
+$(document).on('click', '.le-eliminar-borrador', function () {
+  var id = $(this).data('id');
+  inkConfirm({ title: 'Eliminar borrador', text: 'Se pierde lo que se había armado en él. Esto no afecta ninguna lista generada.', type: 'danger', btnOk: 'Eliminar' }, function () {
+    $.ajax({ url: 'php/lista_empaque_borrador.php', method: 'POST', contentType: 'application/json', data: JSON.stringify({ accion: 'eliminar', id: id }), dataType: 'json' })
+      .done(function (r) {
+        if (!r.ok) { inkToast(r.error || 'No se pudo eliminar el borrador.', 'error'); return; }
+        $('tr[data-borrador="' + id + '"]').remove();
+        if (!$('#le-borradores tbody tr').length) $('#le-borradores').remove();
+        inkToast('Borrador eliminado.', 'ok');
+      })
+      .fail(function () { inkToast('No se pudo eliminar el borrador. Intenta de nuevo.', 'error'); });
+  });
+});
+</script>
 </body>
 </html>
