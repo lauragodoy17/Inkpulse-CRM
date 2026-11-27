@@ -465,9 +465,12 @@ function fvdl_novedades(array $f, array $filas) {
  *    con menos vendidos sin kit, si todos sus libros están en la tabla); Suelto = el escrito o lo que sobra, y debía
  *    cumplirse En kits + Suelto = Vendido + Sin inventario.
  *  - Total kit = kits × precio del paquete (el escrito o el de la adopción); total suelto = Suelto × precio suelto.
+ *  - Reparto manual (2026-11-27, la usuaria): total sin inventario = Sin inventario × precio suelto, y suma al gran total.
+ *    Un kit con un libro del que se vendió menos (kits_sin_stock) es un AVISO, no bloquea el cierre.
  * Devuelve ['manual','novedades','filas' => [id => fila],'grados' => [['clave','id_grado','grado','faltante','filas','paquetes' =>
  * [kit],'total_kit','total_suelto','kits']],'paquetes' => [kit],'total_kit','total_suelto','gran_total','kits','errores'];
- * cada fila con 'vendido','en_kit','suelto_ef','total_suelto','faltante'; cada kit ['id','paquete','id_grado','kits',
+ * cada fila con 'vendido','en_kit','suelto_ef','total_suelto','total_sinv','kits_sin_stock','faltante'; 'total_sinv' y 'avisos' en el
+ * total; cada kit ['id','paquete','id_grado','kits',
  * 'auto','precio','precio_adopcion','total','libros' => [['fila','nombre','pk']]].
  */
 function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null, $kits = null) {
@@ -515,7 +518,7 @@ function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null, $kit
                               'precio' => $precio, 'precio_adopcion' => $p['precio'], 'total' => round($n * $precio, 2), 'libros' => $libros];
     }
     $grados = [];
-    $tot = ['total_kit' => 0, 'total_suelto' => 0, 'kits' => 0];
+    $tot = ['total_kit' => 0, 'total_suelto' => 0, 'total_sinv' => 0, 'kits' => 0];
     foreach ($filas as $id => &$r) {
         $vend = max(0, $r['vendido']);
         $n = $r['libro'];
@@ -524,9 +527,12 @@ function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null, $kit
         $r['sin_asignar'] = 0;
         if ($manual) {
             $r['suelto_ef'] = (int)$r['suelto'];
-            $asignado = $r['en_kit'] + $r['suelto_ef'];
+            // Lo escrito en Sin inventario sale de las unidades sueltas que van quedando (2026-11-27, la usuaria).
+            $asignado = $r['en_kit'] + $r['suelto_ef'] + $sinv;
             // Sin tope (2026-11-27, la usuaria): se puede haber enviado o vendido algo que no se remisionó.
-            $r['sin_asignar'] = max(0, $vend + $sinv - $asignado);
+            $r['sin_asignar'] = max(0, $vend - $asignado);
+            // Kits con este libro por encima de lo vendido: se vendieron kits sin inventario de él (aviso).
+            $r['kits_sin_stock'] = max(0, $r['en_kit'] - $vend);
         } else {
         $r['suelto_ef'] = $novedades && (int)$r['suelto'] > 0 ? (int)$r['suelto'] : $sobra;
         if ($r['vendido'] >= 0 && $r['en_kit'] + $r['suelto_ef'] !== $vend + $sinv) {
@@ -535,19 +541,36 @@ function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null, $kit
                 . ($r['en_kit'] > $vend + $sinv ? 'Si los kits salieron sin este libro, anota la diferencia en Sin inventario; si no, baja los kits del paquete.' : 'El Suelto debe ser ' . $sobra . '.');
         }
         }
+        $r['kits_sin_stock'] = $r['kits_sin_stock'] ?? 0;
         $r['total_suelto'] = round($r['suelto_ef'] * (float)$r['precio_suelto'], 2);
+        // Vendido sin inventario × precio (2026-11-27, la usuaria). Los cerrados con el cálculo anterior no lo cobraban.
+        $r['total_sinv'] = $manual ? round($sinv * (float)$r['precio_suelto'], 2) : 0;
         $r['faltante'] = (int)$r['remisionado'] < (int)$r['solicitado'];
         // Devuelto mayor que remisionado ya no bloquea (2026-11-27, la usuaria): se pudo enviar algo que no se remisionó.
-        if ($r['suelto_ef'] > 0 && (float)$r['precio_suelto'] <= 0) $errores[] = '"' . $n . '": falta el precio suelto.';
+        if (($r['suelto_ef'] > 0 || ($manual && $sinv > 0)) && (float)$r['precio_suelto'] <= 0) $errores[] = '"' . $n . '": falta el precio suelto.';
         $k = $r['id_grado'] ? 'g' . (int)$r['id_grado'] : 'sin';
         $grados[$k] = $grados[$k] ?? ['clave' => $k, 'id_grado' => (int)$r['id_grado'], 'grado' => $r['id_grado'] ? ((string)$r['grado'] !== '' ? $r['grado'] : 'Grado ' . (int)$r['id_grado']) : 'Sin grado',
-                                      'faltante' => false, 'filas' => [], 'paquetes' => [], 'total_kit' => 0, 'total_suelto' => 0, 'kits' => 0];
+                                      'faltante' => false, 'filas' => [], 'paquetes' => [], 'total_kit' => 0, 'total_suelto' => 0, 'total_sinv' => 0, 'kits' => 0];
         $grados[$k]['filas'][] = $r;
         if ($r['faltante']) $grados[$k]['faltante'] = true;
         $grados[$k]['total_suelto'] += $r['total_suelto'];
         $tot['total_suelto'] += $r['total_suelto'];
+        $grados[$k]['total_sinv'] += $r['total_sinv'];
+        $tot['total_sinv'] += $r['total_sinv'];
     }
     unset($r);
+    // Aviso (2026-11-27, la usuaria): kits vendidos con libros que no tenían inventario.
+    $avisos = [];
+    foreach ($kitsPaq as &$kp) {
+        $kp['sin_stock'] = [];
+        if ($manual && $kp['kits'] > 0) foreach ($kp['libros'] as $l) {
+            if ($l['fila'] === null) { $kp['sin_stock'][] = $l['nombre'] . ' (no se remisionó)'; continue; }
+            $fl = $filas[$l['fila']];
+            if ($fl['kits_sin_stock'] > 0) $kp['sin_stock'][] = $l['nombre'] . ' (se vendieron ' . max(0, $fl['vendido']) . ')';
+        }
+        if ($kp['sin_stock']) $avisos[] = 'Estás colocando que vendiste kits sin inventario: "' . $kp['paquete'] . '" (' . $kp['kits'] . ' kit' . ($kp['kits'] === 1 ? '' : 's') . ') lleva ' . implode(', ', $kp['sin_stock']) . '.';
+    }
+    unset($kp);
     foreach ($kitsPaq as &$kp) {
         $k = 'g' . (int)$kp['id_grado'];
         // El paquete va en el grado de la adopción; si no hay filas de ese grado, en el de su primer libro.
@@ -566,9 +589,11 @@ function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null, $kit
     uasort($grados, fn($a, $b) => ($a['id_grado'] ?: PHP_INT_MAX) <=> ($b['id_grado'] ?: PHP_INT_MAX));
     $tot['total_kit'] = round($tot['total_kit'], 2);
     $tot['total_suelto'] = round($tot['total_suelto'], 2);
+    $tot['total_sinv'] = round($tot['total_sinv'], 2);
     return ['manual' => $manual, 'novedades' => $novedades, 'filas' => $filas, 'grados' => array_values($grados), 'paquetes' => array_values($kitsPaq),
-            'total_kit' => $tot['total_kit'], 'total_suelto' => $tot['total_suelto'], 'gran_total' => round($tot['total_kit'] + $tot['total_suelto'], 2),
-            'kits' => $tot['kits'], 'errores' => $errores];
+            'total_kit' => $tot['total_kit'], 'total_suelto' => $tot['total_suelto'], 'total_sinv' => $tot['total_sinv'],
+            'gran_total' => round($tot['total_kit'] + $tot['total_suelto'] + $tot['total_sinv'], 2),
+            'kits' => $tot['kits'], 'errores' => $errores, 'avisos' => $avisos];
 }
 
 /**

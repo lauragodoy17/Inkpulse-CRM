@@ -14,7 +14,10 @@
  *    Bre-B, recaudo de la venta en amarillo y diferencia con el total) y BASE DE CAJA (base entregada − gastos); Cierre =
  *    base devuelta + recaudo; NOTA; OBSERVACIONES y pie.
  * Usa las variables de php/formato_vd_excel.php: $hoja, $f, $cl, $fila, $PESOS, $borde, $relleno, $texto, $seccion,
- *  $AMARILLO y $paq_incompleto (en amarillo los libros remisionados por debajo de lo solicitado y sus paquetes).
+ *  $AMARILLO y $paq_incompleto (en amarillo los libros remisionados por debajo de lo solicitado y sus paquetes),
+ *  $NARANJA / $NARANJA_PAQ y $escribir_avisos (kits vendidos con libros sin inventario, 2026-11-27).
+ * Venta con novedades (2026-11-27, la usuaria): además van las columnas de la pantalla, J Vendido (remisionado − devuelto),
+ *  K En kits, L Suelto, M Sin inventario y N Total sin inventario (M × precio), y la nota pasa a la O.
  * Termina escribiendo el archivo (exit).
  */
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -24,12 +27,18 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 $medio = ['borders' => ['outline' => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['rgb' => '000000']]]];
 $fino = ['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '000000']]]];
 
+// Con novedades: columnas de la pantalla (J:N) y la nota en la O; sin novedades, como siempre (tabla A:I, nota en J).
+$NOV = !empty($cl['novedades']);
+$U = $NOV ? 'N' : 'I';   // última columna de la tabla
+$NC = $NOV ? 'O' : 'J';  // columna de la nota
+
 // Encabezados de la tabla.
-$hoja->fromArray(['Título', 'Detalle', 'Solicitud', 'Inventario entregado', 'Unidades devueltas', 'Inventario final', 'Unidades vendidas', 'Precio venta', 'Total venta'], null, "A$fila");
-$hoja->getStyle("A$fila:I$fila")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-$hoja->getStyle("A$fila:I$fila")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
-$relleno("A$fila:I$fila", '1F3864');
-$hoja->getStyle("A$fila:I$fila")->applyFromArray($fino);
+$hoja->fromArray(array_merge(['Título', 'Detalle', 'Solicitud', 'Inventario entregado', 'Unidades devueltas', 'Inventario final', 'Unidades vendidas', 'Precio venta', 'Total venta'],
+                             $NOV ? ['Vendido', 'En kits', 'Suelto', 'Sin inventario', 'Total sin inventario'] : []), null, "A$fila");
+$hoja->getStyle("A$fila:$U$fila")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+$hoja->getStyle("A$fila:$U$fila")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+$relleno("A$fila:$U$fila", '1F3864');
+$hoja->getStyle("A$fila:$U$fila")->applyFromArray($fino);
 $hoja->getRowDimension($fila)->setRowHeight(30.75);
 $fila++;
 $ini = $fila;
@@ -41,14 +50,21 @@ $mostrado = []; // id de fila => ya se escribieron sus cantidades
 // Nota (J): solo lo escrito en Sin inventario.
 $sinBodega = function ($n) { $n = (int)$n; return $n > 0 ? $n . ' libro' . ($n === 1 ? '' : 's') . ' pagado' . ($n === 1 ? '' : 's') . ' pero no había en bodega' : ''; };
 $nota = fn($r) => $sinBodega((int)$r['sin_inventario']);
-$escribir = function ($r, $vendidas, $precio) use ($hoja, $texto, &$fila, &$mostrado, $nota) {
+$escribir = function ($r, $vendidas, $precio) use ($hoja, $texto, &$fila, &$mostrado, $nota, $NOV, $NC) {
     $texto("B$fila", $r['libro']);
     if (!isset($mostrado[(int)$r['id']])) {
         $hoja->setCellValue("C$fila", (int)$r['solicitado']);
         $hoja->setCellValue("D$fila", (int)$r['remisionado']);
         $hoja->setCellValue("E$fila", (int)$r['devuelto']);
         $hoja->setCellValue("F$fila", (int)$r['devuelto']); // inventario final = lo que volvió
-        if (($n = $nota($r)) !== '') $texto("J$fila", $n);
+        if (($n = $nota($r)) !== '') $texto("$NC$fila", $n);
+        if ($NOV) {
+            $hoja->setCellValue("J$fila", (int)$r['vendido']);
+            $hoja->setCellValue("K$fila", (int)$r['en_kit']);
+            $hoja->setCellValue("L$fila", (int)$r['suelto_ef']);
+            $hoja->setCellValue("M$fila", (int)$r['sin_inventario']);
+            $hoja->setCellValue("N$fila", "=+M$fila*" . (float)$r['precio_suelto']);
+        }
         $mostrado[(int)$r['id']] = true;
     }
     $hoja->setCellValue("G$fila", (int)$vendidas);
@@ -65,9 +81,11 @@ foreach ($cl['paquetes'] as $p) {
     $hoja->setCellValue("G$fila", (int)$p['kits']);
     $hoja->setCellValue("H$fila", (float)$p['precio']);
     $hoja->setCellValue("I$fila", "=+H$fila*G$fila");
-    $hoja->getStyle("A$fila:I$fila")->applyFromArray($fino);
-    $hoja->getStyle("A$fila:I$fila")->applyFromArray($medio);
-    if ($paq_incompleto($p)) $relleno("A$fila:I$fila", $AMARILLO);
+    if ($NOV) $hoja->setCellValue("K$fila", (int)$p['kits']); // kits del paquete en "En kits", como en la pantalla
+    $hoja->getStyle("A$fila:$U$fila")->applyFromArray($fino);
+    $hoja->getStyle("A$fila:$U$fila")->applyFromArray($medio);
+    if (!empty($p['sin_stock'])) { $relleno("A$fila:$U$fila", $NARANJA_PAQ); $texto("$NC$fila", '⚠ Kits sin inventario: ' . $sin_vendidos(implode(', ', $p['sin_stock']))); }
+    elseif ($paq_incompleto($p)) $relleno("A$fila:$U$fila", $AMARILLO);
     $fila++;
 }
 $finKits = $fila - 1;
@@ -75,48 +93,86 @@ $finKits = $fila - 1;
 // 2) Libros sueltos: lo vendido suelto y los libros que aún no aparecen (para que sus cantidades queden en el formato).
 $hoja->setCellValue("A$fila", 'LIBROS SUELTOS');
 $hoja->getStyle("A$fila")->getFont()->setBold(true);
-$hoja->getStyle("A$fila:I$fila")->applyFromArray($fino);
+$hoja->getStyle("A$fila:$U$fila")->applyFromArray($fino);
 $fila++;
 $iniSue = $fila;
 foreach ($cl['grados'] as $g) {
     foreach ($g['filas'] as $r) {
         $texto("A$fila", $g['grado']);
         $escribir($r, (int)$r['suelto_ef'], $r['precio_suelto']);
-        if ($r['faltante']) $relleno("A$fila:I$fila", $AMARILLO);
+        if ($r['kits_sin_stock'] > 0) $relleno("A$fila:$U$fila", $NARANJA);
+        elseif ($r['faltante']) $relleno("A$fila:$U$fila", $AMARILLO);
         $fila++;
     }
 }
 $finSue = $fila - 1;
 if ($finSue >= $iniSue) {
-    $hoja->getStyle("A$iniSue:I$finSue")->applyFromArray($fino);
-    $hoja->getStyle("A$iniSue:I$finSue")->applyFromArray($medio);
+    $hoja->getStyle("A$iniSue:$U$finSue")->applyFromArray($fino);
+    $hoja->getStyle("A$iniSue:$U$finSue")->applyFromArray($medio);
 }
+
+// 3) Vendido sin inventario × precio (2026-11-27, la usuaria): suma al total de venta.
+$iniSinv = $fila;
+$conSinv = array_filter($porId, fn($r) => (float)$r['total_sinv'] != 0);
+if ($conSinv) {
+    $hoja->setCellValue("A$fila", 'LIBROS SIN INVENTARIO');
+    $hoja->getStyle("A$fila")->getFont()->setBold(true);
+    $hoja->getStyle("A$fila:$U$fila")->applyFromArray($fino);
+    $fila++;
+    $iniSinv = $fila;
+    foreach ($conSinv as $r) {
+        $texto("A$fila", $r['grado_txt']);
+        $texto("B$fila", $r['libro']);
+        $hoja->setCellValue("G$fila", (int)$r['sin_inventario']);
+        $hoja->setCellValue("H$fila", (float)$r['precio_suelto']);
+        $hoja->setCellValue("I$fila", "=+H$fila*G$fila");
+        $fila++;
+    }
+    $hoja->getStyle("A$iniSinv:$U" . ($fila - 1))->applyFromArray($fino);
+    $hoja->getStyle("A$iniSinv:$U" . ($fila - 1))->applyFromArray($medio);
+}
+$finSinv = $fila - 1;
 $fin = $fila - 1;
 if ($fin >= $ini) {
     $hoja->getStyle("B$ini:B$fin")->getFont()->setSize(9)->getColor()->setRGB('475569');
     $hoja->getStyle("C$ini:G$fin")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
     $hoja->getStyle("H$ini:I$fin")->getNumberFormat()->setFormatCode($PESOS);
     $hoja->getStyle("A$ini:A$fin")->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
+    if ($NOV) {
+        $hoja->getStyle("J$ini:M$fin")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $hoja->getStyle("N$ini:N$fin")->getNumberFormat()->setFormatCode($PESOS);
+    }
 }
 
 // TOTALES (el total de venta en amarillo, como en el formato de la usuaria).
 $tot = $fila;
 $hoja->setCellValue("A$tot", 'TOTALES');
 foreach (['C', 'D', 'E', 'F', 'I'] as $c) $hoja->setCellValue("$c$tot", "=SUM($c$ini:$c$fin)");
-$hoja->getStyle("A$tot:I$tot")->getFont()->setBold(true);
+// Columnas nuevas: solo los libros (los kits de los paquetes en K no se suman con las unidades).
+if ($NOV && $finSue >= $iniSue) foreach (['J', 'K', 'L', 'M', 'N'] as $c) $hoja->setCellValue("$c$tot", "=SUM($c$iniSue:$c$finSue)");
+$hoja->getStyle("A$tot:$U$tot")->getFont()->setBold(true);
 $relleno("A$tot:H$tot", 'F1F5F9');
 $relleno("I$tot", 'FFFF00');
 $hoja->getStyle("I$tot")->getNumberFormat()->setFormatCode($PESOS);
 $hoja->getStyle("C$tot:G$tot")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-$hoja->getStyle("A$tot:I$tot")->applyFromArray($fino);
-$hoja->getStyle("A$tot:I$tot")->applyFromArray($medio);
+if ($NOV) {
+    $relleno("J$tot:$U$tot", 'F1F5F9');
+    $hoja->getStyle("J$tot:M$tot")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    $hoja->getStyle("N$tot")->getNumberFormat()->setFormatCode($PESOS);
+}
+$hoja->getStyle("A$tot:$U$tot")->applyFromArray($fino);
+$hoja->getStyle("A$tot:$U$tot")->applyFromArray($medio);
+
+// Avisos de kits sin inventario debajo de los totales (2026-11-27).
+$avisoFin = $escribir_avisos($tot + 2, $NC);
 
 // Resumen (A:B etiqueta, C:D valor) y VENTA (E:F etiqueta, G valor) lado a lado.
-$r0 = $tot + 2;
+$r0 = !empty($cl['avisos']) ? $avisoFin : $tot + 2;
 $resumen = [
     ['TOTAL PRECIO KIT (' . (int)$cl['kits'] . ' kit' . ((int)$cl['kits'] === 1 ? '' : 's') . ')', $finKits >= $ini ? "=SUM(I$ini:I$finKits)" : 0, true],
     ['TOTAL PRECIO SUELTO', $finSue >= $iniSue ? "=SUM(I$iniSue:I$finSue)" : 0, true],
-    ['GRAN TOTAL', "=+C$r0+C" . ($r0 + 1), true],
+    ['TOTAL SIN INVENTARIO', $finSinv >= $iniSinv ? "=SUM(I$iniSinv:I$finSinv)" : 0, true],
+    ['GRAN TOTAL', "=+C$r0+C" . ($r0 + 1) . "+C" . ($r0 + 2), true],
     ['LIBROS SIN INVENTARIO', array_sum(array_map(fn($r) => (int)$r['sin_inventario'], $porId)), false],
     ['TOTAL DE CAJAS', $f['total_cajas'] !== null ? (int)$f['total_cajas'] : '', false],
     ['DEVOLUCIÓN INKPULSE', $f['legalizacion'] ? $f['legalizacion']['texto'] : '', false],
@@ -133,7 +189,7 @@ foreach ($resumen as $i => [$lbl, $v, $pesos]) {
 $rFin = $r0 + count($resumen) - 1;
 $relleno("A$r0:A$rFin", 'E5E7EB');
 $hoja->getStyle("A$r0:A$rFin")->getFont()->setBold(true)->setSize(9);
-$hoja->getStyle("A" . ($r0 + 2) . ":D" . ($r0 + 2))->getFont()->setBold(true);
+$hoja->getStyle("A" . ($r0 + 3) . ":D" . ($r0 + 3))->getFont()->setBold(true);
 $hoja->getStyle("A$r0:D$rFin")->applyFromArray($fino);
 
 $hoja->setCellValue("E$r0", 'VENTA');
@@ -211,7 +267,7 @@ $fila += 2;
 $hoja->setCellValue("A$fila", fvd_numero($f['consecutivo']) . ' · ' . $f['colegio'] . ' · Descargado el ' . date('d/m/Y g:i A'));
 $hoja->getStyle("A$fila")->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('64748B');
 
-foreach (['A' => 46, 'B' => 32.4, 'C' => 12, 'D' => 14, 'E' => 13, 'F' => 13, 'G' => 13, 'H' => 18.7, 'I' => 16, 'J' => 39.6] as $c => $w) $hoja->getColumnDimension($c)->setWidth($w);
+foreach (['A' => 46, 'B' => 32.4, 'C' => 12, 'D' => 14, 'E' => 13, 'F' => 13, 'G' => 13, 'H' => 18.7, 'I' => 16] + ($NOV ? ['J' => 11, 'K' => 11, 'L' => 11, 'M' => 13, 'N' => 16, 'O' => 39.6] : ['J' => 39.6]) as $c => $w) $hoja->getColumnDimension($c)->setWidth($w);
 
 $nombre = 'Formato_venta_directa_' . (int)$f['consecutivo'] . '_' . preg_replace('/[^A-Za-z0-9]+/', '_', iconv('UTF-8', 'ASCII//TRANSLIT', $f['colegio']) ?: 'colegio');
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

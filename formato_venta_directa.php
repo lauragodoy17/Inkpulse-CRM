@@ -333,6 +333,15 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     .fv-cl td.fv-cl-rem.falta { background:#fde047; color:#713f12; font-weight:800; }
     .fv-cl td.fv-cl-rem.falta .fv-num { border-color:#eab308; background:#fef9c3; }
     .fv-cl-amarillo { background:#fde047; color:#713f12; font-weight:700; padding:0 6px; border-radius:4px; }
+    /* Separación entre los datos (Solicitado…Vendido) y cómo se vendió (En kits…), y kits sin inventario (2026-11-27). */
+    .fv-cl .fv-cl-sep { border-left:3px solid #6366f1 !important; }
+    .fv-cl tr.fv-cl-fila.sinstock td { background:#ffedd5; }
+    .fv-cl tr.fv-cl-paq.sinstock td { background:#fed7aa; border-top-color:#fb923c; }
+    .fv-cl .fv-cl-sinstock { display:none; font-size:.68rem; font-weight:700; color:#9a3412; background:#fed7aa; border:1px solid #fb923c; border-radius:99px; padding:1px 7px; white-space:nowrap; }
+    .fv-cl tr.sinstock .fv-cl-sinstock { display:inline-block; }
+    .fv-cl .fv-cl-tsi { color:#9a3412; }
+    .fv-cl-alerta { background:#fff7ed !important; border:1px solid #fb923c !important; color:#9a3412 !important; }
+    .fv-cl-naranja { background:#fed7aa; color:#9a3412; font-weight:700; padding:0 6px; border-radius:4px; }
     .fv-modal { position:fixed; inset:0; background:rgba(15,23,42,.5); z-index:9980; display:none; align-items:center; justify-content:center; padding:16px; }
     .fv-modal > form { background:#fff; border-radius:14px; padding:22px; width:440px; max-width:100%; }
     @media (max-width:992px) { .fv-caja { grid-template-columns:1fr; } .fv-resumen { grid-template-columns:1fr 1fr; } .fv-quien { margin-left:0; width:100%; } }
@@ -816,7 +825,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
                 if (!$cl_ed) return '<span class="fv-clk-v" data-k="precio" data-v="' . $v . '">' . $pesos($v) . '</span>' . $adop;
                 return '<div class="fv-pesos-in fv-cl-pesos"><span>$</span><input type="number" class="fv-clk-in" data-k="precio" name="clk[' . (int)$p['id'] . '][precio]" min="0" step="1" value="' . $v . '"></div>' . $adop;
               }; ?>
-            <div class="fv-v-ayuda"><i class="bi bi-info-circle"></i><div>Un renglón por libro, agrupado por grado, con lo <strong>Solicitado</strong>, <strong>Remisionado</strong>, <strong>Devuelto</strong> y <strong>Vendido</strong> (Remisionado − Devuelto). Tú decides cómo se vendió: escribe los <strong>kits</strong> de cada paquete (Kits × Precio del paquete; cada kit lleva 1 unidad de cada libro del paquete) y el <strong>Suelto</strong> de cada libro (Suelto × Precio suelto). Se cobra lo que escribas, sin tope: puede ser más de lo vendido (algo que se envió o vendió sin remisionarse) o menos. <strong>Sin inventario</strong> = libros pagados que no había en bodega (sale como nota en el Excel). Los precios vienen de la adopción y se pueden cambiar aquí sin modificar la adopción. Un libro pedido en varios cursos va en una fila por curso, con lo devuelto en ese curso. <span class="fv-cl-amarillo">En amarillo</span> = remisionado por debajo de lo solicitado (World Office).</div></div>
+            <div class="fv-v-ayuda"><i class="bi bi-info-circle"></i><div>Un renglón por libro, agrupado por grado, con lo <strong>Solicitado</strong>, <strong>Remisionado</strong>, <strong>Devuelto</strong> y <strong>Vendido</strong> (Remisionado − Devuelto). Tú decides cómo se vendió: escribe los <strong>kits</strong> de cada paquete (Kits × Precio del paquete; cada kit lleva 1 unidad de cada libro del paquete) y el <strong>Suelto</strong> de cada libro (Suelto × Precio suelto). Al escribir los kits, el Suelto de sus libros se llena solo con Vendido − kits − Sin inventario; lo puedes cambiar. Se cobra lo que escribas, sin tope: puede ser más de lo vendido (algo que se envió o vendió sin remisionarse) o menos. <strong>Sin inventario</strong> = libros vendidos que no había en bodega: se descuentan del Suelto y se cobran aparte (Sin inventario × Precio, columna <strong>Total sin inventario</strong>) y suman al gran total. <span class="fv-cl-naranja">En naranja</span> = kits vendidos con un libro del que se vendió menos (sin inventario). Los precios vienen de la adopción y se pueden cambiar aquí sin modificar la adopción. Un libro pedido en varios cursos va en una fila por curso, con lo devuelto en ese curso. <span class="fv-cl-amarillo">En amarillo</span> = remisionado por debajo de lo solicitado (World Office).</div></div>
             <?php if ($cl_ed): ?>
             <div style="margin:0 0 10px;"><button type="button" class="fv-btn fv-btn-light" style="padding:7px 14px;font-size:.8rem;" id="fv-cl-proponer" title="Llena los kits de cada paquete con lo que alcanza el libro con menos vendidos y el resto como suelto. Después puedes cambiarlo."><i class="bi bi-magic"></i> Proponer reparto (kits completos y el resto suelto)</button></div>
             <?php elseif (!$manual): ?>
@@ -824,48 +833,52 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
             <?php endif; ?>
             <div class="table-responsive">
               <table class="fv-tabla fv-cl" id="fv-cl">
-                <thead><tr><th>Libro</th><th class="c">Solicitado</th><th class="c">Remisionado</th><th class="c">Devuelto</th><th class="c">Vendido</th><th class="c">En kits</th><th class="c">Suelto</th><th class="c">Sin inventario</th><th class="r">Precio</th><th class="r">Total</th></tr></thead>
+                <thead><tr><th>Libro</th><th class="c">Solicitado</th><th class="c">Remisionado</th><th class="c">Devuelto</th><th class="c">Vendido</th><th class="c fv-cl-sep">En kits</th><th class="c">Suelto</th><th class="c">Sin inventario</th><th class="r">Precio</th><th class="r">Total</th><th class="r">Total sin inventario</th></tr></thead>
                 <?php foreach ($cl['grados'] as $g): ?>
                 <tbody class="fv-cl-g" data-grado="<?= $h($g['clave']) ?>">
                   <tr class="fv-cl-head<?= $g['faltante'] ? ' faltante' : '' ?>">
-                    <td colspan="10"><i class="bi bi-mortarboard"></i> <?= $h(mb_strtoupper($g['grado'])) ?>
+                    <td colspan="11"><i class="bi bi-mortarboard"></i> <?= $h(mb_strtoupper($g['grado'])) ?>
                       <span class="fv-cl-falta"><i class="bi bi-exclamation-triangle-fill"></i> Remisionado menor que lo solicitado</span></td>
                   </tr>
                   <?php foreach ($g['paquetes'] as $p): ?>
-                  <tr class="fv-cl-paq" data-paq="<?= (int)$p['id'] ?>">
+                  <tr class="fv-cl-paq<?= !empty($p['sin_stock']) ? ' sinstock' : '' ?>" data-paq="<?= (int)$p['id'] ?>">
                     <td colspan="5"><div class="fv-paq"><i class="bi bi-box-seam"></i> <strong><?= $h($p['paquete']) ?></strong></div>
                       <div class="fv-cl-hint">Cada kit lleva 1 de: <?= implode(', ', array_map(fn($l) => $l['fila'] !== null ? $h($l['nombre']) : '<span class="fv-cl-nolibro" title="No está en la tabla: no se remisionó">' . $h($l['nombre']) . '</span>', $p['libros'])) ?></div></td>
-                    <td class="c"><?= $clk_kits($p) ?></td>
+                    <td class="c fv-cl-sep"><?= $clk_kits($p) ?></td>
                     <td class="c fv-cl-x" colspan="2">kit(s) × precio del paquete</td>
                     <td class="r"><?= $clk_precio($p) ?></td>
                     <td class="r"><strong class="fv-clk-total"><?= $pesos($p['total']) ?></strong></td>
+                    <td></td>
                   </tr>
                   <?php endforeach; ?>
                   <?php foreach ($g['filas'] as $r): ?>
-                  <tr class="fv-cl-fila" data-id="<?= (int)$r['id'] ?>" data-paq="<?= $h($r['paquetes']) ?>">
+                  <tr class="fv-cl-fila<?= !empty($r['kits_sin_stock']) ? ' sinstock' : '' ?>" data-id="<?= (int)$r['id'] ?>" data-paq="<?= $h($r['paquetes']) ?>">
                     <td><div class="fv-paq"><?= $h($r['libro']) ?><?= $r['curso'] ? '<span class="fv-tag" title="Este libro se pidió en varios cursos: esta fila es lo de ' . $h($r['grado']) . ', con lo devuelto en ese curso.">Solo ' . $h($r['grado']) . '</span>' : '' ?><?= $r['plan_lector'] ? '<span class="fv-tag">Plan lector</span>' : '' ?><?= trim((string)$r['paquetes']) === '' ? '<span class="fv-tag" title="No hace parte de ningún paquete de la adopción: solo se vende suelto.">Solo suelto</span>' : '' ?></div></td>
                     <td class="c"><?= $cl_in($r, 'sol', 'solicitado') ?></td>
                     <td class="c fv-cl-rem<?= $r['faltante'] ? ' falta' : '' ?>"><?= $cl_in($r, 'rem', 'remisionado') ?></td>
                     <td class="c"><?= $cl_in($r, 'dev', 'devuelto') ?></td>
                     <td class="c"><strong class="fv-cl-vend"><?= (int)$r['vendido'] ?></strong></td>
-                    <td class="c fv-cl-enkit"><?= (int)$r['en_kit'] ?></td>
+                    <td class="c fv-cl-enkit fv-cl-sep"><span class="fv-cl-sinstock" title="Los kits de este libro pasan de lo vendido: se están vendiendo kits sin inventario de él."><i class="bi bi-exclamation-triangle-fill"></i> Sin inventario</span></td>
                     <td class="c"><?= $cl_suelto($r) ?></td>
                     <td class="c"><?= $cl_in($r, 'sinv', 'sin_inventario') ?></td>
                     <td class="r"><?= $cl_pin($r, 'ps', 'precio_suelto') ?></td>
                     <td class="r fv-cl-ts"><?= $pesos($r['total_suelto']) ?></td>
+                    <td class="r fv-cl-tsi"><?= $pesos($r['total_sinv'] ?? 0) ?></td>
                   </tr>
                   <?php endforeach; ?>
                 </tbody>
                 <?php endforeach; ?>
                 <tfoot>
-                  <tr><td colspan="9">Total kits <span class="fv-det" style="display:inline;">· <span id="fv-cl-nkits"><?= (int)$cl['kits'] ?></span> kit(s) × precio del paquete</span></td><td class="r" id="fv-cl-tk"><?= $pesos($cl['total_kit']) ?></td></tr>
-                  <tr><td colspan="9">Total sueltos <span class="fv-det" style="display:inline;">· libros sueltos × precio suelto</span></td><td class="r" id="fv-cl-ts"><?= $pesos($cl['total_suelto']) ?></td></tr>
-                  <tr class="fv-cl-gran"><td colspan="9">GRAN TOTAL <span class="fv-det" style="display:inline;">· total kits + total sueltos</span></td><td class="r" id="fv-cl-gran"><?= $pesos($cl['gran_total']) ?></td></tr>
+                  <tr><td colspan="10">Total kits <span class="fv-det" style="display:inline;">· <span id="fv-cl-nkits"><?= (int)$cl['kits'] ?></span> kit(s) × precio del paquete</span></td><td class="r" id="fv-cl-tk"><?= $pesos($cl['total_kit']) ?></td></tr>
+                  <tr><td colspan="10">Total sueltos <span class="fv-det" style="display:inline;">· libros sueltos × precio suelto</span></td><td class="r" id="fv-cl-ts"><?= $pesos($cl['total_suelto']) ?></td></tr>
+                  <tr><td colspan="10">Total sin inventario <span class="fv-det" style="display:inline;">· sin inventario × precio</span></td><td class="r" id="fv-cl-tsit"><?= $pesos($cl['total_sinv'] ?? 0) ?></td></tr>
+                  <tr class="fv-cl-gran"><td colspan="10">GRAN TOTAL <span class="fv-det" style="display:inline;">· total kits + total sueltos + total sin inventario</span></td><td class="r" id="fv-cl-gran"><?= $pesos($cl['gran_total']) ?></td></tr>
                 </tfoot>
               </table>
             </div>
+            <div class="fv-aviso fv-cl-alerta<?= !empty($cl['avisos']) ? '' : ' d-none' ?>" id="fv-cl-avisos" style="margin-top:12px;"><i class="bi bi-exclamation-triangle-fill"></i> <strong>Atención:</strong><ul style="margin:6px 0 0 18px;padding:0;"><?php foreach ($cl['avisos'] ?? [] as $a_cl): ?><li><?= $h($a_cl) ?></li><?php endforeach; ?></ul></div>
             <div class="fv-aviso err<?= $cl['errores'] ? '' : ' d-none' ?>" id="fv-cl-errores" style="margin-top:12px;"><i class="bi bi-exclamation-triangle"></i> <strong>Revisa la tabla antes de cerrar:</strong><ul style="margin:6px 0 0 18px;padding:0;"><?php foreach ($cl['errores'] as $e_cl): ?><li><?= $h($e_cl) ?></li><?php endforeach; ?></ul></div>
-            <script>var FV_CL = <?= json_encode(['editable' => $cl_ed && $manual, 'total' => $cl['gran_total'], 'paquetes' => array_map(fn($p) => ['id' => $p['id'], 'nombre' => $p['paquete'], 'filas' => array_column($p['libros'], 'fila')], $cl['paquetes'])], JSON_UNESCAPED_UNICODE) ?>;</script>
+            <script>var FV_CL = <?= json_encode(['editable' => $cl_ed && $manual, 'total' => $cl['gran_total'], 'paquetes' => array_map(fn($p) => ['id' => $p['id'], 'nombre' => $p['paquete'], 'filas' => array_column($p['libros'], 'fila'), 'libros' => array_column($p['libros'], 'nombre')], $cl['paquetes'])], JSON_UNESCAPED_UNICODE) ?>;</script>
             <?php else: ?>
             <?php if ($dos_dev): ?>
             <div class="fv-v-ayuda"><i class="bi bi-info-circle"></i><div>Este formato tiene <strong>2 devoluciones</strong> (#<?= (int)$ids_l[0] ?> y #<?= (int)end($ids_l) ?>). Las vendidas de cada título son lo entregado menos lo que volvió en las dos.
@@ -1152,19 +1165,43 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     var $i = $tr.find('.fv-clk-in[data-k="' + k + '"]');
     return $i.length ? num($i) : Number($tr.find('.fv-clk-v[data-k="' + k + '"]').data('v')) || 0;
   };
-  $(document).on('input change', '#fv-cl .fv-cl-in, #fv-cl .fv-clk-in', function () { recalcCL(); recalcDinero(); });
+  // Suelto automático (2026-11-27, la usuaria): al cambiar los kits de un paquete, el Suelto de sus libros pasa a
+  // Vendido − En kits − Sin inventario (y al cambiar lo remisionado, devuelto o sin inventario de un libro, el de ese libro).
+  // Se puede cambiar a mano después.
+  function enKitDe(id) {
+    var n = 0, $t = $('#fv-cl');
+    FV_CL.paquetes.forEach(function (p) { if (p.filas.map(String).indexOf(String(id)) >= 0) n += clkVal($t.find('tr.fv-cl-paq[data-paq="' + p.id + '"]'), 'kits'); });
+    return n;
+  }
+  function autoSuelto(ids) {
+    ids.forEach(function (id) {
+      var $tr = $('#fv-cl tr.fv-cl-fila[data-id="' + id + '"]');
+      if ($tr.length) $tr.find('.fv-cl-in[data-k="suelto"]').val(Math.max(0, clVal($tr, 'rem') - clVal($tr, 'dev') - enKitDe(id) - clVal($tr, 'sinv')));
+    });
+  }
+  $(document).on('input change', '#fv-cl .fv-cl-in, #fv-cl .fv-clk-in', function () {
+    var $in = $(this), k = $in.data('k');
+    if ($in.hasClass('fv-clk-in') && k === 'kits') {
+      var idp = String($in.closest('tr.fv-cl-paq').data('paq'));
+      FV_CL.paquetes.forEach(function (p) { if (String(p.id) === idp) autoSuelto(p.filas.filter(function (i) { return i !== null; })); });
+    } else if ($in.hasClass('fv-cl-in') && (k === 'rem' || k === 'dev' || k === 'sinv')) {
+      autoSuelto([String($in.closest('tr.fv-cl-fila').data('id'))]);
+    }
+    recalcCL(); recalcDinero();
+  });
   // Proponer reparto: kits = lo que alcanza el libro del paquete con menos vendidos (en el orden de la adopción) y el
   // resto de cada libro como suelto. Solo llena las casillas; la persona lo puede cambiar.
   $('#fv-cl-proponer').on('click', function () {
     var $t = $('#fv-cl'), libre = {};
-    $t.find('.fv-cl-fila').each(function () { var $tr = $(this); libre[String($tr.data('id'))] = Math.max(0, clVal($tr, 'rem') - clVal($tr, 'dev') + clVal($tr, 'sinv')); });
+    $t.find('.fv-cl-fila').each(function () { var $tr = $(this); libre[String($tr.data('id'))] = Math.max(0, clVal($tr, 'rem') - clVal($tr, 'dev')); });
     FV_CL.paquetes.forEach(function (p) {
       var pres = p.filas.filter(function (i) { return i !== null && libre[String(i)] !== undefined; }).map(String);
       var n = pres.length && pres.length === p.filas.length ? Math.min.apply(null, pres.map(function (i) { return libre[i]; })) : 0;
       pres.forEach(function (i) { libre[i] -= n; });
       $t.find('tr.fv-cl-paq[data-paq="' + p.id + '"] .fv-clk-in[data-k="kits"]').val(n);
     });
-    $t.find('.fv-cl-fila').each(function () { $(this).find('.fv-cl-in[data-k="suelto"]').val(libre[String($(this).data('id'))]); });
+    // Lo que quede de cada libro va como suelto, menos lo que está en Sin inventario (2026-11-27, la usuaria).
+    $t.find('.fv-cl-fila').each(function () { var $tr = $(this); $tr.find('.fv-cl-in[data-k="suelto"]').val(Math.max(0, libre[String($tr.data('id'))] - clVal($tr, 'sinv'))); });
     recalcCL(); recalcDinero();
   });
   function recalcCL() {
@@ -1173,7 +1210,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
       $('#fv-form-6').data('total', FV_CL.total).data('cl-errores', []);
       return;
     }
-    var filas = {}, errores = [], falta = {}, totKit = 0, totSue = 0, nKits = 0;
+    var filas = {}, errores = [], avisos = [], falta = {}, totKit = 0, totSue = 0, totSinv = 0, nKits = 0;
     $t.find('.fv-cl-fila').each(function () {
       var $tr = $(this), id = String($tr.data('id')), x = {};
       ['sol', 'rem', 'dev', 'suelto', 'sinv', 'ps'].forEach(function (k) { x[k] = clVal($tr, k); });
@@ -1197,18 +1234,35 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
       if (f) falta[x.grado] = true;
       $tr.find('.fv-cl-rem').toggleClass('falta', f);
       $tr.find('.fv-cl-vend').text(x.vend);
-      $tr.find('.fv-cl-enkit').text(x.enKit);
+      // Kits con este libro por encima de lo vendido = kits vendidos sin inventario de él (se resalta; no bloquea).
+      $tr.toggleClass('sinstock', x.enKit > Math.max(0, x.vend));
       $tr.find('.fv-cl-ts').text(pesos(x.suelto * x.ps));
+      $tr.find('.fv-cl-tsi').text(pesos(x.sinv * x.ps));
       totSue += x.suelto * x.ps;
-      if (x.suelto > 0 && x.ps <= 0) { errores.push('"' + x.nombre + '": falta el precio suelto.'); mal = true; }
+      totSinv += x.sinv * x.ps;
+      if ((x.suelto > 0 || x.sinv > 0) && x.ps <= 0) { errores.push('"' + x.nombre + '": falta el precio suelto.'); mal = true; }
       $tr.toggleClass('mal', mal);
     });
     $t.find('tbody.fv-cl-g').each(function () { $(this).find('.fv-cl-head').toggleClass('faltante', !!falta[String($(this).data('grado'))]); });
-    $('#fv-cl-tk').text(pesos(totKit)); $('#fv-cl-ts').text(pesos(totSue)); $('#fv-cl-gran').text(pesos(totKit + totSue)); $('#fv-cl-nkits').text(nKits);
+    // Alerta (2026-11-27, la usuaria): paquetes con kits vendidos que llevan libros sin inventario.
+    FV_CL.paquetes.forEach(function (p) {
+      var $tr = $t.find('tr.fv-cl-paq[data-paq="' + p.id + '"]'); if (!$tr.length) return;
+      var n = clkVal($tr, 'kits'), malos = [];
+      if (n > 0) p.filas.forEach(function (i, j) {
+        if (i === null) { malos.push((p.libros[j] || 'un libro') + ' (no se remisionó)'); return; }
+        var x = filas[String(i)];
+        if (x && x.enKit > Math.max(0, x.vend)) malos.push(x.nombre + ' (se vendieron ' + Math.max(0, x.vend) + ')');
+      });
+      $tr.toggleClass('sinstock', malos.length > 0);
+      if (malos.length) avisos.push('Estás colocando que vendiste kits sin inventario: "' + p.nombre + '" (' + n + ' kit' + (n === 1 ? '' : 's') + ') lleva ' + malos.join(', ') + '.');
+    });
+    var gran = totKit + totSue + totSinv;
+    $('#fv-cl-tk').text(pesos(totKit)); $('#fv-cl-ts').text(pesos(totSue)); $('#fv-cl-tsit').text(pesos(totSinv)); $('#fv-cl-gran').text(pesos(gran)); $('#fv-cl-nkits').text(nKits);
+    $('#fv-cl-avisos').toggleClass('d-none', !avisos.length).find('ul').html(avisos.map(function (t) { return '<li>' + $('<div>').text(t).html() + '</li>'; }).join(''));
     var $e = $('#fv-cl-errores');
     $e.toggleClass('d-none', !errores.length).find('ul').html(errores.map(function (t) { return '<li>' + $('<div>').text(t).html() + '</li>'; }).join(''));
-    $('#fv-form-6').data('total', totKit + totSue).data('cl-errores', errores);
-    $('#fv-total-venta').text(pesos(totKit + totSue));
+    $('#fv-form-6').data('total', gran).data('cl-errores', errores);
+    $('#fv-total-venta').text(pesos(gran));
   }
   recalcCL();
 

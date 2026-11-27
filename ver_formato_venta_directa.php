@@ -303,27 +303,28 @@ $pend = fn($ok) => $ok ? '' : '<div class="fx-th-pend fx-noprint">Pendiente</div
             <thead><tr><th style="text-align:left;">Libro</th><th>Solicitado<?php $enc_sol = fvd_encabezado_solicitud($f); if ($enc_sol !== ''): ?><div class="fx-th-ref"><?= $h($enc_sol) ?></div><?php endif; ?></th>
               <th>Remisionado<?php $enc_rem = fvd_encabezado_remisiones($f); if ($enc_rem !== ''): ?><div class="fx-th-ref"><?= $h($enc_rem) ?></div><?php endif; ?></th>
               <th>Devuelto<?php foreach ($f['legalizacion']['todas'] ?? [] as $i_dv => $dv_h): ?><div class="fx-th-ref"><?= $n_devs > 1 ? ($i_dv + 1) . 'ª: ' : '' ?>Devolución #<?= (int)$dv_h['id'] ?></div><?php endforeach; ?></th>
-              <th>Vendido</th><th>En kits</th><th>Suelto</th><?php if ($cl["novedades"]): ?><th>Sin inventario</th><?php endif; ?><th>Precio</th><th>Total</th></tr></thead>
-            <?php $cl_cols = $cl['novedades'] ? 10 : 9; ?>
+              <th>Vendido</th><th>En kits</th><th>Suelto</th><?php if ($cl["novedades"]): ?><th>Sin inventario</th><?php endif; ?><th>Precio</th><th>Total</th><?php if ($cl['manual']): ?><th>Total sin inventario</th><?php endif; ?></tr></thead>
+            <?php $cl_cols = (($cl['novedades'] ? 10 : 9) + ($cl['manual'] ? 1 : 0)); ?>
             <?php foreach ($cl['grados'] as $g): ?>
             <tbody>
               <tr class="fx-grado<?= $g['faltante'] ? ' fx-grado-falta' : '' ?>"><td colspan="<?= $cl_cols ?>"><?= $h(mb_strtoupper($g['grado'])) ?><?= $g['faltante'] ? ' · REMISIONADO MENOR QUE LO SOLICITADO' : '' ?></td></tr>
               <?php foreach ($g['paquetes'] as $p): /* un renglón por paquete: kits × precio del paquete (2026-11-27) */ ?>
               <tr style="background:#f5f3ff;"><td colspan="5"><b><?= $h($p['paquete']) ?></b><div class="fx-det">Cada kit lleva 1 de: <?= $h(implode(', ', array_column($p['libros'], 'nombre'))) ?></div></td>
                 <td class="c"><b><?= (int)$p['kits'] ?></b></td><td class="c fx-det">kit(s) ×</td><?php if ($cl['novedades']): ?><td></td><?php endif; ?>
-                <td class="r"><?= $pesos($p['precio']) ?></td><td class="r"><b><?= $pesos($p['total']) ?></b></td></tr>
+                <td class="r"><?= $pesos($p['precio']) ?></td><td class="r"><b><?= $pesos($p['total']) ?></b></td><?php if ($cl['manual']): ?><td></td><?php endif; ?></tr>
               <?php endforeach; ?>
               <?php foreach ($g['filas'] as $r): ?>
               <tr><td><?= $h($r['libro']) ?><?= $r['curso'] ? ' <span class="fx-det">(solo ' . $h($r['grado']) . ')</span>' : '' ?><?= $r['plan_lector'] ? ' <span class="fx-det">(Plan lector)</span>' : '' ?></td>
                 <td class="c"><?= (int)$r['solicitado'] ?></td><td class="c"<?= $r['faltante'] ? ' style="background:#fde047;font-weight:800;"' : '' ?>><?= (int)$r['remisionado'] ?></td><td class="c"><?= (int)$r['devuelto'] ?></td><td class="c"><b><?= (int)$r['vendido'] ?></b></td>
                 <td class="c"><?= (int)$r['en_kit'] ?></td><td class="c"><?= (int)$r['suelto_ef'] ?></td><?php if ($cl['novedades']): ?><td class="c"><?= (int)$r['sin_inventario'] ?></td><?php endif; ?>
-                <td class="r"><?= $pesos($r['precio_suelto']) ?></td><td class="r"><?= $pesos($r['total_suelto']) ?></td></tr>
+                <td class="r"><?= $pesos($r['precio_suelto']) ?></td><td class="r"><?= $pesos($r['total_suelto']) ?></td><?php if ($cl['manual']): ?><td class="r"><?= $pesos($r['total_sinv']) ?></td><?php endif; ?></tr>
               <?php endforeach; ?>
             </tbody>
             <?php endforeach; ?>
             <tfoot>
               <tr><td colspan="<?= $cl_cols - 1 ?>">TOTAL KITS (<?= (int)$cl['kits'] ?> kit(s) × precio del paquete)</td><td class="r"><?= $pesos($cl['total_kit']) ?></td></tr>
               <tr><td colspan="<?= $cl_cols - 1 ?>">TOTAL SUELTOS</td><td class="r"><?= $pesos($cl['total_suelto']) ?></td></tr>
+              <?php if ($cl['manual']): ?><tr><td colspan="<?= $cl_cols - 1 ?>">TOTAL SIN INVENTARIO (sin inventario × precio)</td><td class="r"><?= $pesos($cl['total_sinv']) ?></td></tr><?php endif; ?>
               <tr><td colspan="<?= $cl_cols - 1 ?>">GRAN TOTAL</td><td class="r"><?= $pesos($cl['gran_total']) ?></td></tr>
             </tfoot>
           </table>
