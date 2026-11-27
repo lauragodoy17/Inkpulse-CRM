@@ -19,7 +19,7 @@ $ops_active          = in_array($current_page, ['solicitar_op.php','lista_op.php
 $empaque_active      = in_array($current_page, ['lista_empaque.php','listas_empaque.php','lista_empaque_ver.php']);
 $opds_active         = in_array($current_page, ['solicitar_orden_pd.php','ver_opds.php','reporte_opd.php']);
 $oe_active           = in_array($current_page, ['solicitar_orden_externa.php','ver_ordenes_externas.php','oe_solicitada.php']);
-$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_stock.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php','reporte_paquetes.php','reporte_backorders.php','reporte_editorial.php','reporte_planillas_procesamiento.php','reporte_ventas_cobrar.php']);
+$reportes_active     = in_array($current_page, ['reporte_zonificacion.php','reporte_cubrimiento.php','reporte_visitas.php','reporte_atenciones.php','calendar_ti.php','reporte_valoriza.php','reporte_valoriza_global.php','reporte_trabajadores.php','reporte_cant_adop.php','reporte_muestreo_f.php','reporte_pedidos.php','reporte_stock.php','reporte_existencias_wo.php','reporte_devoluciones.php','reporte_colocacion.php','reporte_colocacion_usuario.php','reporte_seguimiento_gerencia.php','reporte_paquetes.php','reporte_backorders.php','reporte_editorial.php','reporte_planillas_procesamiento.php','reporte_ventas_cobrar.php']);
 $libros_active       = $current_page === 'libros.php';
 $libros_bodega_active = $current_page === 'libros_bodega.php';
 $usuarios_active     = $current_page === 'usuarios.php';
@@ -765,6 +765,7 @@ register_shutdown_function(function () use ($bdd) {
 										<?php if ($_SESSION["tipo"]==1 || $_SESSION["tipo"]==2) { ?>
 											<li><a href="reporte_pedidos.php">Pedidos</a></li>
 											<li><a href="reporte_stock.php">Stock</a></li>
+											<li><a href="reporte_existencias_wo.php">Existencias World Office</a></li>
 											<li><a href="reporte_devoluciones.php">Devoluciones</a></li>
 											<li><a href="reporte_colocacion.php">Colocación</a></li>
 											<li><a href="reporte_ventas_cobrar.php">Ventas por cobrar por cliente</a></li>
