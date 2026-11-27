@@ -318,6 +318,10 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     .fv-cl .fv-cl-pesos { padding:0 6px; min-width:110px; }
     .fv-cl .fv-cl-pesos input { padding:5px 0; font-size:.84rem; }
     .fv-cl tr.fv-cl-head td { background:#e0e7ff; color:#1e1b4b; font-weight:800; border-top:2px solid #a5b4fc; border-bottom:1px solid #c7d2fe; }
+    /* Grado en amarillo con cuántos títulos se remisionaron por debajo de lo solicitado (2026-11-27, la usuaria). */
+    .fv-cl tr.fv-cl-head.faltante td { background:#fde047; color:#713f12; border-top-color:#eab308; border-bottom-color:#facc15; }
+    .fv-cl .fv-cl-falta { display:none; margin-left:8px; font-size:.7rem; font-weight:700; text-transform:none; }
+    .fv-cl tr.fv-cl-head.faltante .fv-cl-falta { display:inline; }
     .fv-cl .fv-cl-kits { font-size:.72rem; font-weight:600; margin-top:2px; opacity:.85; }
     .fv-cl tr.fv-cl-fila.mal td { background:#fef2f2; }
     .fv-cl tfoot tr.fv-cl-gran td { font-size:1rem; background:#eff6ff; color:#1e3a8a; }
@@ -854,8 +858,10 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
                 </thead>
                 <?php foreach ($cl['grados'] as $g): ?>
                 <tbody class="fv-cl-g" data-grado="<?= $h($g['clave']) ?>">
-                  <tr class="fv-cl-head">
-                    <td colspan="5" class="fv-cl-fi"><i class="bi bi-mortarboard"></i> <?= $h(mb_strtoupper($g['grado'])) ?></td>
+                  <?php $n_falta = count(array_filter($g['filas'], fn($r) => !empty($r['faltante']))); ?>
+                  <tr class="fv-cl-head<?= $n_falta ? ' faltante' : '' ?>">
+                    <td colspan="5" class="fv-cl-fi"><i class="bi bi-mortarboard"></i> <?= $h(mb_strtoupper($g['grado'])) ?>
+                      <span class="fv-cl-falta"><i class="bi bi-exclamation-triangle-fill"></i> Remisionado menor que lo solicitado (<span class="fv-cl-nfalta"><?= $n_falta ?> título<?= $n_falta === 1 ? '' : 's' ?></span>)</span></td>
                     <td colspan="6" class="fv-cl-sep fv-cl-head-d"><i class="bi bi-mortarboard"></i> <?= $h(mb_strtoupper($g['grado'])) ?></td>
                   </tr>
                   <?php foreach ($g['paquetes'] as $p): ?>
@@ -1249,7 +1255,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     Object.keys(filas).forEach(function (id) {
       var x = filas[id], $tr = x.$tr, mal = false;
       var f = x.rem < x.sol;
-      if (f) falta[x.grado] = true;
+      if (f) falta[x.grado] = (falta[x.grado] || 0) + 1;
       $tr.find('.fv-cl-rem').toggleClass('falta', f);
       $tr.find('.fv-cl-vend').text(x.vend);
       // Kits con este libro por encima de lo vendido = kits vendidos sin inventario de él (se resalta; no bloquea).
@@ -1260,6 +1266,10 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
       totSinv += x.sinv * x.ps;
       if ((x.suelto > 0 || x.sinv > 0) && x.ps <= 0) { errores.push('"' + x.nombre + '": falta el precio suelto.'); mal = true; }
       $tr.toggleClass('mal', mal);
+    });
+    $t.find('tbody.fv-cl-g').each(function () {
+      var n = falta[String($(this).data('grado'))] || 0;
+      $(this).find('.fv-cl-head').toggleClass('faltante', n > 0).find('.fv-cl-nfalta').text(n + ' título' + (n === 1 ? '' : 's'));
     });
     // Alerta (2026-11-27, la usuaria): paquetes con kits vendidos que llevan libros sin inventario.
     FV_CL.paquetes.forEach(function (p) {
