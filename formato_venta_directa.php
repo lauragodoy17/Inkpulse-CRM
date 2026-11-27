@@ -318,9 +318,6 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     .fv-cl .fv-cl-pesos { padding:0 6px; min-width:110px; }
     .fv-cl .fv-cl-pesos input { padding:5px 0; font-size:.84rem; }
     .fv-cl tr.fv-cl-head td { background:#e0e7ff; color:#1e1b4b; font-weight:800; border-top:2px solid #a5b4fc; border-bottom:1px solid #c7d2fe; }
-    .fv-cl tr.fv-cl-head.faltante td { background:#fde047; color:#713f12; border-top-color:#eab308; border-bottom-color:#facc15; }
-    .fv-cl .fv-cl-falta { display:none; margin-left:8px; font-size:.7rem; font-weight:700; text-transform:none; }
-    .fv-cl tr.fv-cl-head.faltante .fv-cl-falta { display:inline; }
     .fv-cl .fv-cl-kits { font-size:.72rem; font-weight:600; margin-top:2px; opacity:.85; }
     .fv-cl tr.fv-cl-fila.mal td { background:#fef2f2; }
     .fv-cl tfoot tr.fv-cl-gran td { font-size:1rem; background:#eff6ff; color:#1e3a8a; }
@@ -334,7 +331,25 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
     .fv-cl td.fv-cl-rem.falta .fv-num { border-color:#eab308; background:#fef9c3; }
     .fv-cl-amarillo { background:#fde047; color:#713f12; font-weight:700; padding:0 6px; border-radius:4px; }
     /* Separación entre los datos (Solicitado…Vendido) y cómo se vendió (En kits…), y kits sin inventario (2026-11-27). */
-    .fv-cl .fv-cl-sep { border-left:3px solid #6366f1 !important; }
+    /* Dos bloques juntos (2026-11-27, la usuaria): cada uno con su color (Juego de inventario índigo, Detalle de material
+       vendido gris; invertidos el 2026-11-27) y la división marcada con doble línea (índigo del bloque izquierdo + gris del derecho).
+       Los colores de fila (paquete, naranja, amarillo, error) se mantienen en los dos bloques; al pasar el mouse se resalta la fila. */
+    .fv-cl .fv-cl-fi { border-right:3px solid #6366f1 !important; }
+    .fv-cl .fv-cl-sep { border-left:2px solid #94a3b8 !important; }
+    .fv-cl tbody tr.fv-cl-fila:not(.sinstock):not(.mal) td:nth-child(-n+5):not(.falta) { background:#f5f7ff; }
+    .fv-cl tbody tr.fv-cl-fila:not(.sinstock):not(.mal) td:nth-child(n+6) { background:#f8fafc; }
+    .fv-cl tbody tr.fv-cl-fila:not(.sinstock):not(.mal):hover td:not(.falta),
+    .fv-cl tbody tr.fv-cl-paq:not(.sinstock):hover td { background:#e0e7ff; }
+    .fv-cl tfoot td.fv-cl-vacio { border-top:0 !important; background:#fff !important; }
+    .fv-cl .fv-cl-ref { font-weight:600; color:#4c1d95; }
+    .fv-cl tr.fv-cl-head td.fv-cl-head-d { text-align:left; opacity:.75; }
+    /* Grupos arriba de las columnas: Juego de inventario (izquierda) y Detalle de material vendido (derecha). */
+    .fv-cl thead tr.fv-cl-grupos th { font-size:.72rem; letter-spacing:.07em; padding:8px 10px; text-align:center; border-bottom:0; }
+    .fv-cl thead tr.fv-cl-grupos th .bi { margin-right:5px; }
+    .fv-cl thead th.fv-cl-gi { background:#c7d2fe; color:#312e81; border-top:3px solid #6366f1; border-top-left-radius:10px; }
+    .fv-cl thead th.fv-cl-gd { background:#e2e8f0; color:#334155; border-top:3px solid #94a3b8; border-top-right-radius:10px; }
+    .fv-cl thead tr.fv-cl-cols th { background:#e0e7ff; color:#3730a3; }
+    .fv-cl thead tr.fv-cl-cols th.fv-cl-dv { background:#f1f5f9; color:#475569; }
     .fv-cl tr.fv-cl-fila.sinstock td { background:#ffedd5; }
     .fv-cl tr.fv-cl-paq.sinstock td { background:#fed7aa; border-top-color:#fb923c; }
     .fv-cl .fv-cl-sinstock { display:none; font-size:.68rem; font-weight:700; color:#9a3412; background:#fed7aa; border:1px solid #fb923c; border-radius:99px; padding:1px 7px; white-space:nowrap; }
@@ -833,19 +848,22 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
             <?php endif; ?>
             <div class="table-responsive">
               <table class="fv-tabla fv-cl" id="fv-cl">
-                <thead><tr><th>Libro</th><th class="c">Solicitado</th><th class="c">Remisionado</th><th class="c">Devuelto</th><th class="c">Vendido</th><th class="c fv-cl-sep">En kits</th><th class="c">Suelto</th><th class="c">Sin inventario</th><th class="r">Precio</th><th class="r">Total</th><th class="r">Total sin inventario</th></tr></thead>
+                <thead>
+                  <tr class="fv-cl-grupos"><th colspan="5" class="fv-cl-gi fv-cl-fi"><i class="bi bi-boxes"></i> Juego de inventario</th><th colspan="6" class="fv-cl-gd fv-cl-sep"><i class="bi bi-receipt"></i> Detalle de material vendido</th></tr>
+                  <tr class="fv-cl-cols"><th>Libro</th><th class="c">Solicitado</th><th class="c">Remisionado</th><th class="c">Devuelto</th><th class="c fv-cl-fi">Vendido</th><th class="c fv-cl-sep fv-cl-dv">En kits</th><th class="c fv-cl-dv">Suelto</th><th class="c fv-cl-dv">Sin inventario</th><th class="r fv-cl-dv">Precio</th><th class="r fv-cl-dv">Total</th><th class="r fv-cl-dv">Total sin inventario</th></tr>
+                </thead>
                 <?php foreach ($cl['grados'] as $g): ?>
                 <tbody class="fv-cl-g" data-grado="<?= $h($g['clave']) ?>">
-                  <tr class="fv-cl-head<?= $g['faltante'] ? ' faltante' : '' ?>">
-                    <td colspan="11"><i class="bi bi-mortarboard"></i> <?= $h(mb_strtoupper($g['grado'])) ?>
-                      <span class="fv-cl-falta"><i class="bi bi-exclamation-triangle-fill"></i> Remisionado menor que lo solicitado</span></td>
+                  <tr class="fv-cl-head">
+                    <td colspan="5" class="fv-cl-fi"><i class="bi bi-mortarboard"></i> <?= $h(mb_strtoupper($g['grado'])) ?></td>
+                    <td colspan="6" class="fv-cl-sep fv-cl-head-d"><i class="bi bi-mortarboard"></i> <?= $h(mb_strtoupper($g['grado'])) ?></td>
                   </tr>
                   <?php foreach ($g['paquetes'] as $p): ?>
                   <tr class="fv-cl-paq<?= !empty($p['sin_stock']) ? ' sinstock' : '' ?>" data-paq="<?= (int)$p['id'] ?>">
-                    <td colspan="5"><div class="fv-paq"><i class="bi bi-box-seam"></i> <strong><?= $h($p['paquete']) ?></strong></div>
+                    <td colspan="5" class="fv-cl-fi"><div class="fv-paq"><i class="bi bi-box-seam"></i> <strong><?= $h($p['paquete']) ?></strong></div>
                       <div class="fv-cl-hint">Cada kit lleva 1 de: <?= implode(', ', array_map(fn($l) => $l['fila'] !== null ? $h($l['nombre']) : '<span class="fv-cl-nolibro" title="No está en la tabla: no se remisionó">' . $h($l['nombre']) . '</span>', $p['libros'])) ?></div></td>
                     <td class="c fv-cl-sep"><?= $clk_kits($p) ?></td>
-                    <td class="c fv-cl-x" colspan="2">kit(s) × precio del paquete</td>
+                    <td class="c fv-cl-x" colspan="2" style="white-space:normal;">kit(s) de <span class="fv-cl-ref"><?= $h($p['paquete']) ?></span> × precio del paquete</td>
                     <td class="r"><?= $clk_precio($p) ?></td>
                     <td class="r"><strong class="fv-clk-total"><?= $pesos($p['total']) ?></strong></td>
                     <td></td>
@@ -857,7 +875,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
                     <td class="c"><?= $cl_in($r, 'sol', 'solicitado') ?></td>
                     <td class="c fv-cl-rem<?= $r['faltante'] ? ' falta' : '' ?>"><?= $cl_in($r, 'rem', 'remisionado') ?></td>
                     <td class="c"><?= $cl_in($r, 'dev', 'devuelto') ?></td>
-                    <td class="c"><strong class="fv-cl-vend"><?= (int)$r['vendido'] ?></strong></td>
+                    <td class="c fv-cl-fi"><strong class="fv-cl-vend"><?= (int)$r['vendido'] ?></strong></td>
                     <td class="c fv-cl-enkit fv-cl-sep"><span class="fv-cl-sinstock" title="Los kits de este libro pasan de lo vendido: se están vendiendo kits sin inventario de él."><i class="bi bi-exclamation-triangle-fill"></i> Sin inventario</span></td>
                     <td class="c"><?= $cl_suelto($r) ?></td>
                     <td class="c"><?= $cl_in($r, 'sinv', 'sin_inventario') ?></td>
@@ -869,10 +887,10 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
                 </tbody>
                 <?php endforeach; ?>
                 <tfoot>
-                  <tr><td colspan="10">Total kits <span class="fv-det" style="display:inline;">· <span id="fv-cl-nkits"><?= (int)$cl['kits'] ?></span> kit(s) × precio del paquete</span></td><td class="r" id="fv-cl-tk"><?= $pesos($cl['total_kit']) ?></td></tr>
-                  <tr><td colspan="10">Total sueltos <span class="fv-det" style="display:inline;">· libros sueltos × precio suelto</span></td><td class="r" id="fv-cl-ts"><?= $pesos($cl['total_suelto']) ?></td></tr>
-                  <tr><td colspan="10">Total sin inventario <span class="fv-det" style="display:inline;">· sin inventario × precio</span></td><td class="r" id="fv-cl-tsit"><?= $pesos($cl['total_sinv'] ?? 0) ?></td></tr>
-                  <tr class="fv-cl-gran"><td colspan="10">GRAN TOTAL <span class="fv-det" style="display:inline;">· total kits + total sueltos + total sin inventario</span></td><td class="r" id="fv-cl-gran"><?= $pesos($cl['gran_total']) ?></td></tr>
+                  <tr><td colspan="5" class="fv-cl-vacio"></td><td colspan="5" class="fv-cl-sep">Total kits <span class="fv-det" style="display:inline;">· <span id="fv-cl-nkits"><?= (int)$cl['kits'] ?></span> kit(s) × precio del paquete</span></td><td class="r" id="fv-cl-tk"><?= $pesos($cl['total_kit']) ?></td></tr>
+                  <tr><td colspan="5" class="fv-cl-vacio"></td><td colspan="5" class="fv-cl-sep">Total sueltos <span class="fv-det" style="display:inline;">· libros sueltos × precio suelto</span></td><td class="r" id="fv-cl-ts"><?= $pesos($cl['total_suelto']) ?></td></tr>
+                  <tr><td colspan="5" class="fv-cl-vacio"></td><td colspan="5" class="fv-cl-sep">Total sin inventario <span class="fv-det" style="display:inline;">· sin inventario × precio</span></td><td class="r" id="fv-cl-tsit"><?= $pesos($cl['total_sinv'] ?? 0) ?></td></tr>
+                  <tr class="fv-cl-gran"><td colspan="5" class="fv-cl-vacio"></td><td colspan="5" class="fv-cl-sep">GRAN TOTAL <span class="fv-det" style="display:inline;">· total kits + total sueltos + total sin inventario</span></td><td class="r" id="fv-cl-gran"><?= $pesos($cl['gran_total']) ?></td></tr>
                 </tfoot>
               </table>
             </div>
@@ -1235,7 +1253,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
       $tr.find('.fv-cl-rem').toggleClass('falta', f);
       $tr.find('.fv-cl-vend').text(x.vend);
       // Kits con este libro por encima de lo vendido = kits vendidos sin inventario de él (se resalta; no bloquea).
-      $tr.toggleClass('sinstock', x.enKit > Math.max(0, x.vend));
+      $tr.toggleClass('sinstock', x.enKit > Math.max(0, x.vend) + x.sinv);
       $tr.find('.fv-cl-ts').text(pesos(x.suelto * x.ps));
       $tr.find('.fv-cl-tsi').text(pesos(x.sinv * x.ps));
       totSue += x.suelto * x.ps;
@@ -1243,7 +1261,6 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
       if ((x.suelto > 0 || x.sinv > 0) && x.ps <= 0) { errores.push('"' + x.nombre + '": falta el precio suelto.'); mal = true; }
       $tr.toggleClass('mal', mal);
     });
-    $t.find('tbody.fv-cl-g').each(function () { $(this).find('.fv-cl-head').toggleClass('faltante', !!falta[String($(this).data('grado'))]); });
     // Alerta (2026-11-27, la usuaria): paquetes con kits vendidos que llevan libros sin inventario.
     FV_CL.paquetes.forEach(function (p) {
       var $tr = $t.find('tr.fv-cl-paq[data-paq="' + p.id + '"]'); if (!$tr.length) return;
@@ -1251,7 +1268,7 @@ $cabecera = function ($n, $extra = '') use ($pasos, $estado_paso, $hecho_por) {
       if (n > 0) p.filas.forEach(function (i, j) {
         if (i === null) { malos.push((p.libros[j] || 'un libro') + ' (no se remisionó)'); return; }
         var x = filas[String(i)];
-        if (x && x.enKit > Math.max(0, x.vend)) malos.push(x.nombre + ' (se vendieron ' + Math.max(0, x.vend) + ')');
+        if (x && x.enKit > Math.max(0, x.vend) + x.sinv) malos.push(x.nombre + ' (se vendieron ' + Math.max(0, x.vend) + ')');
       });
       $tr.toggleClass('sinstock', malos.length > 0);
       if (malos.length) avisos.push('Estás colocando que vendiste kits sin inventario: "' + p.nombre + '" (' + n + ' kit' + (n === 1 ? '' : 's') + ') lleva ' + malos.join(', ') + '.');

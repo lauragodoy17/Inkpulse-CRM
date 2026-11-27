@@ -531,8 +531,9 @@ function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null, $kit
             $asignado = $r['en_kit'] + $r['suelto_ef'] + $sinv;
             // Sin tope (2026-11-27, la usuaria): se puede haber enviado o vendido algo que no se remisionó.
             $r['sin_asignar'] = max(0, $vend - $asignado);
-            // Kits con este libro por encima de lo vendido: se vendieron kits sin inventario de él (aviso).
-            $r['kits_sin_stock'] = max(0, $r['en_kit'] - $vend);
+            // Kits con este libro por encima de lo vendido: se vendieron kits sin inventario de él (aviso). Lo escrito en
+            // Sin inventario lo cubre (2026-11-27, la usuaria): ya no hay aviso si En kits <= Vendido + Sin inventario.
+            $r['kits_sin_stock'] = max(0, $r['en_kit'] - $vend - $sinv);
         } else {
         $r['suelto_ef'] = $novedades && (int)$r['suelto'] > 0 ? (int)$r['suelto'] : $sobra;
         if ($r['vendido'] >= 0 && $r['en_kit'] + $r['suelto_ef'] !== $vend + $sinv) {

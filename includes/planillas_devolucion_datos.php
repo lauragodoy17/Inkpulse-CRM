@@ -14,6 +14,9 @@
  *   JSON): el PDF se vuelve a descargar igual aunque WO o el pedido cambien después.
  * - Se le puede adjuntar un archivo (la planilla firmada escaneada, foto...): adjuntos/planillas_devolucion/.
  * - Un pedido puede tener varias planillas (p. ej. una por cada devolución); se anulan con motivo, no se borran.
+ * - Varios pedidos en una planilla (2026-11-27, la usuaria): se elige el colegio y se marcan sus pedidos; la planilla suma
+ *   los títulos de todos (cada pedido con su regla CEUR / solicitado). planillas_devolucion.ids_pedidos = "12,15" (id_pedido
+ *   = el primero); las planillas de antes solo tienen id_pedido. origen = 'wo' | 'pedido' | 'mixto' (unos con CEUR y otros no).
  */
 require_once __DIR__ . '/devoluciones_ventas_datos.php'; // dvd_ops_pedido, wo_documentos_por_op, dm_filtro_alcance_sql
 require_once __DIR__ . '/pedidos_venta_directa.php';     // datos_venta_vd, asegurar_columnas_pedido_vd
@@ -61,6 +64,22 @@ function pdv_asegurar(PDO $bdd) {
             $bdd->exec("ALTER TABLE planillas_devolucion ADD COLUMN origen VARCHAR(10) NOT NULL DEFAULT 'wo' AFTER remisiones");
         }
     } catch (Exception $e) {}
+    try {
+        if (!$bdd->query("SHOW COLUMNS FROM planillas_devolucion LIKE 'ids_pedidos'")->fetch()) {
+            $bdd->exec("ALTER TABLE planillas_devolucion ADD COLUMN ids_pedidos VARCHAR(500) NULL AFTER id_pedido");
+        }
+    } catch (Exception $e) {}
+}
+
+/** Pedidos de una planilla: los de ids_pedidos o, en las de antes, id_pedido. */
+function pdv_ids_pedidos(array $f) {
+    $ids = array_values(array_filter(array_map('intval', explode(',', (string)($f['ids_pedidos'] ?? '')))));
+    return $ids ?: [(int)$f['id_pedido']];
+}
+
+/** "#12" o "#12, #15". */
+function pdv_texto_pedidos(array $f) {
+    return implode(', ', array_map(fn($i) => '#' . $i, pdv_ids_pedidos($f)));
 }
 
 /** Carpeta de adjuntos (se crea si no existe). */
@@ -96,7 +115,8 @@ function pdv_pedidos(PDO $bdd, $idPeriodo) {
     asegurar_columnas_pedido_vd($bdd);
     [$alcance, $params] = dm_filtro_alcance_sql();
     $st = $bdd->prepare("SELECT x.id, x.fecha, ep.estado AS estado_txt, x.id_colegio, c.colegio,
-                                (SELECT COUNT(*) FROM planillas_devolucion pd WHERE pd.id_pedido = x.id AND pd.estado = " . PDV_ESTADO_ACTIVA . ") AS planillas
+                                (SELECT COUNT(*) FROM planillas_devolucion pd WHERE pd.estado = " . PDV_ESTADO_ACTIVA . "
+                                   AND (pd.id_pedido = x.id OR FIND_IN_SET(x.id, pd.ids_pedidos))) AS planillas
                          FROM pedidos x JOIN colegios c ON c.id = x.id_colegio
                          LEFT JOIN recursos r ON r.id_colegio = x.id_colegio AND r.id_periodo = x.id_periodo
                          LEFT JOIN estados_pedidos ep ON ep.id = x.estado
@@ -118,62 +138,92 @@ function pdv_pedido(PDO $bdd, $idPedido) {
     return $st->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
-/**
- * Datos de la planilla de un pedido, calculados ahora (consulta World Office). Devuelve ['ok','error','datos' => [...]]
- * con las columnas de planillas_devolucion (titulos como arreglo [['titulo','codigo','unidades']]).
- */
-function pdv_calcular(PDO $bdd, $idPedido) {
-    $p = pdv_pedido($bdd, $idPedido);
-    if (!$p) return ['ok' => false, 'error' => 'El pedido #' . (int)$idPedido . ' no existe, no es de venta directa o no está en tu alcance.'];
-    if ((int)$p['estado'] === 3) return ['ok' => false, 'error' => 'El pedido #' . (int)$idPedido . ' está anulado.'];
-
+/** Títulos de UN pedido: remisiones CEUR de sus OP o, si no hay, lo solicitado. ['ok','error','titulos','remisiones','origen']. */
+function pdv_titulos_pedido(PDO $bdd, array $p) {
+    $idPedido = (int)$p['id'];
     // Remisiones CEUR de las OP del pedido (dvv_documentos_de_ops con solo remisiones: prefijo CEUR; las RE22 no).
     $titulos = [];
     $remisiones = [];
-    $ops = dvd_ops_pedido($bdd, 'v' . (int)$idPedido);
+    $ops = dvd_ops_pedido($bdd, 'v' . $idPedido);
     if ($ops) {
         $wo = dvv_documentos_de_ops($bdd, $ops, true);
         if (!$wo['ok']) return ['ok' => false, 'error' => $wo['error'] ?: 'No se pudo consultar World Office.'];
         foreach ($wo['documentos'] as $doc) {
             $remisiones[] = trim($doc['documento']);
-            foreach ($doc['renglones'] as $r) {
-                $k = $r['producto_wo'] ?: ('c' . $r['codigo'] . '|' . $r['descripcion']);
-                if (!isset($titulos[$k])) $titulos[$k] = ['titulo' => trim($r['descripcion']), 'codigo' => trim($r['codigo']), 'unidades' => 0];
-                $titulos[$k]['unidades'] += (float)$r['cantidad'];
-            }
+            foreach ($doc['renglones'] as $r) $titulos[] = ['titulo' => trim($r['descripcion']), 'codigo' => trim($r['codigo']), 'unidades' => (float)$r['cantidad']];
         }
-        $titulos = array_values(array_filter($titulos, fn($t) => $t['unidades'] > 0));
     }
-    $origen = 'wo';
-    if (!$titulos) {
-        // Sin remisión CEUR: lo solicitado en el pedido.
-        $origen = 'pedido';
-        $remisiones = [];
-        $st = $bdd->prepare("SELECT l.libro AS titulo, TRIM(l.isbn) AS codigo, SUM(lp.cantidad) AS unidades
-                             FROM libros_pedidos lp JOIN libros l ON l.id = lp.id_libro
-                             WHERE lp.cod_pedido = ? GROUP BY lp.id_libro HAVING unidades > 0");
-        $st->execute([(string)$p['codigo']]);
-        $titulos = array_map(fn($t) => ['titulo' => trim($t['titulo']), 'codigo' => (string)$t['codigo'], 'unidades' => (float)$t['unidades']], $st->fetchAll(PDO::FETCH_ASSOC));
-        if (!$titulos) return ['ok' => false, 'error' => 'El pedido #' . (int)$idPedido . ' no tiene remisiones CEUR en World Office ni títulos solicitados.'];
+    if (array_sum(array_column($titulos, 'unidades')) > 0) return ['ok' => true, 'error' => null, 'titulos' => $titulos, 'remisiones' => $remisiones, 'origen' => 'wo'];
+    // Sin remisión CEUR: lo solicitado en el pedido.
+    $st = $bdd->prepare("SELECT l.libro AS titulo, TRIM(l.isbn) AS codigo, SUM(lp.cantidad) AS unidades
+                         FROM libros_pedidos lp JOIN libros l ON l.id = lp.id_libro
+                         WHERE lp.cod_pedido = ? GROUP BY lp.id_libro HAVING unidades > 0");
+    $st->execute([(string)$p['codigo']]);
+    $titulos = array_map(fn($t) => ['titulo' => trim($t['titulo']), 'codigo' => (string)$t['codigo'], 'unidades' => (float)$t['unidades']], $st->fetchAll(PDO::FETCH_ASSOC));
+    if (!$titulos) return ['ok' => false, 'error' => 'El pedido #' . $idPedido . ' no tiene remisiones CEUR en World Office ni títulos solicitados.'];
+    return ['ok' => true, 'error' => null, 'titulos' => $titulos, 'remisiones' => [], 'origen' => 'pedido'];
+}
+
+/**
+ * Datos de la planilla de uno o varios pedidos del MISMO colegio, calculados ahora (consulta World Office). Devuelve
+ * ['ok','error','datos' => [...]] con las columnas de planillas_devolucion (titulos como arreglo [['titulo','codigo','unidades']],
+ * sumados entre los pedidos por código, o por título si no tiene código).
+ */
+function pdv_calcular(PDO $bdd, $idsPedido) {
+    $ids = array_values(array_unique(array_filter(array_map('intval', (array)$idsPedido))));
+    if (!$ids) return ['ok' => false, 'error' => 'Elige al menos un pedido.'];
+    $peds = [];
+    foreach ($ids as $id) {
+        $p = pdv_pedido($bdd, $id);
+        if (!$p) return ['ok' => false, 'error' => 'El pedido #' . $id . ' no existe, no es de venta directa o no está en tu alcance.'];
+        if ((int)$p['estado'] === 3) return ['ok' => false, 'error' => 'El pedido #' . $id . ' está anulado.'];
+        if ($peds && ((int)$p['id_colegio'] !== (int)$peds[0]['id_colegio'] || (int)$p['id_periodo'] !== (int)$peds[0]['id_periodo'])) {
+            return ['ok' => false, 'error' => 'Los pedidos de una planilla deben ser del mismo colegio y período (el #' . $id . ' es de otro).'];
+        }
+        $peds[] = $p;
     }
+    $p = $peds[0];
+
+    $titulos = [];
+    $remisiones = [];
+    $origenes = [];
+    foreach ($peds as $ped) {
+        $t = pdv_titulos_pedido($bdd, $ped);
+        if (!$t['ok']) return ['ok' => false, 'error' => $t['error']];
+        $origenes[$t['origen']] = true;
+        if ($t['origen'] === 'wo') foreach ($t['remisiones'] as $rm) $remisiones[] = $rm;
+        else $remisiones[] = 'Pedido #' . (int)$ped['id'] . ': lo solicitado';
+        foreach ($t['titulos'] as $x) {
+            $k = $x['codigo'] !== '' ? 'c' . $x['codigo'] : 't' . mb_strtoupper($x['titulo']);
+            if (!isset($titulos[$k])) $titulos[$k] = ['titulo' => $x['titulo'], 'codigo' => $x['codigo'], 'unidades' => 0];
+            $titulos[$k]['unidades'] += $x['unidades'];
+        }
+    }
+    $titulos = array_values(array_filter($titulos, fn($t) => $t['unidades'] > 0));
+    $origen = count($origenes) > 1 ? 'mixto' : array_key_first($origenes);
     usort($titulos, fn($a, $b) => strcoll(mb_strtoupper($a['titulo']), mb_strtoupper($b['titulo'])));
 
-    // Fecha y responsable de la venta: los del formato de venta directa donde está el pedido; si no está en ninguno (o
-    // le falta el dato), datos_venta_vd (fecha elegida en el pedido o de la adopción; responsable escrito al aprobar).
-    $venta = datos_venta_vd($bdd, ['v' . (int)$idPedido]);
+    // Fecha y responsable de la venta: los del formato de venta directa donde está el (primer) pedido; si no está en
+    // ninguno (o le falta el dato), datos_venta_vd (fecha elegida en el pedido o de la adopción; responsable escrito al aprobar).
+    $claves = array_map(fn($i) => 'v' . $i, $ids);
+    $venta = datos_venta_vd($bdd, $claves);
     try {
         $st = $bdd->prepare("SELECT fecha_venta, hora_inicio, hora_fin, responsable, tel_responsable FROM formatos_vd
                              WHERE estado = 1 AND FIND_IN_SET(?, REPLACE(ids_pedidos, ' ', '')) ORDER BY id DESC LIMIT 1");
-        $st->execute(['v' . (int)$idPedido]);
-        if ($fvd = $st->fetch(PDO::FETCH_ASSOC)) {
-            foreach ($fvd as $k => $v) if (trim((string)$v) !== '') $venta[$k] = $v;
-            if (!empty($fvd['fecha_venta']) && empty($fvd['hora_inicio'])) unset($venta['hora_inicio'], $venta['hora_fin']); // horario de otra fecha
+        foreach ($claves as $clave) {
+            $st->execute([$clave]);
+            if ($fvd = $st->fetch(PDO::FETCH_ASSOC)) {
+                foreach ($fvd as $k => $v) if (trim((string)$v) !== '') $venta[$k] = $v;
+                if (!empty($fvd['fecha_venta']) && empty($fvd['hora_inicio'])) unset($venta['hora_inicio'], $venta['hora_fin']); // horario de otra fecha
+                break;
+            }
         }
     } catch (PDOException $e) {} // sin tabla de formatos todavía
     $hora = fn($h) => $h ? date('g:i a', strtotime($h)) : '';
 
     return ['ok' => true, 'error' => null, 'datos' => [
-        'id_pedido' => (int)$idPedido,
+        'id_pedido' => $ids[0],
+        'ids_pedidos' => implode(',', $ids),
         'id_colegio' => (int)$p['id_colegio'],
         'id_periodo' => (int)$p['id_periodo'],
         'colegio' => $p['colegio'] . ($p['ciudad'] ? ' - ' . $p['ciudad'] : ''),
@@ -181,17 +231,17 @@ function pdv_calcular(PDO $bdd, $idPedido) {
         'horario' => !empty($venta['hora_inicio']) ? $hora($venta['hora_inicio']) . ' a ' . $hora($venta['hora_fin'] ?? '') : null,
         'responsable' => trim((string)($venta['responsable'] ?? '')) ?: null,
         'tel_responsable' => trim((string)($venta['tel_responsable'] ?? '')) ?: null,
-        'remisiones' => $origen === 'wo' ? mb_substr(implode(', ', $remisiones), 0, 500) : null,
+        'remisiones' => $origen === 'pedido' ? null : mb_substr(implode(', ', $remisiones), 0, 500),
         'origen' => $origen,
         'titulos' => $titulos,
         'total_unidades' => array_sum(array_column($titulos, 'unidades')),
     ]];
 }
 
-/** Genera y guarda una planilla del pedido. Devuelve ['ok','error','id']. */
-function pdv_generar(PDO $bdd, $idPedido, $idUsuario) {
+/** Genera y guarda una planilla de uno o varios pedidos (mismo colegio). Devuelve ['ok','error','id']. */
+function pdv_generar(PDO $bdd, $idsPedido, $idUsuario) {
     pdv_asegurar($bdd);
-    $c = pdv_calcular($bdd, $idPedido);
+    $c = pdv_calcular($bdd, $idsPedido);
     if (!$c['ok']) return $c + ['id' => null];
     $d = $c['datos'];
     $d['titulos'] = json_encode($d['titulos'], JSON_UNESCAPED_UNICODE);
@@ -220,7 +270,7 @@ function pdv_obtener(PDO $bdd, $id) {
 function pdv_listar(PDO $bdd, $idPeriodo) {
     pdv_asegurar($bdd);
     [$alcance, $params] = dm_filtro_alcance_sql();
-    $st = $bdd->prepare("SELECT pd.id, pd.id_pedido, pd.colegio, pd.fecha_venta, pd.horario, pd.responsable, pd.remisiones, pd.origen, pd.total_unidades,
+    $st = $bdd->prepare("SELECT pd.id, pd.id_pedido, pd.ids_pedidos, pd.colegio, pd.fecha_venta, pd.horario, pd.responsable, pd.remisiones, pd.origen, pd.total_unidades,
                                 pd.adjunto, pd.adjunto_nombre, pd.adjunto_at, pd.estado, pd.motivo_anulacion, pd.anulada_at, pd.created_at,
                                 CONCAT(TRIM(u.nombres), ' ', TRIM(u.apellidos)) AS usuario,
                                 CONCAT(TRIM(ua.nombres), ' ', TRIM(ua.apellidos)) AS usuario_adjunto,
@@ -273,7 +323,7 @@ function pdv_pdf(array $f) {
         ['label' => 'No.', 'w' => 10, 'align' => 'C'],
         ['label' => 'Código', 'w' => 30, 'align' => 'C'],
         ['label' => 'Título', 'w' => $ancho - 10 - 30 - 28 - 30, 'align' => 'L'],
-        ['label' => ($f['origen'] ?? 'wo') === 'pedido' ? 'Unidades solicitadas' : 'Unidades remisionadas', 'w' => 28, 'align' => 'C'],
+        ['label' => ['pedido' => 'Unidades solicitadas', 'mixto' => 'Unidades entregadas'][$f['origen'] ?? 'wo'] ?? 'Unidades remisionadas', 'w' => 28, 'align' => 'C'],
         ['label' => 'Unidades contadas', 'w' => 30, 'align' => 'C'],
     ];
     $encabezado_tabla = function () use ($pdf, $cols) {
@@ -324,12 +374,13 @@ function pdv_pdf(array $f) {
     };
     $mitad = $ancho / 2;
     $responsable = trim((string)$f['responsable']);
-    $dato('Pedido #', (string)$f['id_pedido'], $mitad, false);
+    $varios = count(pdv_ids_pedidos($f)) > 1;
+    $dato($varios ? 'Pedidos' : 'Pedido #', $varios ? pdv_texto_pedidos($f) : (string)$f['id_pedido'], $mitad, false);
     $dato('Fecha de venta', $f['fecha_venta'] ? date('d/m/Y', strtotime($f['fecha_venta'])) . ($f['horario'] ? '  ' . $f['horario'] : '') : 'Sin fecha de venta', $mitad, true);
     $dato('Colegio', (string)$f['colegio'], $mitad, false);
     $dato('Responsable de venta', $responsable !== '' ? $responsable . (trim((string)$f['tel_responsable']) !== '' ? ' - ' . $f['tel_responsable'] : '') : 'Sin registrar', $mitad, true);
     $dato(($f['origen'] ?? 'wo') === 'pedido' ? 'Títulos' : 'Remisiones CEUR', ($f['origen'] ?? 'wo') === 'pedido'
-        ? 'Solicitados en el pedido (sin remisión CEUR en World Office)' : (string)$f['remisiones'], $ancho, true);
+        ? 'Solicitados en ' . ($varios ? 'los pedidos' : 'el pedido') . ' (sin remisión CEUR en World Office)' : (string)$f['remisiones'], $ancho, true);
     $pdf->Ln(5);
 
     $encabezado_tabla();

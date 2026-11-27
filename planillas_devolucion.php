@@ -5,6 +5,7 @@
  * se genera su planilla de devolución (PDF para que bodega cuente lo devuelto, con firmas). Cada planilla queda en el
  * histórico con su consecutivo, se le puede adjuntar un archivo (la planilla firmada) y se puede anular con motivo.
  * Lógica en includes/planillas_devolucion_datos.php; acciones en php/planillas_devolucion_accion.php.
+ * 2026-11-27 (la usuaria): primero se filtra por colegio y luego se marcan uno o varios de sus pedidos para una sola planilla.
  */
 require_once("php/aut.php");
 require_once("conexion/bdd.php");
@@ -27,8 +28,13 @@ if (!$periodo_sel) $periodo_sel = $ids_periodos[0] ?? 0;
 
 $pedidos = $periodo_sel ? pdv_pedidos($bdd, $periodo_sel) : [];
 $planillas = $periodo_sel ? pdv_listar($bdd, $periodo_sel) : [];
-$por_colegio = [];
-foreach ($pedidos as $p) $por_colegio[$p['colegio']][] = $p;
+$por_colegio = []; // id_colegio => ['colegio', 'pedidos' => [...]]
+$colegio_sel = 0;
+foreach ($pedidos as $p) {
+    $por_colegio[(int)$p['id_colegio']]['colegio'] = $p['colegio'];
+    $por_colegio[(int)$p['id_colegio']]['pedidos'][] = $p;
+    if ((int)$p['id'] === $id_pedido_sel) $colegio_sel = (int)$p['id_colegio'];
+}
 $activas = count(array_filter($planillas, fn($f) => (int)$f['estado'] === PDV_ESTADO_ACTIVA));
 $con_adjunto = count(array_filter($planillas, fn($f) => (int)$f['estado'] === PDV_ESTADO_ACTIVA && $f['adjunto']));
 
@@ -77,6 +83,16 @@ $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
     .pd-est.ok { background:#dcfce7; color:#166534; } .pd-est.pend { background:#fef3c7; color:#92400e; } .pd-est.anul { background:#fee2e2; color:#991b1b; }
     .pd-acc { display:flex; gap:6px; flex-wrap:wrap; }
     .pd-vacio { padding:18px; text-align:center; color:#64748b; font-size:.88rem; }
+    .pd-paso { font-size:.74rem; font-weight:800; color:#4338ca; text-transform:uppercase; letter-spacing:.04em; margin:0 0 6px; }
+    .pd-peds { border:1px solid #e2e8f0; border-radius:10px; margin:12px 0 10px; max-height:340px; overflow:auto; }
+    .pd-ped { display:flex; gap:10px; align-items:center; padding:9px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer; margin:0; font-size:.86rem; }
+    .pd-ped:last-child { border-bottom:0; }
+    .pd-ped:hover { background:#f8fafc; }
+    .pd-ped input { width:17px; height:17px; accent-color:#4f46e5; flex:none; }
+    .pd-ped.marcado { background:#eef2ff; }
+    .pd-ped .pd-est { margin-left:auto; }
+    .pd-todos { display:flex; gap:10px; align-items:center; font-size:.8rem; color:#475569; }
+    .pd-todos a { cursor:pointer; color:#4338ca; font-weight:700; }
     .pd-aviso { display:flex; gap:10px; align-items:flex-start; border-radius:10px; padding:10px 14px; font-size:.84rem; margin-top:10px; background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; }
   </style>
 </head>
@@ -101,22 +117,32 @@ $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
         <?php if (!$pedidos): ?>
           <div class="pd-vacio">No hay pedidos de venta directa en este período.</div>
         <?php else: ?>
+        <div class="pd-paso">1. Colegio</div>
         <div class="pd-gen">
-          <select id="pd-pedido">
-            <option value="">Elegir pedido...</option>
-            <?php foreach ($por_colegio as $colegio => $lista): ?>
-            <optgroup label="<?= $h($colegio) ?>">
-              <?php foreach ($lista as $p): ?>
-              <option value="<?= (int)$p['id'] ?>" data-planillas="<?= (int)$p['planillas'] ?>" <?= (int)$p['id'] === $id_pedido_sel ? 'selected' : '' ?>>
-                Pedido #<?= (int)$p['id'] ?> · <?= $h($p['estado_txt']) ?> · <?= date('d/m/Y', strtotime($p['fecha'])) ?><?= (int)$p['planillas'] ? ' · ' . (int)$p['planillas'] . ' planilla' . ((int)$p['planillas'] === 1 ? '' : 's') : '' ?>
-              </option>
-              <?php endforeach; ?>
-            </optgroup>
+          <select id="pd-colegio">
+            <option value="">Elegir colegio...</option>
+            <?php foreach ($por_colegio as $id_col => $c): ?>
+            <option value="<?= (int)$id_col ?>" <?= (int)$id_col === $colegio_sel ? 'selected' : '' ?>><?= $h($c['colegio']) ?> (<?= count($c['pedidos']) ?> pedido<?= count($c['pedidos']) === 1 ? '' : 's' ?>)</option>
             <?php endforeach; ?>
           </select>
-          <button type="button" class="pd-btn pd-btn-ok" id="pd-generar"><i class="bi bi-file-earmark-pdf"></i> Generar planilla</button>
         </div>
-        <div class="pd-sub" style="margin-top:8px;">Los títulos y unidades se toman de las remisiones <strong>CEUR</strong> del pedido en World Office; si no tiene ninguna, de lo <strong>solicitado en el pedido</strong>. Quedan guardados al generar la planilla: al descargarla de nuevo sale igual.</div>
+        <div id="pd-paso2" style="<?= $colegio_sel ? '' : 'display:none;' ?>margin-top:14px;">
+          <div class="pd-paso">2. Pedidos para la planilla</div>
+          <div class="pd-todos"><a id="pd-marcar-todos">Marcar todos</a> · <a id="pd-desmarcar">Quitar todos</a></div>
+          <?php foreach ($por_colegio as $id_col => $c): ?>
+          <div class="pd-peds" data-colegio="<?= (int)$id_col ?>" style="<?= (int)$id_col === $colegio_sel ? '' : 'display:none;' ?>">
+            <?php foreach ($c['pedidos'] as $p): $marcado = (int)$p['id'] === $id_pedido_sel; ?>
+            <label class="pd-ped<?= $marcado ? ' marcado' : '' ?>">
+              <input type="checkbox" class="pd-chk" value="<?= (int)$p['id'] ?>" data-planillas="<?= (int)$p['planillas'] ?>" <?= $marcado ? 'checked' : '' ?>>
+              <span><strong>Pedido #<?= (int)$p['id'] ?></strong> · <?= $h($p['estado_txt']) ?> · <?= date('d/m/Y', strtotime($p['fecha'])) ?></span>
+              <?php if ((int)$p['planillas']): ?><span class="pd-est pend"><?= (int)$p['planillas'] ?> planilla<?= (int)$p['planillas'] === 1 ? '' : 's' ?></span><?php endif; ?>
+            </label>
+            <?php endforeach; ?>
+          </div>
+          <?php endforeach; ?>
+          <button type="button" class="pd-btn pd-btn-ok" id="pd-generar"><i class="bi bi-file-earmark-pdf"></i> <span>Generar planilla</span></button>
+        </div>
+        <div class="pd-sub" style="margin-top:8px;">Si marcas varios pedidos sale <strong>una sola planilla</strong> con los títulos de todos sumados. Los títulos y unidades de cada pedido se toman de sus remisiones <strong>CEUR</strong> en World Office; si no tiene ninguna, de lo <strong>solicitado en el pedido</strong>. Quedan guardados al generar la planilla: al descargarla de nuevo sale igual.</div>
         <?php endif; ?>
       </div>
 
@@ -133,15 +159,15 @@ $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
         <?php else: ?>
         <div class="table-responsive">
           <table class="pd-tabla" id="pd-tabla">
-            <thead><tr><th>No.</th><th>Pedido</th><th>Colegio</th><th>Fecha de venta</th><th>Responsable de venta</th><th>Unid.</th><th>Generada</th><th>Archivo adjunto</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>No.</th><th>Pedido(s)</th><th>Colegio</th><th>Fecha de venta</th><th>Responsable de venta</th><th>Unid.</th><th>Generada</th><th>Archivo adjunto</th><th>Acciones</th></tr></thead>
             <tbody>
             <?php foreach ($planillas as $f):
               $activa = (int)$f['estado'] === PDV_ESTADO_ACTIVA;
-              $buscar = mb_strtolower(pdv_numero($f['id']) . ' #' . $f['id_pedido'] . ' ' . $f['colegio'] . ' ' . $f['responsable']); ?>
+              $buscar = mb_strtolower(pdv_numero($f['id']) . ' ' . pdv_texto_pedidos($f) . ' ' . $f['colegio'] . ' ' . $f['responsable']); ?>
             <tr class="<?= $activa ? '' : 'pd-anulada' ?>" data-id="<?= (int)$f['id'] ?>" data-buscar="<?= $h($buscar) ?>">
               <td><span class="pd-num"><?= $h(pdv_numero($f['id'])) ?></span>
                 <?php if (!$activa): ?><small><span class="pd-est anul">Anulada</span></small><?php endif; ?></td>
-              <td><a href="pedido_colegio.php?id_pedido=<?= (int)$f['id_pedido'] ?>" target="_blank">#<?= (int)$f['id_pedido'] ?></a></td>
+              <td style="white-space:nowrap"><?= implode(', ', array_map(fn($i) => '<a href="pedido_colegio.php?id_pedido=' . $i . '" target="_blank">#' . $i . '</a>', pdv_ids_pedidos($f))) ?></td>
               <td><?= $h($f['colegio']) ?><small><?= $f['origen'] === 'pedido' ? 'Títulos solicitados en el pedido (sin remisión CEUR)' : $h($f['remisiones']) ?></small></td>
               <td><?= $f['fecha_venta'] ? date('d/m/Y', strtotime($f['fecha_venta'])) : '—' ?><?php if ($f['horario']): ?><small><?= $h($f['horario']) ?></small><?php endif; ?></td>
               <td><?= $f['responsable'] ? $h($f['responsable']) : '<span class="pd-sub">Sin registrar</span>' ?></td>
@@ -188,15 +214,37 @@ $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
   var avisar = function (m, t) { if (typeof window.inkToast === 'function') window.inkToast(m, t); else alert(m); };
   var recargar = function () { window.location.href = 'planillas_devolucion.php?periodo=<?= (int)$periodo_sel ?>'; };
 
-  // Generar: la pestaña del PDF se abre en el clic (si se abre después de la respuesta, el navegador la bloquea).
+  // Paso 1: colegio → muestra sus pedidos (los de otro colegio se desmarcan).
+  var $peds = function () { return $('.pd-peds[data-colegio="' + $('#pd-colegio').val() + '"]'); };
+  var contar = function () {
+    var n = $peds().find('.pd-chk:checked').length;
+    $('#pd-generar span').text(n > 1 ? 'Generar planilla con ' + n + ' pedidos' : 'Generar planilla');
+  };
+  $('#pd-colegio').on('change', function () {
+    $('.pd-peds').hide().find('.pd-chk').prop('checked', false).closest('.pd-ped').removeClass('marcado');
+    if (!this.value) { $('#pd-paso2').hide(); return; }
+    var $l = $peds().show();
+    if ($l.find('.pd-chk').length === 1) $l.find('.pd-chk').prop('checked', true).closest('.pd-ped').addClass('marcado');
+    $('#pd-paso2').show();
+    contar();
+  });
+  $(document).on('change', '.pd-chk', function () { $(this).closest('.pd-ped').toggleClass('marcado', this.checked); contar(); });
+  $('#pd-marcar-todos').on('click', function () { $peds().find('.pd-chk').prop('checked', true).closest('.pd-ped').addClass('marcado'); contar(); });
+  $('#pd-desmarcar').on('click', function () { $peds().find('.pd-chk').prop('checked', false).closest('.pd-ped').removeClass('marcado'); contar(); });
+  contar();
+
+  // Paso 2 → Generar: la pestaña del PDF se abre en el clic (si se abre después de la respuesta, el navegador la bloquea).
   $('#pd-generar').on('click', function () {
-    var $sel = $('#pd-pedido'), id = $sel.val(), $b = $(this);
-    if (!id) { avisar('Elige el pedido.', 'warn'); $sel.focus(); return; }
+    var $b = $(this), $marcados = $peds().find('.pd-chk:checked');
+    var ids = $marcados.map(function () { return this.value; }).get();
+    if (!ids.length) { avisar('Marca al menos un pedido.', 'warn'); return; }
+    var txt = ids.length > 1 ? 'los pedidos #' + ids.join(', #') : 'el pedido #' + ids[0];
+    var normal = $b.html();
     var hacer = function () {
       var ventana = window.open('', '_blank');
-      if (ventana) ventana.document.write('<p style="font-family:Arial;padding:30px">Generando la planilla de devolución del pedido #' + id + '...</p>');
+      if (ventana) ventana.document.write('<p style="font-family:Arial;padding:30px">Generando la planilla de devolución de ' + txt + '...</p>');
       $b.prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> Consultando World Office...');
-      $.post('php/planillas_devolucion_accion.php', { accion: 'generar', id_pedido: id }, null, 'json').done(function (r) {
+      $.post('php/planillas_devolucion_accion.php', { accion: 'generar', ids_pedidos: ids }, null, 'json').done(function (r) {
         if (r && r.ok) {
           if (ventana) ventana.location.href = r.url; else window.open(r.url, '_blank');
           avisar('Se generó la planilla ' + r.numero + '.', 'success');
@@ -204,17 +252,18 @@ $h = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES);
         } else {
           if (ventana) ventana.close();
           avisar((r && r.error) || 'No se pudo generar la planilla.', 'error');
-          $b.prop('disabled', false).html('<i class="bi bi-file-earmark-pdf"></i> Generar planilla');
+          $b.prop('disabled', false).html(normal);
         }
       }).fail(function () {
         if (ventana) ventana.close();
         avisar('No se pudo generar la planilla. Revisa la conexión.', 'error');
-        $b.prop('disabled', false).html('<i class="bi bi-file-earmark-pdf"></i> Generar planilla');
+        $b.prop('disabled', false).html(normal);
       });
     };
-    var n = parseInt($sel.find('option:selected').data('planillas'), 10) || 0;
-    if (!n) { hacer(); return; }
-    var opts = { type: 'warning', title: 'El pedido #' + id + ' ya tiene ' + n + ' planilla' + (n === 1 ? '' : 's'), text: '¿Generar otra? Las anteriores siguen en el histórico (puedes anularlas).', btnOk: 'Sí, generar otra' };
+    var con = $marcados.filter(function () { return (parseInt($(this).data('planillas'), 10) || 0) > 0; }).map(function () { return '#' + this.value; }).get();
+    if (!con.length) { hacer(); return; }
+    var opts = { type: 'warning', title: (con.length > 1 ? 'Los pedidos ' + con.join(', ') + ' ya tienen' : 'El pedido ' + con[0] + ' ya tiene') + ' planilla',
+                 text: '¿Generar otra? Las anteriores siguen en el histórico (puedes anularlas).', btnOk: 'Sí, generar otra' };
     if (window.inkConfirm) window.inkConfirm(opts, hacer); else if (confirm(opts.title + '. ' + opts.text)) hacer();
   });
 

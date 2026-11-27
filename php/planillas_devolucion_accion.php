@@ -1,7 +1,7 @@
 <?php
 /**
  * /php/planillas_devolucion_accion.php — acciones del módulo Planillas de devolución (planillas_devolucion.php).
- * POST accion=generar: id_pedido → genera y guarda la planilla (consulta WO). {ok, id, numero, url}
+ * POST accion=generar: ids_pedidos[] (uno o varios del mismo colegio; o id_pedido) → genera y guarda la planilla (consulta WO). {ok, id, numero, url}
  * POST accion=adjuntar: id + archivo → adjunta (o reemplaza) el archivo de la planilla. {ok, msg}
  * POST accion=anular: id + motivo → la planilla queda anulada (sigue en el histórico). {ok, msg}
  * Responde JSON {ok, error?}.
@@ -24,11 +24,12 @@ $id_usuario = (int)($_SESSION['id'] ?? 0);
 $accion = (string)($_POST['accion'] ?? '');
 
 if ($accion === 'generar') {
-    $r = pdv_generar($bdd, (int)($_POST['id_pedido'] ?? 0), $id_usuario);
+    $ids = isset($_POST['ids_pedidos']) ? (array)$_POST['ids_pedidos'] : [(int)($_POST['id_pedido'] ?? 0)];
+    $r = pdv_generar($bdd, array_map('intval', $ids), $id_usuario);
     if (!$r['ok']) pdva_salir(['ok' => false, 'error' => $r['error']]);
     $f = pdv_obtener($bdd, $r['id']);
     registrar_historial($bdd, $f['id_colegio'], $id_usuario, 'Venta directa', 'Planilla de devolución generada', '',
-        pdv_numero($r['id']) . ' · pedido #' . (int)$f['id_pedido']);
+        pdv_numero($r['id']) . ' · ' . (count(pdv_ids_pedidos($f)) > 1 ? 'pedidos ' : 'pedido ') . pdv_texto_pedidos($f));
     pdva_salir(['ok' => true, 'id' => $r['id'], 'numero' => pdv_numero($r['id']), 'url' => 'php/planilla_devolucion.php?id=' . $r['id']]);
 }
 
