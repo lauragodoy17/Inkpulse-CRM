@@ -5,15 +5,16 @@
  * estructura del formato en Excel que maneja la usuaria (Formato_venta_directa_2_Cooperativo_Venecia_Ver_3.xlsx):
  *  - Inventario y ventas: Título | Detalle | Solicitud | Inventario entregado | Unidades devueltas | Inventario final |
  *    Unidades vendidas | Precio venta | Total venta (= precio × vendidas, con fórmula) | nota (J).
- *    · Un bloque por paquete armado (kits completos), con borde grueso: en A el paquete ("Paquete 1 (Primero)"), en B cada
- *      libro; vendidas = kits del paquete y precio = precio kit del libro (la suma del bloque = kits × precio del paquete).
+ *    · Un renglón por paquete vendido (2026-11-27, la usuaria), con borde grueso: en A el paquete ("Paquete 1 (Primero)"),
+ *      en B sus libros; vendidas = kits del paquete y precio = precio del paquete (total = kits × precio del paquete).
  *    · LIBROS SUELTOS: en A el grado y en B el libro; vendidas = unidades sueltas, precio = precio suelto.
- *    · Solicitud / entregado / devueltas / inventario final de cada libro van una sola vez (donde aparece primero), para que
- *      los totales no se dupliquen. J = "N libros pagados pero no había en bodega" (columna Sin inventario).
+ *    · Solicitud / entregado / devueltas / inventario final de cada libro van en LIBROS SUELTOS (todos los libros aparecen
+ *      ahí una vez, aunque no tengan sueltos), para que los totales no se dupliquen. J = "N libros pagados pero no había en bodega" (columna Sin inventario).
  *  - TOTALES (total venta en amarillo); total precio kit, total precio suelto y GRAN TOTAL; VENTA (efectivo, datáfono,
  *    Bre-B, recaudo de la venta en amarillo y diferencia con el total) y BASE DE CAJA (base entregada − gastos); Cierre =
  *    base devuelta + recaudo; NOTA; OBSERVACIONES y pie.
- * Usa las variables de php/formato_vd_excel.php: $hoja, $f, $cl, $fila, $PESOS, $borde, $relleno, $texto, $seccion.
+ * Usa las variables de php/formato_vd_excel.php: $hoja, $f, $cl, $fila, $PESOS, $borde, $relleno, $texto, $seccion,
+ *  $AMARILLO y $paq_incompleto (en amarillo los libros remisionados por debajo de lo solicitado y sus paquetes).
  * Termina escribiendo el archivo (exit).
  */
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -33,11 +34,9 @@ $hoja->getRowDimension($fila)->setRowHeight(30.75);
 $fila++;
 $ini = $fila;
 
-// Filas por id de la tabla del cierre y kits de cada paquete.
+// Filas por id de la tabla del cierre.
 $porId = [];
 foreach ($cl['grados'] as $g) foreach ($g['filas'] as $r) $porId[(int)$r['id']] = $r + ['grado_txt' => $g['grado']];
-$kitsPaq = [];
-foreach ($cl['grados'] as $g) foreach ($g['paquetes'] as $p) $kitsPaq[(int)$p['id']] = $p;
 $mostrado = []; // id de fila => ya se escribieron sus cantidades
 // Nota (J): solo lo escrito en Sin inventario.
 $sinBodega = function ($n) { $n = (int)$n; return $n > 0 ? $n . ' libro' . ($n === 1 ? '' : 's') . ' pagado' . ($n === 1 ? '' : 's') . ' pero no había en bodega' : ''; };
@@ -57,25 +56,19 @@ $escribir = function ($r, $vendidas, $precio) use ($hoja, $texto, &$fila, &$most
     $hoja->setCellValue("I$fila", "=+H$fila*G$fila");
 };
 
-// 1) Un bloque por paquete armado.
+// 1) Un renglón por paquete vendido: kits × precio del paquete.
 foreach ($cl['paquetes'] as $p) {
-    $kp = $kitsPaq[(int)$p['id']] ?? null;
-    if (!$kp || $kp['kits'] <= 0) continue;
-    $desde = $fila;
+    if ($p['kits'] <= 0) continue;
     $texto("A$fila", $p['paquete']);
-    foreach ($p['libros'] as $lp) {
-        $r = $lp['fila'] !== null ? ($porId[(int)$lp['fila']] ?? null) : null;
-        if ($r) { $escribir($r, $kp['kits'], $r['precio_kit']); $fila++; continue; }
-        // Libro del paquete que no está en la tabla (no se remisionó): se vendió en el kit sin stock.
-        $texto("B$fila", $lp['nombre']);
-        $hoja->setCellValue("G$fila", (int)$kp['kits']);
-        $hoja->setCellValue("H$fila", (float)$lp['pk']);
-        $hoja->setCellValue("I$fila", "=+H$fila*G$fila");
-        $fila++;
-    }
-    $hoja->getStyle("A$desde:I" . ($fila - 1))->applyFromArray($fino);
-    $hoja->getStyle("A$desde:I" . ($fila - 1))->applyFromArray($medio);
-    $hoja->getStyle("I$desde:I" . ($fila - 1))->applyFromArray($medio);
+    $texto("B$fila", implode(', ', array_column($p['libros'], 'nombre')));
+    $hoja->getStyle("B$fila")->getAlignment()->setWrapText(true);
+    $hoja->setCellValue("G$fila", (int)$p['kits']);
+    $hoja->setCellValue("H$fila", (float)$p['precio']);
+    $hoja->setCellValue("I$fila", "=+H$fila*G$fila");
+    $hoja->getStyle("A$fila:I$fila")->applyFromArray($fino);
+    $hoja->getStyle("A$fila:I$fila")->applyFromArray($medio);
+    if ($paq_incompleto($p)) $relleno("A$fila:I$fila", $AMARILLO);
+    $fila++;
 }
 $finKits = $fila - 1;
 
@@ -87,9 +80,9 @@ $fila++;
 $iniSue = $fila;
 foreach ($cl['grados'] as $g) {
     foreach ($g['filas'] as $r) {
-        if ((int)$r['suelto_ef'] <= 0 && isset($mostrado[(int)$r['id']])) continue;
         $texto("A$fila", $g['grado']);
         $escribir($r, (int)$r['suelto_ef'], $r['precio_suelto']);
+        if ($r['faltante']) $relleno("A$fila:I$fila", $AMARILLO);
         $fila++;
     }
 }
@@ -109,7 +102,7 @@ if ($fin >= $ini) {
 // TOTALES (el total de venta en amarillo, como en el formato de la usuaria).
 $tot = $fila;
 $hoja->setCellValue("A$tot", 'TOTALES');
-foreach (['C', 'D', 'E', 'F', 'G', 'I'] as $c) $hoja->setCellValue("$c$tot", "=SUM($c$ini:$c$fin)");
+foreach (['C', 'D', 'E', 'F', 'I'] as $c) $hoja->setCellValue("$c$tot", "=SUM($c$ini:$c$fin)");
 $hoja->getStyle("A$tot:I$tot")->getFont()->setBold(true);
 $relleno("A$tot:H$tot", 'F1F5F9');
 $relleno("I$tot", 'FFFF00');

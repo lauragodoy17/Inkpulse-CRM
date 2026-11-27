@@ -56,6 +56,13 @@ $PESOS = '"$" #,##0;-"$" #,##0';
 // tabla de paquetes y libros sueltos.
 $cl_filas = fvdl_sincronizar($bdd, $f);
 $cl = $cl_filas ? fvdl_calcular($bdd, $f, $cl_filas) : null;
+// Amarillo (2026-11-27, la usuaria): libro remisionado por debajo de lo solicitado (incluye 0) y paquete con algún libro así
+// o que no se remisionó (no está en la tabla), igual que en la pantalla.
+$AMARILLO = 'FDE047';
+$paq_incompleto = function (array $pq) use ($cl) {
+    foreach ($pq['libros'] as $l) if ($l['fila'] === null || !empty($cl['filas'][$l['fila']]['faltante'])) return true;
+    return false;
+};
 
 $libro = new Spreadsheet();
 $libro->getProperties()->setCreator('Inkpulse')->setTitle(fvd_numero($f['consecutivo']));
@@ -114,49 +121,60 @@ $seccion($fila, 'Inventario y ventas');
 $fila++;
 if ($formato_cierre) require __DIR__ . '/formato_vd_excel_cierre.php'; // escribe el resto y descarga (exit)
 if ($cl) {
-    // Columnas: A libro, B solicitado, C remisionado, D devuelto, E vendido, F kit, G suelto, H sin inventario,
-    // I precio kit, J precio suelto, K total precio kit, L total precio suelto.
-    $hoja->fromArray(['Libro', 'Solicitado', 'Remisionado', 'Devuelto', 'Vendido', 'Kit', 'Suelto', 'Sin inventario', 'Precio kit', 'Precio suelto', 'Total precio kit', 'Total precio suelto'], null, "A$fila");
-    $hoja->getStyle("A$fila:L$fila")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-    $hoja->getStyle("A$fila:L$fila")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
-    $relleno("A$fila:L$fila", '1F3864');
+    // Columnas: A libro, B solicitado, C remisionado, D devuelto, E vendido, F en kits, G suelto, H sin inventario,
+    // I precio, J total. En cada grado un renglón por paquete (kits × precio del paquete, 2026-11-27) y luego sus libros
+    // (suelto × precio suelto).
+    $hoja->fromArray(['Libro', 'Solicitado', 'Remisionado', 'Devuelto', 'Vendido', 'En kits', 'Suelto', 'Sin inventario', 'Precio', 'Total'], null, "A$fila");
+    $hoja->getStyle("A$fila:J$fila")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+    $hoja->getStyle("A$fila:J$fila")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+    $relleno("A$fila:J$fila", '1F3864');
     $hoja->getRowDimension($fila)->setRowHeight(30);
     $cab = $fila;
     $fila++;
     $ini = $fila;
     foreach ($cl['grados'] as $g) {
         // Franja del grado: color propio; amarillo si algún libro se remisionó por debajo de lo solicitado.
-        $kits = $g['paquetes'] ? implode(' · ', array_map(fn($p) => $p['paquete'] . ': ' . $p['kits'] . ' kit(s) × $' . number_format($p['precio'], 0, ',', '.'), $g['paquetes'])) : 'Sin kits completos';
-        $texto("A$fila", mb_strtoupper($g['grado']) . ($g['faltante'] ? ' · REMISIONADO MENOR QUE LO SOLICITADO' : '') . ' — ' . $kits);
+        $texto("A$fila", mb_strtoupper($g['grado']) . ($g['faltante'] ? ' · REMISIONADO MENOR QUE LO SOLICITADO' : ''));
         $hoja->mergeCells("A$fila:J$fila");
-        $hoja->setCellValue("K$fila", (float)$g['total_kit']);
-        $hoja->setCellValue("L$fila", (float)$g['total_suelto']);
-        $hoja->getStyle("A$fila:L$fila")->getFont()->setBold(true);
-        $relleno("A$fila:L$fila", $g['faltante'] ? 'FDE047' : 'E0E7FF');
+        $hoja->getStyle("A$fila:J$fila")->getFont()->setBold(true);
+        $relleno("A$fila:J$fila", $g['faltante'] ? 'FDE047' : 'E0E7FF');
         $fila++;
+        foreach ($g['paquetes'] as $pq) {
+            $texto("A$fila", $pq['paquete'] . ' — cada kit lleva 1 de: ' . implode(', ', array_column($pq['libros'], 'nombre')));
+            $hoja->getStyle("A$fila")->getAlignment()->setWrapText(true);
+            $hoja->mergeCells("A$fila:E$fila");
+            $hoja->setCellValue("F$fila", (int)$pq['kits']);
+            $texto("G$fila", 'kit(s) ×');
+            $hoja->setCellValue("I$fila", (float)$pq['precio']);
+            $hoja->setCellValue("J$fila", "=F$fila*I$fila");
+            $hoja->getStyle("A$fila:J$fila")->getFont()->setBold(true);
+            $relleno("A$fila:J$fila", $paq_incompleto($pq) ? $AMARILLO : 'F5F3FF');
+            $fila++;
+        }
         foreach ($g['filas'] as $r) {
-            $texto("A$fila", $r['libro'] . ($r['plan_lector'] ? ' (Plan lector)' : ''));
-            $hoja->fromArray([(int)$r['solicitado'], (int)$r['remisionado'], (int)$r['devuelto'], (int)$r['vendido'], (int)$r['kit'], (int)$r['suelto'], (int)$r['sin_inventario'],
-                              (float)$r['precio_kit'], (float)$r['precio_suelto'], (float)$r['total_kit'], (float)$r['total_suelto']], null, "B$fila", true);
+            $texto("A$fila", $r['libro'] . ($r['curso'] ? ' (solo ' . $r['grado'] . ')' : '') . ($r['plan_lector'] ? ' (Plan lector)' : ''));
+            $hoja->fromArray([(int)$r['solicitado'], (int)$r['remisionado'], (int)$r['devuelto'], (int)$r['vendido'], (int)$r['en_kit'], (int)$r['suelto_ef'], (int)$r['sin_inventario'],
+                              (float)$r['precio_suelto']], null, "B$fila", true);
+            $hoja->setCellValue("J$fila", "=G$fila*I$fila");
+            if ($r['faltante']) $relleno("A$fila:J$fila", $AMARILLO);
             $fila++;
         }
     }
     $fin = $fila - 1;
-    $hoja->setCellValue("A$fila", 'TOTAL PRECIO KIT (' . (int)$cl['kits'] . ' kit(s) completo(s) × precio del kit)');
-    $hoja->setCellValue("K$fila", (float)$cl['total_kit']);
+    $hoja->setCellValue("A$fila", 'TOTAL KITS (' . (int)$cl['kits'] . ' kit(s) × precio del paquete)');
+    $hoja->setCellValue("J$fila", (float)$cl['total_kit']);
     $fila++;
-    $hoja->setCellValue("A$fila", 'TOTAL PRECIO SUELTO');
-    $hoja->setCellValue("L$fila", (float)$cl['total_suelto']);
+    $hoja->setCellValue("A$fila", 'TOTAL SUELTOS');
+    $hoja->setCellValue("J$fila", (float)$cl['total_suelto']);
     $fila++;
     $hoja->setCellValue("A$fila", 'GRAN TOTAL');
-    $hoja->setCellValue("K$fila", (float)$cl['gran_total']);
-    $hoja->mergeCells("K$fila:L$fila");
-    $hoja->getStyle("A" . ($fin + 1) . ":L$fila")->getFont()->setBold(true);
-    $relleno("A" . ($fin + 1) . ":L$fila", 'F1F5F9');
-    $hoja->getStyle("I$ini:L$fila")->getNumberFormat()->setFormatCode($PESOS);
+    $hoja->setCellValue("J$fila", (float)$cl['gran_total']);
+    $hoja->getStyle("A" . ($fin + 1) . ":J$fila")->getFont()->setBold(true);
+    $relleno("A" . ($fin + 1) . ":J$fila", 'F1F5F9');
+    $hoja->getStyle("I$ini:J$fila")->getNumberFormat()->setFormatCode($PESOS);
     $hoja->getStyle("B$ini:H$fila")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $hoja->getStyle("A$cab:L$fila")->applyFromArray($borde);
-    foreach (['J', 'K', 'L'] as $c) $hoja->getColumnDimension($c)->setWidth(16);
+    $hoja->getStyle("A$cab:J$fila")->applyFromArray($borde);
+    foreach (['I', 'J'] as $c) $hoja->getColumnDimension($c)->setWidth(16);
     $fila += 2;
 } else {
 // Pedidos y remisiones del formato solo en el encabezado de Solicitud / Inventario entregado (2026-11-23).

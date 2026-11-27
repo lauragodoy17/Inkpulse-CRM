@@ -6,32 +6,41 @@
  *  - Una fila POR LIBRO, agrupadas por grado (encabezado de color por grado; amarillo si en el grado algún libro tiene
  *    Remisionado < Solicitado). Dentro del grado, primero los libros en el orden del paquete de la adopción, luego los
  *    demás en orden alfabético y al final el plan lector.
- *  - Columnas editables a mano: Solicitado, Remisionado, Devuelto, Kit, Suelto, Sin inventario, Precio kit y Precio suelto.
- *    Vendido = Remisionado − Devuelto (calculado) y siempre Vendido = Kit + Suelto.
- *  - Kits: se arman solos con la columna Kit. Cada paquete de la adopción (paquetes_colegio) lleva 1 unidad de cada uno de
- *    sus libros; kits completos del paquete = lo que alcanza el libro con menos unidades en Kit (en el orden de los
- *    paquetes, como fvd_repartir_en_paquetes). Unidades en Kit que no completan un paquete = inconsistencia (no se cierra).
- *  - Precios: Precio suelto = precio de venta individual de la adopción ("Precio venta padre", o el editado / de la
- *    remisión que ya tenía la fila del título). Precio kit = la parte del libro en el precio del paquete
- *    (paquetes_colegio_libros.precio_neto llevado a paquetes_colegio.precio_final), de modo que precio del kit = suma de
- *    los precios kit de sus libros. Ambos editables por fila; nunca se cambia la adopción.
- *  - Total kits = kits completos × precio del kit; total sueltos = Σ suelto × precio suelto; GRAN TOTAL = ambos. El gran
- *    total pasa a ser el total de venta del formato (formatos_vd.total_venta) con el que se cuadra el cierre de dinero.
+ *  - Libro pedido en 2 o más cursos (p. ej. JUGAR CON LETRAS en Jardín y Transición; 2026-11-27, la usuaria): UNA FILA
+ *    POR CURSO, con lo pedido en ese curso (libros_pedidos.cod_area) y lo devuelto en ese curso (libros_devol_v.cod_area
+ *    de las devoluciones del formato). Lo remisionado no dice de qué curso sale: se reparte como lo pedido y la diferencia
+ *    va al curso con más pedido. Cada fila va en el paquete de SU curso.
+ *  - Una fila POR PAQUETE en su grado (2026-11-27, la usuaria): Kits × Precio del paquete (paquetes_colegio.precio_final de
+ *    la adopción, editable aquí sin cambiar la adopción) = Total kit. Ya no se reparte el precio del paquete entre sus
+ *    libros. Los kits los ESCRIBE la persona (formatos_vd_kits); el botón "Proponer reparto" solo llena las casillas.
+ *  - Por libro: Suelto × Precio suelto (precio de venta individual de la adopción, editable), también escrito a mano.
+ *    Cada kit lleva 1 unidad de cada libro del paquete. Sin tope (2026-11-27, la usuaria): se cobra lo escrito aunque pase
+ *    de lo vendido (se pudo enviar o vender algo que no se remisionó) o quede por debajo. "Sin inventario" = libros
+ *    pagados que no había en bodega (nota del Excel).
+ *  - Los formatos cerrados antes del reparto manual (libros_novedades ≠ FVDL_MANUAL) conservan el cálculo automático con
+ *    el que se cerraron: kits = lo que alcanza el libro del paquete con menos vendidos y el resto suelto.
+ *  - GRAN TOTAL = Σ kits × precio del paquete + Σ suelto × precio suelto; pasa a ser el total de venta del formato
+ *    (formatos_vd.total_venta) con el que se cuadra el cierre de dinero.
  * Las cantidades se proponen con las filas del formato (lo remisionado y lo devuelto de la devolución) y quedan guardadas
  * en formatos_vd_libros; editar aquí NO cambia la devolución ni sus documentos. Si cambian las filas del formato (p. ej.
  * llega la 2a devolución) antes del cierre, se actualizan las cantidades que no se habían editado a mano.
  * Los formatos cerrados antes de este cambio (sin filas aquí) se siguen mostrando como antes.
  */
 
-/** Tabla de las filas por libro y huella de las filas del formato con la que se propusieron. Antes de cualquier transacción. */
+/** Versión del armado de filas: al cambiarla, los formatos abiertos se vuelven a proponer una vez (fvdl_huella_items). */
+const FVDL_VERSION_FILAS = 2; // 2026-11-27: filas por curso de los libros pedidos en varios cursos
+
+/** Tablas de las filas por libro y de los kits por paquete. Antes de cualquier transacción. */
 function fvdl_asegurar_tabla(PDO $bdd) {
     static $hecho = false;
     if ($hecho) return;
     $hecho = true;
+    // curso: id del grado cuando el libro se pidió en varios cursos y va una fila por curso; 0 = una sola fila.
     $bdd->exec("CREATE TABLE IF NOT EXISTS formatos_vd_libros (
         id INT AUTO_INCREMENT PRIMARY KEY,
         id_formato INT NOT NULL,
         id_libro INT NOT NULL,
+        curso INT NOT NULL DEFAULT 0,
         libro VARCHAR(255) NOT NULL,
         id_grado INT NULL,
         grado VARCHAR(100) NULL,
@@ -49,8 +58,21 @@ function fvdl_asegurar_tabla(PDO $bdd) {
         base_solicitado INT NOT NULL DEFAULT 0,
         base_remisionado INT NOT NULL DEFAULT 0,
         base_devuelto INT NOT NULL DEFAULT 0,
-        UNIQUE KEY uniq_formatos_vd_libros (id_formato, id_libro),
+        UNIQUE KEY uniq_formatos_vd_libros (id_formato, id_libro, curso),
         KEY idx_formatos_vd_libros_formato (id_formato)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+    if (!$bdd->query("SHOW COLUMNS FROM formatos_vd_libros LIKE 'curso'")->fetch()) {
+        $bdd->exec("ALTER TABLE formatos_vd_libros ADD COLUMN curso INT NOT NULL DEFAULT 0 AFTER id_libro,
+                    DROP INDEX uniq_formatos_vd_libros, ADD UNIQUE KEY uniq_formatos_vd_libros (id_formato, id_libro, curso)");
+    }
+    // Kits por paquete (2026-11-27): kits NULL = automáticos (sin novedades); precio NULL = el de la adopción.
+    $bdd->exec("CREATE TABLE IF NOT EXISTS formatos_vd_kits (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        id_formato INT NOT NULL,
+        id_paquete INT NOT NULL,
+        kits INT NULL,
+        precio DECIMAL(14,2) NULL,
+        UNIQUE KEY uniq_formatos_vd_kits (id_formato, id_paquete)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
     if (!$bdd->query("SHOW COLUMNS FROM formatos_vd LIKE 'libros_huella'")->fetch()) {
         try { $bdd->exec("ALTER TABLE formatos_vd ADD COLUMN libros_huella VARCHAR(32) NULL"); } catch (Exception $e) { /* ya existe */ }
@@ -61,14 +83,14 @@ function fvdl_asegurar_tabla(PDO $bdd) {
     }
 }
 
-/** Huella de las filas del formato de las que salen las cantidades propuestas. */
+/** Huella de las filas del formato (y de sus devoluciones) de las que salen las cantidades propuestas. */
 function fvdl_huella_items(array $f) {
     $x = [];
     foreach ($f['items'] as $it) {
         $x[] = [$it['id'], $it['tipo'], $it['id_paquete'], $it['id_libro'], $it['libros'], (int)$it['solicitud'], (int)$it['inv_inicial'],
                 (int)$it['devueltas'], (int)($it['en_paquetes'] ?? 0), (int)($it['armados'] ?? 0), (int)($it['abiertos'] ?? 0)];
     }
-    return md5(json_encode($x));
+    return md5(json_encode([FVDL_VERSION_FILAS, $f['legalizacion']['ids'] ?? [], $x]));
 }
 
 /** La tabla por grado se usa (se crea y se edita) desde el cierre de dinero; un formato cerrado solo la muestra si ya la tiene. */
@@ -83,7 +105,7 @@ function fvdl_filas(PDO $bdd, $idFormato) {
     $st->execute([(int)$idFormato]);
     $res = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        foreach (['id', 'id_formato', 'id_libro', 'id_grado', 'plan_lector', 'orden', 'solicitado', 'remisionado', 'devuelto', 'kit', 'suelto', 'sin_inventario',
+        foreach (['id', 'id_formato', 'id_libro', 'curso', 'id_grado', 'plan_lector', 'orden', 'solicitado', 'remisionado', 'devuelto', 'kit', 'suelto', 'sin_inventario',
                   'base_solicitado', 'base_remisionado', 'base_devuelto'] as $k) $r[$k] = (int)$r[$k];
         $r['precio_kit'] = (float)$r['precio_kit'];
         $r['precio_suelto'] = (float)$r['precio_suelto'];
@@ -92,10 +114,23 @@ function fvdl_filas(PDO $bdd, $idFormato) {
     return $res;
 }
 
+/** Kits guardados por paquete: [id_paquete => ['kits' => int|null, 'precio' => float|null]]. */
+function fvdl_kits(PDO $bdd, $idFormato) {
+    fvdl_asegurar_tabla($bdd);
+    $st = $bdd->prepare("SELECT id_paquete, kits, precio FROM formatos_vd_kits WHERE id_formato = ?");
+    $st->execute([(int)$idFormato]);
+    $res = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $res[(int)$r['id_paquete']] = ['kits' => $r['kits'] === null ? null : (int)$r['kits'], 'precio' => $r['precio'] === null ? null : (float)$r['precio']];
+    }
+    return $res;
+}
+
 /**
- * Paquetes de la adopción del colegio con sus libros en orden, su grado y el precio kit de cada libro (su parte del
- * precio del paquete; el último libro lleva el redondeo para que la suma dé exactamente el precio del paquete):
- * [id_paquete => ['id','paquete','id_grado','grado','precio','libros' => [id_libro => precio_kit]]].
+ * Paquetes de la adopción del colegio con sus libros en orden, su grado y su precio (paquetes_colegio.precio_final):
+ * [id_paquete => ['id','paquete','id_grado','grado','precio','libros' => [id_libro => parte del precio]]]. La parte de
+ * cada libro (precio_neto llevado al precio del paquete; el último libro lleva el redondeo) ya no se cobra por libro: solo
+ * sirve como precio de referencia del libro en el Excel.
  */
 function fvdl_paquetes(PDO $bdd, $idColegio, $idPeriodo) {
     if (!$bdd->query("SHOW TABLES LIKE 'paquetes_colegio'")->fetch()) return [];
@@ -131,9 +166,28 @@ function fvdl_paquetes(PDO $bdd, $idColegio, $idPeriodo) {
 }
 
 /**
- * Propuesta por libro con las filas del formato: [id_libro => ['libro','sol','rem','dev','kit']] (kit = unidades que ya se
- * vendían en paquete: paquetes remisionados como producto de paquete en WO y los armados a mano), con los libros de los
- * paquetes pasados al libros.id de la fila del título del mismo producto (libro repetido en el catálogo).
+ * Reparte $total entre las claves de $vals (los valores de partida) para que sumen exactamente $total: lo que falta se suma
+ * a la clave con más $peso; lo que sobra se quita empezando por la de más $peso, sin bajar de $piso[clave].
+ */
+function fvdl_ajustar_reparto(array $vals, $total, array $peso, array $piso = []) {
+    $dif = (int)$total - array_sum($vals);
+    if (!$vals || $dif === 0) return $vals;
+    $orden = array_keys($peso);
+    usort($orden, fn($a, $b) => $peso[$b] <=> $peso[$a]);
+    if ($dif > 0) { $vals[$orden[0]] += $dif; return $vals; }
+    foreach ($orden as $k) {
+        $quita = min(-$dif, max(0, $vals[$k] - (int)($piso[$k] ?? 0)));
+        $vals[$k] -= $quita;
+        $dif += $quita;
+        if ($dif === 0) break;
+    }
+    return $vals;
+}
+
+/**
+ * Propuesta por libro (y por curso) con las filas del formato: ["id_libro:curso" => ['id_libro','curso','grado_curso',
+ * 'libro','sol','rem','dev']], con los libros de los paquetes pasados al libros.id de la fila del título del mismo producto
+ * (libro repetido en el catálogo). curso = 0 salvo en los libros pedidos en 2 o más cursos (fvdl_cursos_base).
  */
 function fvdl_base_items(PDO $bdd, array $f) {
     require_once __DIR__ . '/devoluciones_ventas_datos.php'; // dvv_claves_catalogo
@@ -152,7 +206,7 @@ function fvdl_base_items(PDO $bdd, array $f) {
     $res = [];
     $add = function ($l, $campo, $n, $nombre = null) use (&$res, $canon) {
         $l = $canon($l);
-        $res[$l] = $res[$l] ?? ['libro' => null, 'sol' => 0, 'rem' => 0, 'dev' => 0, 'kit' => 0];
+        $res[$l] = $res[$l] ?? ['libro' => null, 'sol' => 0, 'rem' => 0, 'dev' => 0];
         $res[$l][$campo] += $n;
         if ($nombre !== null && $res[$l]['libro'] === null) $res[$l]['libro'] = $nombre;
     };
@@ -163,15 +217,12 @@ function fvdl_base_items(PDO $bdd, array $f) {
             $add($l, 'sol', (int)$it['solicitud'], $it['descripcion']);
             $add($l, 'rem', (int)$it['inv_inicial'] + (int)($it['en_paquetes'] ?? 0)); // deshace el armado anterior
             $add($l, 'dev', (int)$it['devueltas']);
-            $add($l, 'kit', (int)($it['en_paquetes'] ?? 0));
         } elseif ($it['tipo'] === 'paquete') {
             $rem = (int)$it['inv_inicial'] - (int)($it['armados'] ?? 0); // los armados vienen de los títulos
-            $enKit = max(0, $rem - (int)$it['devueltas'] - (int)($it['abiertos'] ?? 0));
             foreach ($libros as $l) {
                 $add($l, 'sol', (int)$it['solicitud']);
                 $add($l, 'rem', max(0, $rem));
                 $add($l, 'dev', (int)$it['devueltas']);
-                $add($l, 'kit', $enKit);
             }
         } elseif ($it['tipo'] === FVD_TIPO_ABIERTO || $it['tipo'] === FVD_TIPO_SUELTO_PAQ) {
             // Libro de un paquete ya contado en la fila del paquete: solo suma lo que volvió suelto.
@@ -182,6 +233,72 @@ function fvdl_base_items(PDO $bdd, array $f) {
     if ($sinNombre) foreach ($bdd->query("SELECT id, libro FROM libros WHERE id IN (" . implode(',', $sinNombre) . ")")->fetchAll(PDO::FETCH_KEY_PAIR) as $id => $n) $res[(int)$id]['libro'] = $n;
     foreach ($res as $l => &$x) $x['libro'] = $x['libro'] ?? 'Libro #' . $l;
     unset($x);
+
+    $cursos = fvdl_cursos_base($bdd, $f, array_keys($res), $canon);
+    $out = [];
+    foreach ($res as $l => $x) {
+        if (!isset($cursos[$l])) {
+            $out["$l:0"] = $x + ['id_libro' => $l, 'curso' => 0, 'grado_curso' => null];
+            continue;
+        }
+        // Una fila por curso: lo pedido y lo devuelto de cada curso, ajustados para que sumen lo del libro; lo remisionado
+        // se reparte como lo pedido (World Office no dice de qué curso sale cada unidad).
+        $c = $cursos[$l];
+        $peso = array_map(fn($y) => $y['sol'], $c);
+        $sol = fvdl_ajustar_reparto($peso, $x['sol'], $peso);
+        $dev = fvdl_ajustar_reparto(array_map(fn($y) => $y['dev'], $c), $x['dev'], $peso);
+        $rem = fvdl_ajustar_reparto($sol, $x['rem'], $peso, $dev);
+        foreach ($c as $g => $y) {
+            $out["$l:$g"] = ['libro' => $x['libro'], 'sol' => $sol[$g], 'rem' => $rem[$g], 'dev' => $dev[$g], 'id_libro' => $l, 'curso' => $g, 'grado_curso' => $y['grado']];
+        }
+    }
+    return $out;
+}
+
+/**
+ * Cursos de los libros pedidos en 2 o más cursos de distinto grado (2026-11-27, la usuaria): lo pedido por curso en los
+ * pedidos del formato (libros_pedidos.cod_area) y lo devuelto por curso en sus devoluciones no anuladas
+ * (libros_devol_v.cod_area). Cada área va al grado de la adopción (en el grado "Otro" = 17, el grado específico); dos áreas
+ * del mismo grado se suman. Devuelve [id_libro (de la tabla) => [id_grado => ['grado','sol','dev']]] ordenado por grado.
+ */
+function fvdl_cursos_base(PDO $bdd, array $f, array $idsTabla, callable $canon) {
+    $idsPed = array_values(array_filter(array_map(fn($c) => (int)substr(trim($c), 1), explode(',', (string)$f['ids_pedidos']))));
+    if (!$idsPed || !$idsTabla) return [];
+    $pedido = $bdd->query("SELECT lp.id_libro, lp.cod_area, SUM(lp.cantidad) AS n FROM libros_pedidos lp JOIN pedidos x ON x.codigo = lp.cod_pedido
+                           WHERE x.id IN (" . implode(',', $idsPed) . ") AND COALESCE(lp.cod_area, '') <> ''
+                           GROUP BY lp.id_libro, lp.cod_area HAVING n > 0")->fetchAll(PDO::FETCH_ASSOC);
+    if (!$pedido) return [];
+    $st = $bdd->prepare("SELECT ld.id_libro, ld.cod_area, SUM(ld.cantidad) AS n FROM libros_devol_v ld JOIN devoluciones_v d ON d.codigo = ld.cod_pedido
+                         WHERE d.id_formato_vd = ? AND d.estado <> " . DVD_ESTADO_DEVOL_ANULADA . " AND COALESCE(ld.cod_area, '') <> ''
+                         GROUP BY ld.id_libro, ld.cod_area");
+    $st->execute([(int)$f['id']]);
+    $devol = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    $areas = [];
+    foreach (array_merge($pedido, $devol) as $r) $areas[(string)$r['cod_area']] = true;
+    $st = $bdd->prepare("SELECT a.codigo, g.id, g.grado FROM areas_objetivas a JOIN grados g ON g.id = IF(a.id_grado = 17 AND a.id_grado_otro > 0, a.id_grado_otro, a.id_grado)
+                         WHERE a.id_colegio = ? AND a.codigo IN (" . implode(',', array_fill(0, count($areas), '?')) . ")");
+    $st->execute(array_merge([(int)$f['id_colegio']], array_map('strval', array_keys($areas))));
+    $grado = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $grado[(string)$r['codigo']] = ['id' => (int)$r['id'], 'grado' => trim((string)$r['grado'])];
+
+    $enTabla = array_flip($idsTabla);
+    $res = [];
+    foreach ($pedido as $r) {
+        $l = $canon($r['id_libro']);
+        $g = $grado[(string)$r['cod_area']] ?? null;
+        if (!isset($enTabla[$l]) || !$g) continue;
+        $res[$l][$g['id']] = $res[$l][$g['id']] ?? ['grado' => $g['grado'], 'sol' => 0, 'dev' => 0];
+        $res[$l][$g['id']]['sol'] += (int)$r['n'];
+    }
+    $res = array_filter($res, fn($c) => count($c) > 1);
+    foreach ($devol as $r) {
+        $l = $canon($r['id_libro']);
+        $g = $grado[(string)$r['cod_area']] ?? null;
+        if ($g && isset($res[$l][$g['id']])) $res[$l][$g['id']]['dev'] += (int)$r['n'];
+    }
+    foreach ($res as &$c) ksort($c);
+    unset($c);
     return $res;
 }
 
@@ -206,14 +323,14 @@ function fvdl_paquetes_canonicos(PDO $bdd, array $paquetes, array $idsTabla) {
 /**
  * Crea o actualiza las filas por libro del formato con la propuesta (fvdl_base_items). Primera vez: todas las columnas
  * propuestas. Después, solo si cambiaron las filas del formato: las cantidades que no se editaron a mano toman el valor
- * nuevo y aparecen los libros nuevos; Kit / Suelto / Sin inventario solo llevan lo escrito a mano. Devuelve las filas.
+ * nuevo y aparecen los libros nuevos; Suelto / Sin inventario solo llevan lo escrito a mano. Devuelve las filas.
  */
 function fvdl_sincronizar(PDO $bdd, array $f) {
     fvdl_asegurar_tabla($bdd);
     $filas = fvdl_filas($bdd, $f['id']);
     if (!fvdl_aplica($f)) return $filas;
     $huella = fvdl_huella_items($f);
-    // Kit / Suelto / Sin inventario arrancan en 0 (2026-11-26, la usuaria): solo llevan lo que se escriba con novedades. Las
+    // Suelto / Sin inventario arrancan en 0 (2026-11-26, la usuaria): solo llevan lo que se escriba con novedades. Las
     // filas creadas antes con valores propuestos se limpian mientras el cierre no se haya guardado (libros_novedades NULL).
     if ($filas && ($f['libros_novedades'] ?? null) === null && array_filter($filas, fn($r) => $r['kit'] || $r['suelto'] || $r['sin_inventario'])) {
         $bdd->prepare("UPDATE formatos_vd_libros SET kit = 0, suelto = 0, sin_inventario = 0 WHERE id_formato = ?")->execute([(int)$f['id']]);
@@ -226,39 +343,39 @@ function fvdl_sincronizar(PDO $bdd, array $f) {
 }
 
 /**
- * Propuesta por libro (sin guardar), ya ordenada: [id_libro => ['libro','id_grado','grado','plan_lector','pos','paquetes',
- * 'sol','rem','dev','kit','suelto','precio_kit','precio_suelto']].
+ * Propuesta por libro y curso (sin guardar), ya ordenada: ["id_libro:curso" => ['id_libro','curso','libro','id_grado',
+ * 'grado','plan_lector','pos','paquetes','sol','rem','dev','precio_suelto']]. La fila de un curso va solo en los paquetes
+ * de ese grado.
  */
 function fvdl_propuesta(PDO $bdd, array $f) {
     $base = fvdl_base_items($bdd, $f);
-    $paquetes = fvdl_paquetes_canonicos($bdd, fvdl_paquetes($bdd, $f['id_colegio'], $f['id_periodo']), array_keys($base));
-    $cursos = fvd_cursos_adopcion($bdd, $f['id_colegio'], $f['id_periodo'], array_keys($base));
+    $idsLibro = array_values(array_unique(array_map(fn($b) => $b['id_libro'], $base)));
+    $paquetes = fvdl_paquetes_canonicos($bdd, fvdl_paquetes($bdd, $f['id_colegio'], $f['id_periodo']), $idsLibro);
+    $cursos = fvd_cursos_adopcion($bdd, $f['id_colegio'], $f['id_periodo'], $idsLibro);
     // Precio suelto: el de la fila del título (editado > remisión > precio venta padre); los libros que solo venían en
     // paquete, el precio venta padre de la adopción.
     $fake = ['items' => [], 'id_colegio' => $f['id_colegio'], 'id_periodo' => $f['id_periodo'], 'legalizacion' => null];
     foreach ($f['items'] as $it) if ($it['tipo'] === 'titulo') $fake['items'][] = $it;
     $conTitulo = array_map(fn($it) => (int)$it['id_libro'], $fake['items']);
-    foreach (array_keys($base) as $l) if (!in_array($l, $conTitulo, true)) $fake['items'][] = ['tipo' => 'titulo', 'id_libro' => $l, 'id_paquete' => null, 'clave' => 'L' . $l];
+    foreach ($idsLibro as $l) if (!in_array($l, $conTitulo, true)) $fake['items'][] = ['tipo' => 'titulo', 'id_libro' => $l, 'id_paquete' => null, 'clave' => 'L' . $l];
     $precios = $fake['items'] ? fvd_precios_actuales($bdd, $fake) : [];
-    // Paquetes, grado, orden y precio kit de cada libro.
-    $info = [];
+    // Paquetes de cada libro en orden de la adopción, con su grado y la posición del libro.
+    $enPaq = []; // id_libro => [['id','id_grado','grado','pos']]
     $pos = 0;
-    foreach ($paquetes as $p) {
-        foreach ($p['libros'] as $l => $pk) {
-            if (!isset($base[$l])) continue;
-            $info[$l] = $info[$l] ?? ['paquetes' => [], 'precio_kit' => $pk, 'id_grado' => $p['id_grado'], 'grado' => $p['grado'], 'pos' => $pos++];
-            $info[$l]['paquetes'][] = $p['id'];
-        }
-    }
+    foreach ($paquetes as $p) foreach (array_keys($p['libros']) as $l) $enPaq[$l][] = ['id' => $p['id'], 'id_grado' => $p['id_grado'], 'grado' => $p['grado'], 'pos' => $pos++];
     $prop = [];
-    foreach ($base as $l => $b) {
+    foreach ($base as $k => $b) {
+        $l = $b['id_libro'];
         $c = $cursos[$l] ?? null;
-        $i = $info[$l] ?? null;
-        $prop[$l] = ['libro' => mb_substr($b['libro'], 0, 255), 'id_grado' => $i ? $i['id_grado'] : ($c['id_grado'] ?? null),
-                     'grado' => $i ? $i['grado'] : ($c['grado'] ?? null), 'plan_lector' => $c && $c['plan_lector'] ? 1 : 0,
-                     'pos' => $i ? $i['pos'] : null, 'paquetes' => $i ? implode(',', $i['paquetes']) : '',
-                     'sol' => $b['sol'], 'rem' => $b['rem'], 'dev' => $b['dev'], 'kit' => 0, 'suelto' => 0,
-                     'precio_kit' => $i ? (float)$i['precio_kit'] : 0, 'precio_suelto' => (float)($precios['L' . $l]['precio'] ?? 0)];
+        $lista = $enPaq[$l] ?? [];
+        if ($b['curso']) $lista = array_values(array_filter($lista, fn($p) => $p['id_grado'] === $b['curso']));
+        $i = $lista[0] ?? null;
+        $idGrado = $b['curso'] ?: ($i ? $i['id_grado'] : ($c['id_grado'] ?? null));
+        $grado = $b['curso'] ? $b['grado_curso'] : ($i ? $i['grado'] : ($c['grado'] ?? null));
+        $prop[$k] = ['id_libro' => $l, 'curso' => $b['curso'], 'libro' => mb_substr($b['libro'], 0, 255), 'id_grado' => $idGrado, 'grado' => $grado,
+                     'plan_lector' => $c && $c['plan_lector'] ? 1 : 0, 'pos' => $i ? $i['pos'] : null,
+                     'paquetes' => implode(',', array_column($lista, 'id')),
+                     'sol' => $b['sol'], 'rem' => $b['rem'], 'dev' => $b['dev'], 'precio_suelto' => (float)($precios['L' . $l]['precio'] ?? 0)];
     }
     // Orden: por grado (sin grado al final); en el grado los libros del paquete en su orden, luego los demás por nombre y el plan lector al final.
     uksort($prop, function ($a, $b) use ($prop) {
@@ -275,37 +392,39 @@ function fvdl_propuesta(PDO $bdd, array $f) {
 
 /** Escribe la propuesta sobre las filas guardadas (ver fvdl_sincronizar). */
 function fvdl_escribir(PDO $bdd, array $f, array $filas, array $prop, $huella) {
-    $porLibro = [];
-    foreach ($filas as $r) $porLibro[$r['id_libro']] = $r;
+    $porClave = [];
+    foreach ($filas as $r) $porClave[$r['id_libro'] . ':' . $r['curso']] = $r;
+    $porCurso = []; // libros que ahora van una fila por curso
+    foreach ($prop as $x) if ($x['curso']) $porCurso[$x['id_libro']] = true;
     $bdd->beginTransaction();
     try {
-        $ins = $bdd->prepare("INSERT INTO formatos_vd_libros (id_formato, id_libro, libro, id_grado, grado, plan_lector, orden, paquetes, solicitado, remisionado, devuelto,
+        $ins = $bdd->prepare("INSERT INTO formatos_vd_libros (id_formato, id_libro, curso, libro, id_grado, grado, plan_lector, orden, paquetes, solicitado, remisionado, devuelto,
                                      kit, suelto, precio_kit, precio_suelto, base_solicitado, base_remisionado, base_devuelto)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?)");
         $up = $bdd->prepare("UPDATE formatos_vd_libros SET libro = ?, id_grado = ?, grado = ?, plan_lector = ?, orden = ?, paquetes = ?, solicitado = ?, remisionado = ?, devuelto = ?,
-                                    kit = ?, suelto = ?, base_solicitado = ?, base_remisionado = ?, base_devuelto = ? WHERE id = ?");
+                                    base_solicitado = ?, base_remisionado = ?, base_devuelto = ? WHERE id = ?");
+        $del = $bdd->prepare("DELETE FROM formatos_vd_libros WHERE id = ?");
         $orden = 0;
-        foreach ($prop as $l => $x) {
+        foreach ($prop as $k => $x) {
             $orden++;
-            $r = $porLibro[$l] ?? null;
+            $r = $porClave[$k] ?? null;
             if (!$r) {
-                $ins->execute([(int)$f['id'], $l, $x['libro'], $x['id_grado'], $x['grado'], $x['plan_lector'], $orden, $x['paquetes'], $x['sol'], $x['rem'], $x['dev'],
-                               $x['kit'], $x['suelto'], $x['precio_kit'], $x['precio_suelto'], $x['sol'], $x['rem'], $x['dev']]);
+                $ins->execute([(int)$f['id'], $x['id_libro'], $x['curso'], $x['libro'], $x['id_grado'], $x['grado'], $x['plan_lector'], $orden, $x['paquetes'], $x['sol'], $x['rem'], $x['dev'],
+                               $x['precio_suelto'], $x['sol'], $x['rem'], $x['dev']]);
                 continue;
             }
             // Lo editado a mano se conserva; lo demás toma el valor nuevo.
             $sol = $r['solicitado'] === $r['base_solicitado'] ? $x['sol'] : $r['solicitado'];
             $rem = $r['remisionado'] === $r['base_remisionado'] ? $x['rem'] : $r['remisionado'];
             $dev = $r['devuelto'] === $r['base_devuelto'] ? $x['dev'] : $r['devuelto'];
-            $up->execute([$x['libro'], $x['id_grado'], $x['grado'], $x['plan_lector'], $orden, $x['paquetes'], $sol, $rem, $dev, $r['kit'], $r['suelto'],
-                          $x['sol'], $x['rem'], $x['dev'], $r['id']]);
+            $up->execute([$x['libro'], $x['id_grado'], $x['grado'], $x['plan_lector'], $orden, $x['paquetes'], $sol, $rem, $dev, $x['sol'], $x['rem'], $x['dev'], $r['id']]);
         }
-        // Libros que ya no están en el formato y no se tocaron: se quitan.
-        foreach ($porLibro as $l => $r) {
-            if (isset($prop[$l])) continue;
-            if ($r['solicitado'] === $r['base_solicitado'] && $r['remisionado'] === $r['base_remisionado'] && $r['devuelto'] === $r['base_devuelto']) {
-                $bdd->prepare("DELETE FROM formatos_vd_libros WHERE id = ?")->execute([$r['id']]);
-            }
+        foreach ($porClave as $k => $r) {
+            if (isset($prop[$k])) continue;
+            // La fila única de un libro que ahora va por curso se quita siempre (si no, sus unidades se contarían dos veces);
+            // los demás libros que ya no están en el formato, solo si no se tocaron.
+            $intacta = $r['solicitado'] === $r['base_solicitado'] && $r['remisionado'] === $r['base_remisionado'] && $r['devuelto'] === $r['base_devuelto'];
+            if ($intacta || isset($porCurso[$r['id_libro']])) $del->execute([$r['id']]);
         }
         $bdd->prepare("UPDATE formatos_vd SET libros_huella = ? WHERE id = ?")->execute([$huella, (int)$f['id']]);
         $bdd->commit();
@@ -315,8 +434,19 @@ function fvdl_escribir(PDO $bdd, array $f, array $filas, array $prop, $huella) {
     }
 }
 
+/** formatos_vd.libros_novedades de los formatos guardados con el reparto manual de kits y sueltos (2026-11-27). */
+const FVDL_MANUAL = 2;
+
 /**
- * ¿La venta tuvo novedades? (2026-11-26, la usuaria). Solo con novedades se ven y se escriben Kit / Suelto / Sin inventario.
+ * ¿El reparto de kits y sueltos lo escribe la persona? Sí en todo formato abierto y en los cerrados desde el 2026-11-27
+ * (libros_novedades = FVDL_MANUAL); los cerrados antes conservan el cálculo automático con el que se cerraron.
+ */
+function fvdl_es_manual(array $f) {
+    return (int)$f['etapa'] < FVD_ETAPA_CERRADO || (int)($f['libros_novedades'] ?? -1) === FVDL_MANUAL;
+}
+
+/**
+ * ¿La venta tuvo novedades? (2026-11-26, la usuaria). Solo para los formatos cerrados antes del reparto manual. Solo con novedades se escriben los Kits, Suelto y Sin inventario.
  * formatos_vd.libros_novedades: 1 / 0 elegido en el cierre; NULL = automático: sí cuando algún libro se remisionó por
  * debajo de lo solicitado (World Office).
  */
@@ -327,30 +457,33 @@ function fvdl_novedades(array $f, array $filas) {
 }
 
 /**
- * Cálculo de la tabla (el mismo que hace la pantalla en vivo). $filas = fvdl_filas (o con los valores enviados).
- * Kit / Suelto / Sin inventario son lo ESCRITO a mano (arrancan en 0 y no se llenan solos, 2026-11-26 la usuaria). Lo que
- * se cobra sale así:
- *  - Kits de cada paquete (en el orden de la adopción): con novedades y algún libro del paquete con Kit escrito, el MAYOR
- *    Kit escrito entre sus libros (el paquete sale aunque solo un libro diga Kit = 1: se vendió sin stock de los demás).
- *    Si no (sin novedades, o ningún libro del paquete con Kit), se arma solo con lo vendido: lo que alcanza el libro con
- *    menos vendidas, solo si todos sus libros están en la tabla.
- *  - Suelto cobrado de cada libro = lo vendido que no fue en kits; con novedades, si se escribió Suelto, ese (debe cuadrar).
- *  - Sin inventario es informativo (nota del Excel); sin novedades cuenta 0.
- * Precio del kit = suma de los precios kit de sus libros (el de la tabla o, si el libro no está, su parte en la adopción).
- * Total precio kit de la fila = kits de sus paquetes × su precio kit (la suma de las filas = kits × precio del paquete).
- * Devuelve ['novedades','filas' => [id => fila],'grados' => [['clave','id_grado','grado','faltante','filas','paquetes' =>
- * [['id','paquete','kits','precio','total']],'total_kit','total_suelto','kits']],'total_kit','total_suelto','gran_total',
- * 'kits','errores','paquetes' (para la pantalla)]; cada fila con 'vendido','en_kit','suelto_ef','total_kit','total_suelto','faltante'.
+ * Cálculo de la tabla (el mismo que hace la pantalla en vivo). $filas = fvdl_filas (o con los valores enviados); $kits =
+ * fvdl_kits (o lo enviado); null = lo guardado.
+ *  - Reparto manual (fvdl_es_manual): kits de cada paquete = los escritos (0 si no); Suelto = el escrito. Sin tope: lo que
+ *    falte para lo vendido queda en 'sin_asignar'.
+ *  - Formatos cerrados con el cálculo anterior: kits con novedades los escritos o, si no, solos (lo que alcanza el libro
+ *    con menos vendidos sin kit, si todos sus libros están en la tabla); Suelto = el escrito o lo que sobra, y debía
+ *    cumplirse En kits + Suelto = Vendido + Sin inventario.
+ *  - Total kit = kits × precio del paquete (el escrito o el de la adopción); total suelto = Suelto × precio suelto.
+ * Devuelve ['manual','novedades','filas' => [id => fila],'grados' => [['clave','id_grado','grado','faltante','filas','paquetes' =>
+ * [kit],'total_kit','total_suelto','kits']],'paquetes' => [kit],'total_kit','total_suelto','gran_total','kits','errores'];
+ * cada fila con 'vendido','en_kit','suelto_ef','total_suelto','faltante'; cada kit ['id','paquete','id_grado','kits',
+ * 'auto','precio','precio_adopcion','total','libros' => [['fila','nombre','pk']]].
  */
-function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null) {
-    $novedades = $novedades === null ? fvdl_novedades($f, $filas) : (bool)$novedades;
-    $paquetes = fvdl_paquetes_canonicos($bdd, fvdl_paquetes($bdd, $f['id_colegio'], $f['id_periodo']), array_map(fn($r) => (int)$r['id_libro'], $filas));
-    $porLibro = [];
-    foreach ($filas as $id => $r) $porLibro[(int)$r['id_libro']] = $id;
-    $nombres = [];
+function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null, $kits = null) {
+    // Reparto MANUAL (2026-11-27, la usuaria): la persona escribe los kits de cada paquete y el suelto de cada libro; la
+    // única restricción es no pasar de lo vendido (+ sin inventario) y lo que quede sin asignar se deja pasar. Los formatos
+    // cerrados antes con el cálculo automático (libros_novedades distinto de FVDL_MANUAL) se siguen mostrando como se cerraron.
+    $manual = fvdl_es_manual($f);
+    $novedades = $manual ? true : ($novedades === null ? fvdl_novedades($f, $filas) : (bool)$novedades);
+    $kits = $kits ?? fvdl_kits($bdd, $f['id']);
+    $paquetes = fvdl_paquetes_canonicos($bdd, fvdl_paquetes($bdd, $f['id_colegio'], $f['id_periodo']), array_values(array_unique(array_map(fn($r) => (int)$r['id_libro'], $filas))));
+    // Fila de cada libro en cada paquete (una fila por curso va solo en el paquete de su curso).
+    $enPaq = []; // id_paquete => [id_libro => id fila]
+    foreach ($filas as $id => $r) foreach (array_filter(explode(',', (string)$r['paquetes'])) as $p) $enPaq[(int)$p][(int)$r['id_libro']] = $id;
     $faltanNombre = [];
-    foreach ($paquetes as $p) foreach (array_keys($p['libros']) as $l) if (!isset($porLibro[$l])) $faltanNombre[$l] = true;
-    if ($faltanNombre) foreach ($bdd->query("SELECT id, libro FROM libros WHERE id IN (" . implode(',', array_keys($faltanNombre)) . ")")->fetchAll(PDO::FETCH_KEY_PAIR) as $l => $n) $nombres[(int)$l] = $n;
+    foreach ($paquetes as $p) foreach (array_keys($p['libros']) as $l) if (!isset($enPaq[$p['id']][$l])) $faltanNombre[$l] = true;
+    $nombres = $faltanNombre ? $bdd->query("SELECT id, libro FROM libros WHERE id IN (" . implode(',', array_keys($faltanNombre)) . ")")->fetchAll(PDO::FETCH_KEY_PAIR) : [];
     $errores = [];
     $libre = [];
     foreach ($filas as $id => &$r) {
@@ -358,46 +491,54 @@ function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null) {
         if (!$novedades) $r['sin_inventario'] = 0;
         $libre[$id] = max(0, $r['vendido']);
         $r['en_kit'] = 0;
-        $r['total_kit'] = 0;
     }
     unset($r);
     $kitsPaq = [];
     foreach ($paquetes as $p) {
-        $presentes = array_values(array_filter(array_map(fn($l) => $porLibro[$l] ?? null, array_keys($p['libros'])), fn($x) => $x !== null));
+        $libros = [];
+        foreach ($p['libros'] as $l => $pk) {
+            $id = $enPaq[$p['id']][$l] ?? null;
+            $libros[] = ['fila' => $id, 'nombre' => $id !== null ? $filas[$id]['libro'] : ($nombres[$l] ?? 'Libro #' . $l), 'pk' => (float)$pk];
+        }
+        $presentes = array_values(array_filter(array_column($libros, 'fila'), fn($x) => $x !== null));
         if (!$presentes) continue;
-        $escrito = $novedades ? max(array_map(fn($id) => (int)$filas[$id]['kit'], $presentes)) : 0;
-        if ($escrito > 0) $n = $escrito;
-        elseif (count($presentes) === count($p['libros'])) $n = min(array_map(fn($id) => $libre[$id], $presentes));
-        else continue; // automático: solo con todos sus libros en la tabla
-        if ($n <= 0) continue;
-        $precio = 0;
-        foreach ($p['libros'] as $l => $pkAdop) {
-            $id = $porLibro[$l] ?? null;
-            if ($id === null) { $precio += $pkAdop; continue; }
-            $precio += (float)$filas[$id]['precio_kit'];
+        $auto = count($presentes) === count($libros) ? min(array_map(fn($id) => $libre[$id], $presentes)) : 0;
+        $cfg = $kits[$p['id']] ?? ['kits' => null, 'precio' => null];
+        $n = $manual ? (int)($cfg['kits'] ?? 0) : ($novedades && $cfg['kits'] !== null ? (int)$cfg['kits'] : $auto);
+        $precio = $cfg['precio'] !== null ? (float)$cfg['precio'] : $p['precio'];
+        foreach ($presentes as $id) {
             $libre[$id] -= min($libre[$id], $n);
             $filas[$id]['en_kit'] += $n;
-            $filas[$id]['total_kit'] += $n * (float)$filas[$id]['precio_kit'];
         }
-        $kitsPaq[$p['id']] = ['id' => $p['id'], 'paquete' => $p['paquete'], 'kits' => $n, 'precio' => $precio, 'total' => round($n * $precio, 2), 'id_grado' => $p['id_grado']];
+        if ($n > 0 && $precio <= 0) $errores[] = '"' . $p['paquete'] . '": falta el precio del paquete.';
+        $kitsPaq[$p['id']] = ['id' => $p['id'], 'paquete' => $p['paquete'], 'id_grado' => $p['id_grado'], 'kits' => $n, 'auto' => $auto,
+                              'precio' => $precio, 'precio_adopcion' => $p['precio'], 'total' => round($n * $precio, 2), 'libros' => $libros];
     }
     $grados = [];
     $tot = ['total_kit' => 0, 'total_suelto' => 0, 'kits' => 0];
     foreach ($filas as $id => &$r) {
-        $vend = $r['vendido'];
+        $vend = max(0, $r['vendido']);
         $n = $r['libro'];
-        $r['suelto_ef'] = $libre[$id]; // lo vendido que no fue en kits
-        if ($novedades && (int)$r['suelto'] > 0) {
-            if ((int)$r['suelto'] !== $libre[$id]) $errores[] = '"' . $n . '": se vendieron ' . max(0, $vend) . ($r['en_kit'] ? ' y ' . min(max(0, $vend), $r['en_kit']) . ' van en kits' : '') . ': el Suelto debe ser ' . $libre[$id] . ' (escribiste ' . (int)$r['suelto'] . ').';
+        $sinv = (int)$r['sin_inventario'];
+        $sobra = max(0, $vend + $sinv - $r['en_kit']);
+        $r['sin_asignar'] = 0;
+        if ($manual) {
             $r['suelto_ef'] = (int)$r['suelto'];
+            $asignado = $r['en_kit'] + $r['suelto_ef'];
+            // Sin tope (2026-11-27, la usuaria): se puede haber enviado o vendido algo que no se remisionó.
+            $r['sin_asignar'] = max(0, $vend + $sinv - $asignado);
+        } else {
+        $r['suelto_ef'] = $novedades && (int)$r['suelto'] > 0 ? (int)$r['suelto'] : $sobra;
+        if ($r['vendido'] >= 0 && $r['en_kit'] + $r['suelto_ef'] !== $vend + $sinv) {
+            $errores[] = '"' . $n . '": se vendieron ' . $vend . ($sinv ? ' y ' . $sinv . ' sin inventario' : '') . ', pero van ' . $r['en_kit'] . ' en kits y '
+                . $r['suelto_ef'] . ' sueltos (' . ($r['en_kit'] + $r['suelto_ef']) . '). '
+                . ($r['en_kit'] > $vend + $sinv ? 'Si los kits salieron sin este libro, anota la diferencia en Sin inventario; si no, baja los kits del paquete.' : 'El Suelto debe ser ' . $sobra . '.');
         }
-        $r['total_kit'] = round($r['total_kit'], 2);
+        }
         $r['total_suelto'] = round($r['suelto_ef'] * (float)$r['precio_suelto'], 2);
         $r['faltante'] = (int)$r['remisionado'] < (int)$r['solicitado'];
-        if ($vend < 0) $errores[] = '"' . $n . '": lo devuelto (' . (int)$r['devuelto'] . ') es más que lo remisionado (' . (int)$r['remisionado'] . ').';
-        if ($novedades && (int)$r['kit'] > 0 && trim((string)$r['paquetes']) === '') $errores[] = '"' . $n . '" no hace parte de ningún paquete de la adopción: no puede ir en Kit.';
+        // Devuelto mayor que remisionado ya no bloquea (2026-11-27, la usuaria): se pudo enviar algo que no se remisionó.
         if ($r['suelto_ef'] > 0 && (float)$r['precio_suelto'] <= 0) $errores[] = '"' . $n . '": falta el precio suelto.';
-        if ($r['total_kit'] > 0 && (float)$r['precio_kit'] <= 0) $errores[] = '"' . $n . '": falta el precio kit.';
         $k = $r['id_grado'] ? 'g' . (int)$r['id_grado'] : 'sin';
         $grados[$k] = $grados[$k] ?? ['clave' => $k, 'id_grado' => (int)$r['id_grado'], 'grado' => $r['id_grado'] ? ((string)$r['grado'] !== '' ? $r['grado'] : 'Grado ' . (int)$r['id_grado']) : 'Sin grado',
                                       'faltante' => false, 'filas' => [], 'paquetes' => [], 'total_kit' => 0, 'total_suelto' => 0, 'kits' => 0];
@@ -407,35 +548,36 @@ function fvdl_calcular(PDO $bdd, array $f, array $filas, $novedades = null) {
         $tot['total_suelto'] += $r['total_suelto'];
     }
     unset($r);
-    foreach ($kitsPaq as $kp) {
+    foreach ($kitsPaq as &$kp) {
         $k = 'g' . (int)$kp['id_grado'];
-        // El paquete va en el grado de la adopción; si no hay filas de ese grado, en el primero.
-        if (!isset($grados[$k])) foreach ($grados as $gk => $g) { $k = $gk; break; }
+        // El paquete va en el grado de la adopción; si no hay filas de ese grado, en el de su primer libro.
+        if (!isset($grados[$k])) {
+            $primera = array_values(array_filter(array_column($kp['libros'], 'fila'), fn($x) => $x !== null))[0];
+            $k = $filas[$primera]['id_grado'] ? 'g' . (int)$filas[$primera]['id_grado'] : 'sin';
+        }
+        $kp['grado_clave'] = $k;
         $grados[$k]['paquetes'][] = $kp;
         $grados[$k]['total_kit'] += $kp['total'];
         $grados[$k]['kits'] += $kp['kits'];
         $tot['total_kit'] += $kp['total'];
         $tot['kits'] += $kp['kits'];
     }
+    unset($kp);
     uasort($grados, fn($a, $b) => ($a['id_grado'] ?: PHP_INT_MAX) <=> ($b['id_grado'] ?: PHP_INT_MAX));
     $tot['total_kit'] = round($tot['total_kit'], 2);
     $tot['total_suelto'] = round($tot['total_suelto'], 2);
-    return ['novedades' => $novedades, 'filas' => $filas, 'grados' => array_values($grados), 'total_kit' => $tot['total_kit'], 'total_suelto' => $tot['total_suelto'],
-            'gran_total' => round($tot['total_kit'] + $tot['total_suelto'], 2), 'kits' => $tot['kits'], 'errores' => $errores,
-            // Para la pantalla: cada paquete con las filas de sus libros (null si el libro no está en la tabla), su parte de la
-            // adopción en el precio kit y su nombre.
-            'paquetes' => array_values(array_map(fn($p) => ['id' => $p['id'], 'paquete' => $p['paquete'], 'id_grado' => $p['id_grado'],
-                'libros' => array_map(fn($l) => ['fila' => $porLibro[$l] ?? null, 'pk' => (float)$p['libros'][$l], 'nombre' => isset($porLibro[$l]) ? $filas[$porLibro[$l]]['libro'] : ($nombres[$l] ?? 'Libro #' . $l)], array_keys($p['libros']))],
-                $paquetes))];
+    return ['manual' => $manual, 'novedades' => $novedades, 'filas' => $filas, 'grados' => array_values($grados), 'paquetes' => array_values($kitsPaq),
+            'total_kit' => $tot['total_kit'], 'total_suelto' => $tot['total_suelto'], 'gran_total' => round($tot['total_kit'] + $tot['total_suelto'], 2),
+            'kits' => $tot['kits'], 'errores' => $errores];
 }
 
 /**
- * Lee la tabla enviada en el cierre de dinero ($post['cl'][id][sol|rem|dev|kit|suelto|sinv|pk|ps]) sobre las filas guardadas.
+ * Lee la tabla enviada en el cierre de dinero ($post['cl'][id][sol|rem|dev|suelto|sinv|ps]) sobre las filas guardadas.
  * Devuelve ['filas' => [id => fila con los valores nuevos]] o ['error' => texto].
  */
 function fvdl_leer(array $filas, array $post) {
-    $campos = ['sol' => 'solicitado', 'rem' => 'remisionado', 'dev' => 'devuelto', 'kit' => 'kit', 'suelto' => 'suelto', 'sinv' => 'sin_inventario'];
-    $nombres = ['sol' => 'Solicitado', 'rem' => 'Remisionado', 'dev' => 'Devuelto', 'kit' => 'Kit', 'suelto' => 'Suelto', 'sinv' => 'Sin inventario'];
+    $campos = ['sol' => 'solicitado', 'rem' => 'remisionado', 'dev' => 'devuelto', 'suelto' => 'suelto', 'sinv' => 'sin_inventario'];
+    $nombres = ['sol' => 'Solicitado', 'rem' => 'Remisionado', 'dev' => 'Devuelto', 'suelto' => 'Suelto', 'sinv' => 'Sin inventario'];
     foreach ((array)($post['cl'] ?? []) as $id => $v) {
         $id = (int)$id;
         if (!isset($filas[$id])) return ['error' => 'La tabla del cierre cambió mientras la editabas. Recarga el formato.'];
@@ -445,24 +587,52 @@ function fvdl_leer(array $filas, array $post) {
             if ($n === null) return ['error' => '"' . $filas[$id]['libro'] . '": ' . $nombres[$k] . ' debe ser un número entero, sin decimales ni negativos.'];
             $filas[$id][$col] = $n;
         }
-        foreach (['pk' => 'precio_kit', 'ps' => 'precio_suelto'] as $k => $col) {
-            if (!isset($v[$k])) continue;
-            $p = fvd_leer_pesos($v[$k]);
-            if ($p === null) return ['error' => '"' . $filas[$id]['libro'] . '": el ' . ($k === 'pk' ? 'precio kit' : 'precio suelto') . ' debe ser un valor en pesos, sin decimales.'];
-            $filas[$id][$col] = (float)$p;
+        if (isset($v['ps'])) {
+            $p = fvd_leer_pesos($v['ps']);
+            if ($p === null) return ['error' => '"' . $filas[$id]['libro'] . '": el precio suelto debe ser un valor en pesos, sin decimales.'];
+            $filas[$id]['precio_suelto'] = (float)$p;
         }
     }
     return ['filas' => $filas];
 }
 
-/** Guarda las filas (dentro de la transacción del cierre de dinero). */
-function fvdl_guardar_filas(PDO $bdd, $idFormato, array $filas) {
-    $up = $bdd->prepare("UPDATE formatos_vd_libros SET solicitado = ?, remisionado = ?, devuelto = ?, kit = ?, suelto = ?, sin_inventario = ?, precio_kit = ?, precio_suelto = ?
+/**
+ * Lee los kits por paquete enviados en el cierre ($post['clk'][id_paquete][kits|precio]) sobre los guardados ($kits =
+ * fvdl_kits). Sin novedades los kits quedan automáticos (null). Devuelve ['kits' => [...]] o ['error' => texto].
+ */
+function fvdl_leer_kits(array $kits, array $post, $novedades) {
+    foreach ((array)($post['clk'] ?? []) as $idPaq => $v) {
+        $idPaq = (int)$idPaq;
+        if ($idPaq <= 0) continue;
+        $cfg = $kits[$idPaq] ?? ['kits' => null, 'precio' => null];
+        if (isset($v['kits'])) {
+            $n = fvd_entero($v['kits']);
+            if ($n === null) return ['error' => 'Los kits de cada paquete deben ser un número entero, sin decimales ni negativos.'];
+            $cfg['kits'] = $n;
+        }
+        if (isset($v['precio'])) {
+            $p = fvd_leer_pesos($v['precio']);
+            if ($p === null) return ['error' => 'El precio del paquete debe ser un valor en pesos, sin decimales.'];
+            $cfg['precio'] = (float)$p;
+        }
+        $kits[$idPaq] = $cfg;
+    }
+    if (!$novedades) foreach ($kits as &$cfg) $cfg['kits'] = null;
+    unset($cfg);
+    return ['kits' => $kits];
+}
+
+/** Guarda las filas y los kits por paquete (dentro de la transacción del cierre de dinero). */
+function fvdl_guardar_filas(PDO $bdd, $idFormato, array $filas, array $kits = []) {
+    $up = $bdd->prepare("UPDATE formatos_vd_libros SET solicitado = ?, remisionado = ?, devuelto = ?, suelto = ?, sin_inventario = ?, precio_suelto = ?
                          WHERE id = ? AND id_formato = ?");
     foreach ($filas as $r) {
-        $up->execute([(int)$r['solicitado'], (int)$r['remisionado'], (int)$r['devuelto'], (int)$r['kit'], (int)$r['suelto'], (int)$r['sin_inventario'],
-                      (float)$r['precio_kit'], (float)$r['precio_suelto'], (int)$r['id'], (int)$idFormato]);
+        $up->execute([(int)$r['solicitado'], (int)$r['remisionado'], (int)$r['devuelto'], (int)$r['suelto'], (int)$r['sin_inventario'],
+                      (float)$r['precio_suelto'], (int)$r['id'], (int)$idFormato]);
     }
+    $upK = $bdd->prepare("INSERT INTO formatos_vd_kits (id_formato, id_paquete, kits, precio) VALUES (?, ?, ?, ?)
+                          ON DUPLICATE KEY UPDATE kits = VALUES(kits), precio = VALUES(precio)");
+    foreach ($kits as $idPaq => $cfg) $upK->execute([(int)$idFormato, (int)$idPaq, $cfg['kits'], $cfg['precio']]);
 }
 
 /** Gran total guardado de la tabla por grado del formato, o null si el formato no la usa. */
