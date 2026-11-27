@@ -395,7 +395,8 @@ $es_admin = $tipo_sesion === 1;
 <script src="src/plugins/select2/dist/js/select2.min.js"></script>
 <script>
 (function () {
-  var esAdmin = <?= $es_admin ? 'true' : 'false' ?>;
+  // Asignar pedido a un documento sin verificar: todos los usuarios con acceso al reporte (2026-11-27, la usuaria).
+  var puedeAsignar = true;
   function h(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
   function num(v) { v = parseFloat(v) || 0; return v % 1 === 0 ? v.toString() : v.toFixed(2); }
   function claseCumplimiento(pct) {
@@ -564,7 +565,7 @@ $es_admin = $tipo_sesion === 1;
         (d.motivo ? '<div class="colegio-hint"><strong>Motivo:</strong> ' + h(d.motivo) + '</div>' : '') +
         (d.colegio_extraido ? '<div class="colegio-hint">Posible colegio (texto del concepto): ' + h(d.colegio_extraido) + '</div>' : '') +
         '<div class="concepto">' + h(d.concepto) + '</div>' +
-        (esAdmin ? (
+        (puedeAsignar ? (
           '<div class="bo-sinverificar-asignar">' +
           '<select class="sv-select"><option></option></select>' +
           '<button type="button" class="bo-btn bo-btn-asignar-sv" style="padding:6px 16px; font-size:.8rem;">Asignar pedido</button>' +
@@ -575,7 +576,7 @@ $es_admin = $tipo_sesion === 1;
     }).join(''));
     $panel.show();
 
-    if (esAdmin) {
+    if (puedeAsignar) {
       $('.sv-select').select2({
         placeholder: 'Escribe para buscar un pedido por colegio, cliente o # de pedido...',
         allowClear: true,

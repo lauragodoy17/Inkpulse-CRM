@@ -11,7 +11,8 @@
  */
 require_once("aut.php");
 
-if (($_SESSION["tipo"] ?? null) != 1) {
+// Mismos usuarios que pueden abrir reporte_backorders.php (tipo 1 y 2).
+if (!in_array(intval($_SESSION["tipo"] ?? 0), [1, 2], true)) {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'No autorizado']);
     exit;

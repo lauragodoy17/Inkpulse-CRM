@@ -10,7 +10,8 @@
 require_once("aut.php");
 
 $tipo_sesion = intval($_SESSION["tipo"] ?? 0);
-if ($tipo_sesion !== 1) {
+// Mismos usuarios que pueden abrir reporte_backorders.php (tipo 1 y 2).
+if (!in_array($tipo_sesion, [1, 2], true)) {
     header('Content-Type: application/json');
     echo json_encode([]);
     exit;
