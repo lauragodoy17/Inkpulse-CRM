@@ -179,7 +179,8 @@ $es_admin = $tipo_sesion === 1;
       </div>
 
       <?php $numSeccion = 0; ?>
-      <?php if ($es_admin): ?>
+      <?php // Visible para todos los usuarios con acceso al reporte (2026-11-27, la usuaria) ?>
+      <?php if (true): ?>
       <div class="bo-section">
         <div class="bo-section-head">
           <div class="bo-num"><?= ++$numSeccion ?></div>
@@ -991,7 +992,7 @@ $es_admin = $tipo_sesion === 1;
     renderClientes();
   });
 
-  <?php if ($es_admin): ?>
+  <?php if (true): // todos los usuarios con acceso al reporte ?>
   // ── Actualizar desde World Office: una llamada por tipo (php/sync_backorders_wo_rapido.php trae el
   // listado completo y solo descarga lo nuevo/modificado); si quedan documentos por traer
   // ("faltan"), se vuelve a llamar. Las tablas se recargan apenas termina cada tipo.
